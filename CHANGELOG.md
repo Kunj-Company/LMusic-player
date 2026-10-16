@@ -1,3 +1,17 @@
+# LMusic changelog
+
+## 1.0.0 — 2026-10-17
+- Forked from PixelPlayer at commit 3903015 (last MIT version); app id `com.twilighty.lmusic`, Android 15+.
+- Yuyu design system: colors, Bricolage Grotesque + Figtree, radius scale, app icon; Material You still selectable.
+- Tag editor: album artist, year, composer and MusicBrainz IDs written into files.
+- Metadata autofill: offline filename/folder guesses + MusicBrainz and Cover Art Archive.
+- Stats: 30-second play rule, custom date ranges, skip rate, new songs/artists, lifetime history.
+- CI: signed APK on every push, GitHub Release on version tags.
+
+---
+
+# PixelPlayer changelog (upstream, up to the fork point)
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
