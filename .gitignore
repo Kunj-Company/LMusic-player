@@ -39,3 +39,6 @@ misc.xml
 markdown.xml
 .vscode/
 .agents/
+
+# CI signing material (never commit)
+.lmusic-signing/

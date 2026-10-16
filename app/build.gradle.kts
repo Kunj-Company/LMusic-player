@@ -59,8 +59,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.theveloper.pixelplay"
-        minSdk = 30
+        applicationId = "com.twilighty.lmusic"
+        minSdk = 35
         targetSdk = 37
         versionCode = (project.findProperty("APP_VERSION_CODE") as? String)?.toInt() ?: 1
         versionName = (project.findProperty("APP_VERSION_NAME") as? String) ?: "1.0.0"
@@ -70,7 +70,9 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("$rootDir/vz-pixelplay.jks")
+            // LMusic release key. CI writes the keystore from repository secrets so every
+            // build is signed with the same key and installs as an update over the last one.
+            storeFile = file(keystoreProperties.getProperty("storeFile") ?: "$rootDir/lmusic-release.jks")
             storePassword = keystoreProperties.getProperty("storePassword") ?: "dummyPassword"
             keyAlias = keystoreProperties.getProperty("keyAlias") ?: "dummyAlias"
             keyPassword = keystoreProperties.getProperty("keyPassword") ?: "dummyPassword"

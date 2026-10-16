@@ -1,0 +1,30 @@
+name: Keep CI signing key alive
+
+# GitHub drops Actions cache entries that go unused for 7 days. LMusic's CI
+# signing key lives in that cache (unless you set your own key as secrets), so
+# this touches it twice a week to make sure it never expires between releases.
+
+on:
+  schedule:
+    - cron: '23 4 * * 1,4'
+  workflow_dispatch:
+
+jobs:
+  touch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore signing key (refreshes its last-used time)
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .lmusic-signing
+          key: lmusic-signing-key-v1
+          lookup-only: false
+
+      - name: Report
+        run: |
+          if [ "${{ steps.restore.outputs.cache-hit }}" = "true" ]; then
+            echo "Signing key present."
+          else
+            echo "::warning::No CI signing key in cache. The next main-branch build will create one (APKs signed with a new key must be installed fresh)."
+          fi
