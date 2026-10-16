@@ -125,15 +125,18 @@ jobs:
       - name: Build release APK
         run: |
           chmod +x gradlew
+          # arm64 build only: every Android 15+ phone (including the Galaxy S23) is
+          # 64-bit ARM, and it keeps the APK a fraction of the universal size.
           ./gradlew :app:assembleRelease --stacktrace \
-            -Ppixelplay.enableAbiSplits=false \
+            -Ppixelplay.enableAbiSplits=true \
             -PAPP_VERSION_CODE=${{ steps.version.outputs.code }} \
             -PAPP_VERSION_NAME=${{ steps.version.outputs.name }}
 
       - name: Verify and rename APK
         id: apk
         run: |
-          SRC="$(ls app/build/outputs/apk/release/*.apk | head -n 1)"
+          SRC="app/build/outputs/apk/release/app-arm64-v8a-release.apk"
+          ls -la app/build/outputs/apk/release/
           OUT="LMusic-${{ steps.version.outputs.name }}.apk"
           cp "$SRC" "$OUT"
           BT="$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"

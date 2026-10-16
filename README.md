@@ -61,7 +61,7 @@ Open the project in Android Studio (Ladybug or newer, JDK 21) and run the `app`
 configuration, or:
 
 ```bash
-./gradlew :app:assembleRelease -Ppixelplay.enableAbiSplits=false
+./gradlew :app:assembleRelease   # APK per ABI; LMusic releases ship the arm64-v8a one
 ```
 
 ### Signing
