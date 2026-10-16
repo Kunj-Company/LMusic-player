@@ -226,7 +226,22 @@ class ListeningStatsTracker @Inject constructor(
         val nowEpoch = System.currentTimeMillis()
         accumulateRealtimeListening(session, nowRealtime)
         val listened = session.accumulatedListeningMs.coerceAtLeast(0L)
-        if (listened >= MIN_SESSION_LISTEN_MS) {
+        // LMusic counts a play after 30 seconds of listening. Tracks shorter than that
+        // count once nearly all of them has been heard.
+        val trackDuration = session.totalDurationMs
+        val playThresholdMs = if (trackDuration in 1 until MIN_SESSION_LISTEN_MS) {
+            (trackDuration * 9 / 10).coerceAtLeast(1_000L)
+        } else {
+            MIN_SESSION_LISTEN_MS
+        }
+        if (listened < playThresholdMs && listened >= MIN_SKIP_LISTEN_MS) {
+            val skippedSongId = session.songId
+            persistenceScope.launch {
+                runCatching { playbackStatsRepository.recordSkip(skippedSongId) }
+                    .onFailure { Timber.e(it, "Failed to record skip for song=%s", skippedSongId) }
+            }
+        }
+        if (listened >= playThresholdMs) {
             val rawEndTimestamp = when {
                 session.isPlaying -> nowEpoch
                 session.lastUpdateEpochMs > 0L -> session.lastUpdateEpochMs
@@ -313,7 +328,9 @@ class ListeningStatsTracker @Inject constructor(
     }
 
     companion object {
-        private val MIN_SESSION_LISTEN_MS = TimeUnit.SECONDS.toMillis(5)
+        private val MIN_SESSION_LISTEN_MS = TimeUnit.SECONDS.toMillis(30)
+        /** Anything started for at least this long but stopped before it counts is a skip. */
+        private val MIN_SKIP_LISTEN_MS = TimeUnit.SECONDS.toMillis(1)
         private const val MAX_INTERNAL_PLAYBACK_HISTORY_ITEMS = 500
     }
 }

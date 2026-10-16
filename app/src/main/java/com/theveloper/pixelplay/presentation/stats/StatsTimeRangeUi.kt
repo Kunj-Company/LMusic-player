@@ -11,4 +11,5 @@ fun StatsTimeRange.displayNameRes(): Int = when (this) {
     StatsTimeRange.MONTH -> R.string.presentation_batch_g_stats_range_month_to_date
     StatsTimeRange.YEAR -> R.string.presentation_batch_g_stats_range_year_to_date
     StatsTimeRange.ALL -> R.string.presentation_batch_g_stats_range_all_time
+    StatsTimeRange.CUSTOM -> R.string.lmusic_stats_range_custom
 }

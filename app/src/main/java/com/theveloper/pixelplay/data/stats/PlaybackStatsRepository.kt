@@ -42,6 +42,11 @@ class PlaybackStatsRepository @Inject constructor(
 
     private val gson = Gson()
     private val historyFile = File(context.filesDir, "playback_history.json")
+    // LMusic: plays stopped before the 30-second mark, used for the skip-rate insight.
+    private val skipFile = File(context.filesDir, "skip_history.json")
+    private val atomicSkipFile = AtomicFile(skipFile)
+    private val skipLock = Any()
+    private val skipsType = object : TypeToken<MutableList<SkipEvent>>() {}.type
     private val atomicHistoryFile = AtomicFile(historyFile)
     private val fileLock = Any()
     private val eventsType = object : TypeToken<MutableList<PlaybackEvent>>() {}.type
@@ -56,6 +61,11 @@ class PlaybackStatsRepository @Inject constructor(
         val durationMs: Long,
         val startTimestamp: Long? = null,
         val endTimestamp: Long? = null
+    )
+
+    data class SkipEvent(
+        val songId: String,
+        val timestamp: Long
     )
 
     data class PlaybackHistoryEntry(
@@ -159,8 +169,19 @@ class PlaybackStatsRepository @Inject constructor(
         val dayListeningDistribution: DayListeningDistribution?,
         val peakTimeline: TimelineEntry?,
         val peakDayLabel: String?,
-        val peakDayDurationMs: Long
-    )
+        val peakDayDurationMs: Long,
+        // LMusic insights
+        val skipCount: Int = 0,
+        val newSongs: List<SongPlaybackSummary> = emptyList(),
+        val newSongCount: Int = 0,
+        val newArtistCount: Int = 0,
+        val customStartMillis: Long? = null,
+        val customEndMillis: Long? = null
+    ) {
+        /** Plays that were started: counted plays plus skips. */
+        val startedCount: Int get() = totalPlayCount + skipCount
+        val skipRate: Float get() = if (startedCount > 0) skipCount.toFloat() / startedCount else 0f
+    }
 
     suspend fun recordPlayback(
         songId: String,
@@ -191,19 +212,38 @@ class PlaybackStatsRepository @Inject constructor(
         }
     }
 
+    suspend fun recordSkip(
+        songId: String,
+        timestamp: Long = System.currentTimeMillis()
+    ) = withContext(Dispatchers.IO) {
+        if (songId.isBlank()) return@withContext
+        val written = synchronized(skipLock) {
+            val skips = readSkipsLocked()
+            skips += SkipEvent(songId, timestamp.coerceAtLeast(0L))
+            writeSkipsLocked(skips)
+        }
+        if (written) notifyStatsChanged()
+    }
+
     suspend fun loadSummary(
         range: StatsTimeRange,
         songs: List<Song>,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        customStartMillis: Long? = null,
+        customEndMillis: Long? = null
     ): PlaybackStatsSummary = withContext(Dispatchers.IO) {
         val zoneId = ZoneId.systemDefault()
         val allEvents = readEvents()
+        val skips = synchronized(skipLock) { readSkipsLocked() }
         buildSummaryFromEvents(
             range = range,
             songs = songs,
             nowMillis = nowMillis,
             allEvents = allEvents,
-            zoneId = zoneId
+            zoneId = zoneId,
+            customStartMillis = customStartMillis,
+            customEndMillis = customEndMillis,
+            skipEvents = skips
         )
     }
 
@@ -212,9 +252,18 @@ class PlaybackStatsRepository @Inject constructor(
         songs: List<Song>,
         nowMillis: Long,
         allEvents: List<PlaybackEvent>,
-        zoneId: ZoneId = ZoneId.systemDefault()
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        customStartMillis: Long? = null,
+        customEndMillis: Long? = null,
+        skipEvents: List<SkipEvent> = emptyList()
     ): PlaybackStatsSummary {
-        val (startBound, endBound) = range.resolveBounds(allEvents, nowMillis, zoneId)
+        val (startBound, endBound) = if (range == StatsTimeRange.CUSTOM) {
+            val end = (customEndMillis ?: nowMillis).coerceAtMost(nowMillis)
+            val start = (customStartMillis ?: allEvents.minOfOrNull { it.startMillis() } ?: end).coerceAtMost(end)
+            start to end
+        } else {
+            range.resolveBounds(allEvents, nowMillis, zoneId)
+        }
         val filteredEvents = allEvents.mapNotNull { event ->
             val start = event.startMillis()
             val end = event.endMillis()
@@ -347,7 +396,8 @@ class PlaybackStatsRepository @Inject constructor(
             zoneId = zoneId,
             now = Instant.ofEpochMilli(endBound),
             spans = overallSpans,
-            fallbackStart = effectiveStart ?: endBound
+            fallbackStart = effectiveStart ?: endBound,
+            customStart = startBound
         )
         val timelineEntries = accumulateTimelineEntries(timelineBuckets, overallSpans)
 
@@ -417,7 +467,32 @@ class PlaybackStatsRepository @Inject constructor(
             endBound = endBound
         )
 
+        // ---- LMusic insights: skips and first-time listens in this period ----
+        val lowerBound = startBound ?: Long.MIN_VALUE
+        val skipCount = skipEvents.count { it.timestamp in lowerBound..endBound }
+        val firstPlayBySong = HashMap<String, Long>()
+        allEvents.forEach { event ->
+            val start = event.startMillis()
+            val previous = firstPlayBySong[event.songId]
+            if (previous == null || start < previous) firstPlayBySong[event.songId] = start
+        }
+        val newSongIds = firstPlayBySong.filterValues { it in lowerBound..endBound }.keys
+        val newSongs = allSongs.filter { it.songId in newSongIds }
+        val firstPlayByArtist = HashMap<String, Long>()
+        firstPlayBySong.forEach { (songId, firstStart) ->
+            val artist = songMap[songId]?.artist?.takeIf { it.isNotBlank() } ?: return@forEach
+            val previous = firstPlayByArtist[artist]
+            if (previous == null || firstStart < previous) firstPlayByArtist[artist] = firstStart
+        }
+        val newArtistCount = firstPlayByArtist.values.count { it in lowerBound..endBound }
+
         return PlaybackStatsSummary(
+            skipCount = skipCount,
+            newSongs = newSongs,
+            newSongCount = newSongIds.size,
+            newArtistCount = newArtistCount,
+            customStartMillis = if (range == StatsTimeRange.CUSTOM) startBound else null,
+            customEndMillis = if (range == StatsTimeRange.CUSTOM) endBound else null,
             range = range,
             startTimestamp = startBound,
             endTimestamp = endBound,
@@ -862,14 +937,66 @@ class PlaybackStatsRepository @Inject constructor(
         zoneId: ZoneId,
         now: Instant,
         spans: List<PlaybackSpan>,
-        fallbackStart: Long
+        fallbackStart: Long,
+        customStart: Long? = null
     ): List<TimelineBucket> {
         return when (range) {
+            StatsTimeRange.CUSTOM -> createCustomBuckets(zoneId, customStart ?: fallbackStart, now)
             StatsTimeRange.DAY -> createDayBuckets(zoneId, now)
             StatsTimeRange.WEEK -> createWeekBuckets(zoneId, now)
             StatsTimeRange.MONTH -> createMonthBuckets(zoneId, now)
             StatsTimeRange.YEAR -> createYearBuckets(zoneId, now)
             StatsTimeRange.ALL -> createAllTimeBuckets(zoneId, spans, fallbackStart, now)
+        }
+    }
+
+    /** Days for ranges up to ~a month, months up to ~a year and a half, years beyond that. */
+    private fun createCustomBuckets(zoneId: ZoneId, startMillis: Long, now: Instant): List<TimelineBucket> {
+        val startDate = Instant.ofEpochMilli(startMillis).atZone(zoneId).toLocalDate()
+        val endDate = now.atZone(zoneId).toLocalDate()
+        if (endDate.isBefore(startDate)) return emptyList()
+        val days = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1
+        return when {
+            days <= 35 -> {
+                val formatter = DateTimeFormatter.ofPattern("d MMM", Locale.US)
+                (0 until days).map { offset ->
+                    val day = startDate.plusDays(offset)
+                    TimelineBucket(
+                        label = formatter.format(day),
+                        startMillis = day.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                        endMillis = day.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                        inclusiveEnd = false
+                    )
+                }
+            }
+            days <= 550 -> {
+                val formatter = DateTimeFormatter.ofPattern("MMM yy", Locale.US)
+                var month = YearMonth.from(startDate)
+                val lastMonth = YearMonth.from(endDate)
+                buildList {
+                    while (!month.isAfter(lastMonth)) {
+                        val bucketStart = maxOf(month.atDay(1), startDate)
+                        add(
+                            TimelineBucket(
+                                label = formatter.format(month),
+                                startMillis = bucketStart.atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                                endMillis = month.atEndOfMonth().plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                                inclusiveEnd = false
+                            )
+                        )
+                        month = month.plusMonths(1)
+                    }
+                }
+            }
+            else -> (startDate.year..endDate.year).map { yearValue ->
+                val year = Year.of(yearValue)
+                TimelineBucket(
+                    label = yearValue.toString(),
+                    startMillis = maxOf(year.atDay(1), startDate).atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                    endMillis = year.plusYears(1).atDay(1).atStartOfDay(zoneId).toInstant().toEpochMilli(),
+                    inclusiveEnd = false
+                )
+            }
         }
     }
 
@@ -1011,7 +1138,7 @@ class PlaybackStatsRepository @Inject constructor(
                     .toEpochMilli()
                 start to nowMillis
             }
-            StatsTimeRange.ALL -> {
+            StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> {
                 val start = events.minOfOrNull { it.startMillis() }
                 start to nowMillis
             }
@@ -1037,6 +1164,34 @@ class PlaybackStatsRepository @Inject constructor(
         return max(end, start)
     }
 
+    private fun readSkipsLocked(): MutableList<SkipEvent> {
+        val raw = runCatching {
+            atomicSkipFile.openRead().bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrNull()
+        if (raw.isNullOrBlank()) return mutableListOf()
+        return runCatching {
+            val parsed: MutableList<SkipEvent>? = gson.fromJson(raw, skipsType)
+            parsed?.filterTo(mutableListOf()) { it.songId.isNotBlank() } ?: mutableListOf()
+        }.getOrElse { throwable ->
+            Timber.e(throwable, "Failed parsing skip history")
+            mutableListOf()
+        }
+    }
+
+    private fun writeSkipsLocked(skips: List<SkipEvent>): Boolean {
+        var stream: FileOutputStream? = null
+        return runCatching {
+            stream = atomicSkipFile.startWrite()
+            stream?.write(gson.toJson(skips).toByteArray(Charsets.UTF_8))
+            stream?.let { atomicSkipFile.finishWrite(it) }
+            stream = null
+            true
+        }.onFailure { throwable ->
+            stream?.let { atomicSkipFile.failWrite(it) }
+            Timber.e(throwable, "Failed to persist skip history")
+        }.getOrDefault(false)
+    }
+
     private fun notifyStatsChanged() {
         _refreshVersion.update { current ->
             if (current == Long.MAX_VALUE) {
@@ -1051,7 +1206,8 @@ class PlaybackStatsRepository @Inject constructor(
         private const val DEFAULT_PLAYBACK_HISTORY_LIMIT = 500
         private const val MAX_PLAYBACK_HISTORY_LIMIT = 5_000
         private const val MAX_FILE_UPDATE_RETRIES = 3
-        private val MAX_HISTORY_AGE_MS = TimeUnit.DAYS.toMillis(730) // Keep roughly two years of history
+        // LMusic keeps listening history for life (lifetime stats); this is only a safety cap.
+        private val MAX_HISTORY_AGE_MS = TimeUnit.DAYS.toMillis(365L * 100)
         private const val SEGMENT_JOIN_TOLERANCE_MS = 0L
     }
 }
@@ -1061,5 +1217,6 @@ enum class StatsTimeRange(val displayName: String) {
     WEEK("Week to Date"),
     MONTH("Month to Date"),
     YEAR("Year to Date"),
-    ALL("All Time")
+    ALL("All Time"),
+    CUSTOM("Custom")
 }

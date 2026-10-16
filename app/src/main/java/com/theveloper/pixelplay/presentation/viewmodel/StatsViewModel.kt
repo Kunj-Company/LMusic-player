@@ -31,7 +31,10 @@ class StatsViewModel @Inject constructor(
         val isLoading: Boolean = true,
         val isRefreshing: Boolean = false,
         val summary: PlaybackStatsSummary? = null,
-        val availableRanges: List<StatsTimeRange> = StatsTimeRange.entries
+        val availableRanges: List<StatsTimeRange> = StatsTimeRange.entries,
+        /** Inclusive local-time bounds of the Custom range, when one has been picked. */
+        val customStartMillis: Long? = null,
+        val customEndMillis: Long? = null
     )
 
     private val _uiState = MutableStateFlow(StatsUiState())
@@ -65,6 +68,22 @@ class StatsViewModel @Inject constructor(
             showLoading = true,
             updateWeeklyOverview = range == StatsTimeRange.WEEK
         )
+    }
+
+    /**
+     * Shows stats for a custom date range. [startDateUtcMillis]/[endDateUtcMillis] are the
+     * UTC-midnight values a Material date-range picker returns; they're turned into local days.
+     */
+    fun onCustomRangeSelected(startDateUtcMillis: Long, endDateUtcMillis: Long) {
+        val zone = java.time.ZoneId.systemDefault()
+        val startDate = java.time.Instant.ofEpochMilli(minOf(startDateUtcMillis, endDateUtcMillis))
+            .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val endDate = java.time.Instant.ofEpochMilli(maxOf(startDateUtcMillis, endDateUtcMillis))
+            .atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val start = startDate.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = endDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1
+        _uiState.update { it.copy(customStartMillis = start, customEndMillis = end) }
+        refreshRange(range = StatsTimeRange.CUSTOM, showLoading = true)
     }
 
     fun refreshWeeklyOverview() {
@@ -119,7 +138,17 @@ class StatsViewModel @Inject constructor(
             val summary = runCatching {
                 withContext(Dispatchers.IO) {
                     val songs = loadSongs()
-                    playbackStatsRepository.loadSummary(range, songs)
+                    val state = _uiState.value
+                    if (range == StatsTimeRange.CUSTOM) {
+                        playbackStatsRepository.loadSummary(
+                            range = range,
+                            songs = songs,
+                            customStartMillis = state.customStartMillis,
+                            customEndMillis = state.customEndMillis
+                        )
+                    } else {
+                        playbackStatsRepository.loadSummary(range, songs)
+                    }
                 }
             }
             summary.getOrNull()?.let { loaded ->

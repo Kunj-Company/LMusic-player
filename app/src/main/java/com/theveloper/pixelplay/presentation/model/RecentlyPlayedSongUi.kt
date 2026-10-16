@@ -119,7 +119,7 @@ private fun StatsTimeRange?.resolveBounds(
             val start = startOfYear.atStartOfDay(zoneId).toInstant().toEpochMilli()
             start to safeNow
         }
-        StatsTimeRange.ALL, null -> {
+        StatsTimeRange.ALL, StatsTimeRange.CUSTOM, null -> {
             null to safeNow
         }
     }

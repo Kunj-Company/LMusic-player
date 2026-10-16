@@ -205,6 +205,19 @@ fun StatsScreen(
     val showRangeTabIndicator = false
     val tabIndicatorExtraSpacing = if (showRangeTabIndicator) 8.dp else 0.dp
     val tabContentSpacing = 20.dp
+    var showCustomRangePicker by rememberSaveable { mutableStateOf(false) }
+    val customRangeLabel = remember(uiState.customStartMillis, uiState.customEndMillis) {
+        com.theveloper.pixelplay.presentation.stats.formatCustomRangeLabel(uiState.customStartMillis, uiState.customEndMillis)
+    }
+    if (showCustomRangePicker) {
+        com.theveloper.pixelplay.presentation.stats.StatsCustomRangeDialog(
+            onDismiss = { showCustomRangePicker = false },
+            onConfirm = { start, end ->
+                showCustomRangePicker = false
+                statsViewModel.onCustomRangeSelected(start, end)
+            }
+        )
+    }
     var selectedTimelineMetric by rememberSaveable { mutableStateOf(TimelineMetric.ListeningTime) }
     var selectedCategoryDimension by rememberSaveable { mutableStateOf(CategoryDimension.Song) }
     val pullToRefreshState = rememberPullToRefreshState()
@@ -282,6 +295,12 @@ fun StatsScreen(
                 ) {
                     item(key = "hero_section") {
                         StatsHeroSection(
+                            summary = summary,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
+                    item(key = "lmusic_insights") {
+                        com.theveloper.pixelplay.presentation.stats.LMusicInsightsCard(
                             summary = summary,
                             modifier = Modifier.padding(horizontal = 20.dp)
                         )
@@ -378,7 +397,14 @@ fun StatsScreen(
                     RangeTabsHeader(
                         ranges = uiState.availableRanges,
                         selected = uiState.selectedRange,
-                        onRangeSelected = statsViewModel::onRangeSelected,
+                        onRangeSelected = { range ->
+                            if (range == StatsTimeRange.CUSTOM) {
+                                showCustomRangePicker = true
+                            } else {
+                                statsViewModel.onRangeSelected(range)
+                            }
+                        },
+                        customRangeLabel = customRangeLabel,
                         indicatorSpacing = tabIndicatorExtraSpacing,
                         showIndicator = showRangeTabIndicator,
                     )
@@ -640,6 +666,7 @@ private fun RangeTabsHeader(
     onRangeSelected: (StatsTimeRange) -> Unit,
     indicatorSpacing: Dp,
     showIndicator: Boolean = false,
+    customRangeLabel: String? = null,
     modifier: Modifier = Modifier
 ) {
     val selectedIndex = remember(ranges, selected) { ranges.indexOf(selected).coerceAtLeast(0) }
@@ -680,8 +707,13 @@ private fun RangeTabsHeader(
                     onUnselectedColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     title = stringResource(range.displayNameRes())
                 ) {
+                    val tabLabel = if (range == StatsTimeRange.CUSTOM && customRangeLabel != null && index == selectedIndex) {
+                        customRangeLabel
+                    } else {
+                        stringResource(range.displayNameRes())
+                    }
                     Text(
-                        text = stringResource(range.displayNameRes()),
+                        text = tabLabel,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Medium
                     )
@@ -983,7 +1015,7 @@ private fun rememberStatsAxisLabelStyle(range: StatsTimeRange): TextStyle {
     val fontSize = when (range) {
         StatsTimeRange.DAY, StatsTimeRange.WEEK -> 10.sp
         StatsTimeRange.MONTH, StatsTimeRange.ALL -> 11.sp
-        StatsTimeRange.YEAR -> 10.sp
+        StatsTimeRange.YEAR, StatsTimeRange.CUSTOM -> 10.sp
     }
     return remember(range, fontSize) {
         TextStyle(
@@ -1102,7 +1134,7 @@ private fun ListeningTimelineSection(
             val cardColor = when (range) {
                 StatsTimeRange.DAY, StatsTimeRange.WEEK -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
                 StatsTimeRange.MONTH, StatsTimeRange.YEAR -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.42f)
-                StatsTimeRange.ALL -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.40f)
+                StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.40f)
             }
             Card(
                 shape = RoundedCornerShape(28.dp),
@@ -1130,7 +1162,7 @@ private fun ListeningTimelineSection(
                                     StatsTimeRange.WEEK -> stringResource(R.string.presentation_batch_g_stats_rhythm_weekly)
                                     StatsTimeRange.MONTH -> stringResource(R.string.presentation_batch_g_stats_rhythm_monthly)
                                     StatsTimeRange.YEAR -> stringResource(R.string.presentation_batch_g_stats_rhythm_year)
-                                    StatsTimeRange.ALL -> stringResource(R.string.presentation_batch_g_stats_rhythm_all_time)
+                                    StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> stringResource(R.string.presentation_batch_g_stats_rhythm_all_time)
                                 },
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
@@ -1143,6 +1175,7 @@ private fun ListeningTimelineSection(
                                     StatsTimeRange.MONTH -> stringResource(R.string.presentation_batch_g_stats_grouped_week_of_month)
                                     StatsTimeRange.YEAR -> stringResource(R.string.presentation_batch_g_stats_grouped_by_month)
                                     StatsTimeRange.ALL -> stringResource(R.string.presentation_batch_g_stats_grouped_by_year)
+                                    StatsTimeRange.CUSTOM -> stringResource(R.string.lmusic_stats_range_custom)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1519,7 +1552,7 @@ private fun VerticalTimelineBarChart(
     val highlightColor = when (range) {
         StatsTimeRange.DAY, StatsTimeRange.WEEK -> MaterialTheme.colorScheme.primary
         StatsTimeRange.MONTH, StatsTimeRange.YEAR -> MaterialTheme.colorScheme.secondary
-        StatsTimeRange.ALL -> MaterialTheme.colorScheme.tertiary
+        StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> MaterialTheme.colorScheme.tertiary
     }
     val regularColor = highlightColor.copy(alpha = 0.72f)
     val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
@@ -1617,7 +1650,7 @@ private fun HorizontalTimelineBarChart(
     val highlightColor = when (range) {
         StatsTimeRange.DAY, StatsTimeRange.WEEK -> MaterialTheme.colorScheme.primary
         StatsTimeRange.MONTH, StatsTimeRange.YEAR -> MaterialTheme.colorScheme.secondary
-        StatsTimeRange.ALL -> MaterialTheme.colorScheme.tertiary
+        StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> MaterialTheme.colorScheme.tertiary
     }
     val regularColor = highlightColor.copy(alpha = 0.72f)
     val trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
@@ -1693,7 +1726,7 @@ private fun timelineSupportingCopy(
             StatsTimeRange.WEEK -> R.string.presentation_batch_g_stats_timeline_support_week
             StatsTimeRange.MONTH -> R.string.presentation_batch_g_stats_timeline_support_month
             StatsTimeRange.YEAR -> R.string.presentation_batch_g_stats_timeline_support_year
-            StatsTimeRange.ALL -> R.string.presentation_batch_g_stats_timeline_support_all
+            StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> R.string.presentation_batch_g_stats_timeline_support_all
         }
     )
     return stringResource(selectedMetric.descriptionRes) + " " + rangeCopy
@@ -1772,7 +1805,7 @@ private fun timelineChartSpecFor(
             horizontalContentPadding = 16.dp
         )
 
-        StatsTimeRange.ALL -> {
+        StatsTimeRange.ALL, StatsTimeRange.CUSTOM -> {
             val isSparse = entryCount <= 4
             TimelineChartSpec(
                 layout = TimelineChartLayout.Vertical,
