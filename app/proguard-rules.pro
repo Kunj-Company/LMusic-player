@@ -73,6 +73,10 @@
 -keep class com.theveloper.pixelplay.data.preferences.PreferenceBackupEntry { *; }
 -keep class com.theveloper.pixelplay.data.backup.model.** { *; }
 -keep class com.theveloper.pixelplay.data.backup.module.** { *; }
+# LMusic: listening history and skips are stored as Gson JSON. Keep field names stable
+# across builds so stats survive app updates.
+-keep class com.theveloper.pixelplay.data.stats.PlaybackStatsRepository$PlaybackEvent { *; }
+-keep class com.theveloper.pixelplay.data.stats.PlaybackStatsRepository$SkipEvent { *; }
 # Backup payload entities are part of the persisted .pxpl contract.
 -keep class com.theveloper.pixelplay.data.database.FavoritesEntity { *; }
 -keep class com.theveloper.pixelplay.data.database.SongEngagementEntity { *; }
