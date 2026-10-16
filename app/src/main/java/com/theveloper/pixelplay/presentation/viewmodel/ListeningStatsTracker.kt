@@ -99,7 +99,7 @@ class ListeningStatsTracker @Inject constructor(
         fallbackDurationMs: Long,
         isPlaying: Boolean
     ) {
-        finalizeCurrentSession()
+        finalizeCurrentSession(recordSkipIfShort = true)
         val safeSongId = songId?.takeIf { it.isNotBlank() }
         if (safeSongId == null) {
             return
@@ -220,7 +220,11 @@ class ListeningStatsTracker @Inject constructor(
     }
 
     @Synchronized
-    fun finalizeCurrentSession(forceSynchronousPersistence: Boolean = false) {
+    fun finalizeCurrentSession(
+        forceSynchronousPersistence: Boolean = false,
+        // Only a move to another track counts as a skip — not pausing, stopping or closing the app.
+        recordSkipIfShort: Boolean = false
+    ) {
         val session = currentSession ?: return
         val nowRealtime = SystemClock.elapsedRealtime()
         val nowEpoch = System.currentTimeMillis()
@@ -234,7 +238,7 @@ class ListeningStatsTracker @Inject constructor(
         } else {
             MIN_SESSION_LISTEN_MS
         }
-        if (listened < playThresholdMs && listened >= MIN_SKIP_LISTEN_MS) {
+        if (recordSkipIfShort && listened < playThresholdMs && listened >= MIN_SKIP_LISTEN_MS) {
             val skippedSongId = session.songId
             persistenceScope.launch {
                 runCatching { playbackStatsRepository.recordSkip(skippedSongId) }

@@ -4558,6 +4558,7 @@ class PlayerViewModel @Inject constructor(
         val pending = pendingMetadataEdit ?: return
         pendingMetadataEdit = null
         if (!granted) {
+            com.theveloper.pixelplay.data.media.PendingExtendedTags.clear(pending.song.id)
             viewModelScope.launch {
                 _toastEvents.emit(context.getString(R.string.player_permission_denied_edit_this_file))
             }
@@ -4635,6 +4636,7 @@ class PlayerViewModel @Inject constructor(
         val previousAlbumArt = song.albumArtUriString
 
         val result = metadataEditStateHolder.saveMetadata(
+            extendedTags = com.theveloper.pixelplay.data.media.PendingExtendedTags.take(song.id),
             song = song,
             newTitle = newTitle,
             newArtist = newArtist,

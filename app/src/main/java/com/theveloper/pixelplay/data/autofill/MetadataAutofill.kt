@@ -186,9 +186,11 @@ object OfflineMetadataGuesser {
 
     data class ParsedName(val track: Int?, val artist: String?, val title: String?)
 
-    private val trackArtistTitle = Regex("^(\\d{1,3})\\s*[.\\-)]?\\s+(.+?)\\s+[-–—]\\s+(.+)$")
+    // A leading number is a track number only with a separator ("01 -", "3.") or a leading zero,
+    // so names like "50 Cent - In Da Club" stay intact.
+    private val trackArtistTitle = Regex("^(0\\d{0,2}|\\d{1,3}(?=\\s*[.\\-)]))\\s*[.\\-)]?\\s+(.+?)\\s+[-–—]\\s+(.+)$")
     private val artistTrackTitle = Regex("^(.+?)\\s+[-–—]\\s+(\\d{1,3})\\s+[-–—]\\s+(.+)$")
-    private val trackTitle = Regex("^(\\d{1,3})\\s*[.\\-)]?\\s+(.+)$")
+    private val trackTitle = Regex("^(0\\d{0,2}|\\d{1,3}(?=\\s*[.\\-)]))\\s*[.\\-)]?\\s+(.+)$")
     private val artistTitle = Regex("^(.+?)\\s+[-–—]\\s+(.+)$")
 
     fun parseFileName(name: String): ParsedName {
@@ -202,11 +204,7 @@ object OfflineMetadataGuesser {
             return ParsedName(it.groupValues[2].toIntOrNull(), it.groupValues[1].trim(), it.groupValues[3].trim())
         }
         trackTitle.matchEntire(cleaned)?.let {
-            // "1999" or "22" alone are probably titles, not track numbers.
-            val number = it.groupValues[1]
-            if (number.length <= 2 || number.startsWith("0")) {
-                return ParsedName(number.toIntOrNull(), null, it.groupValues[2].trim())
-            }
+            return ParsedName(it.groupValues[1].toIntOrNull(), null, it.groupValues[2].trim())
         }
         artistTitle.matchEntire(cleaned)?.let {
             return ParsedName(null, it.groupValues[1].trim(), it.groupValues[2].trim())
@@ -265,7 +263,8 @@ object MusicBrainzAutofill {
             }
             add("recording:\"${lucene(cleanTitle)}\"")
             // Loose, unquoted fallback for typos and odd spellings.
-            add(listOf(cleanTitle, artist).filter { it.isNotBlank() }.joinToString(" ") { lucene(it) })
+            // Lower-cased so words like AND / OR / NOT in titles aren't read as operators.
+            add(listOf(cleanTitle, artist).filter { it.isNotBlank() }.joinToString(" ") { lucene(it.lowercase(Locale.ROOT)) })
         }.distinct()
 
         val seen = LinkedHashMap<String, AutofillCandidate>()
@@ -483,7 +482,7 @@ object MusicBrainzAutofill {
     }
 
     private fun lucene(value: String): String =
-        value.trim().replace(Regex("([+\\-!(){}\\[\\]^\"~*?:\\\\/]|&&|\\|\\|)"), "\\\\$1")
+        value.trim().replace(Regex("([+\\-!(){}\\[\\]^\"~*?:\\\\/&|])"), "\\\\$1")
 
     // -- HTTP ------------------------------------------------------------------------------
 

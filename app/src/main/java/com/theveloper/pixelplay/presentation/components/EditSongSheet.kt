@@ -205,6 +205,11 @@ private fun EditSongContent(
         discNumber = song.discNumber?.toString() ?: ""
         replayGainTrackGainDb = ""
         replayGainAlbumGainDb = ""
+        albumArtist = song.albumArtist ?: ""
+        year = song.year.takeIf { it > 0 }?.toString() ?: ""
+        composer = ""
+        initialExtended = com.theveloper.pixelplay.data.media.ExtendedTagSnapshot(albumArtist, year, "")
+        autofillIds = null
         coverArtPreview = null
         editedCoverArt = null
         isCoverArtDeleted = false
@@ -282,9 +287,17 @@ private fun EditSongContent(
                         android.graphics.BitmapFactory.decodeByteArray(art.bytes, 0, art.bytes.size)?.asImageBitmap()
                     }.getOrNull()
                 }
-                if (result.candidate.source == com.theveloper.pixelplay.data.autofill.AutofillSource.MUSICBRAINZ) {
-                    autofillIds = result.candidate
-                }
+                // Store MusicBrainz IDs only when the match was taken as this song's identity.
+                val identityApplied = result.selected.containsAll(
+                    listOf(
+                        com.theveloper.pixelplay.data.autofill.AutofillField.TITLE,
+                        com.theveloper.pixelplay.data.autofill.AutofillField.ARTIST
+                    )
+                ) || result.candidate.confidence >= 80
+                autofillIds = if (
+                    result.candidate.source == com.theveloper.pixelplay.data.autofill.AutofillSource.MUSICBRAINZ &&
+                    identityApplied
+                ) result.candidate else null
                 sheetScope.launch { snackbarHostState.showSnackbar(autofillAppliedMessage) }
             }
         )

@@ -174,7 +174,13 @@ fun MetadataAutofillDialog(
                     .onFailure { Timber.w(it, "Offline autofill failed") }
                     .getOrNull()
             }
-            runSearch()
+            // Untagged files: search with what the filename and folder suggest.
+            offlineCandidate?.fields?.let { guess ->
+                if (queryTitle.isBlank()) queryTitle = guess.title
+                if (queryArtist.isBlank()) queryArtist = guess.artist
+                if (queryAlbum.isBlank()) queryAlbum = guess.album
+            }
+            if (queryTitle.isNotBlank()) runSearch() else online = OnlineState.Loaded(emptyList())
         }
 
         val chosen = selected

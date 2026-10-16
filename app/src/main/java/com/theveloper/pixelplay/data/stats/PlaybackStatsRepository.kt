@@ -220,7 +220,9 @@ class PlaybackStatsRepository @Inject constructor(
         val written = synchronized(skipLock) {
             val skips = readSkipsLocked()
             skips += SkipEvent(songId, timestamp.coerceAtLeast(0L))
-            writeSkipsLocked(skips)
+            // Keep the file small: the most recent skips are what the insight needs.
+            val trimmed = if (skips.size > MAX_SKIP_EVENTS) skips.takeLast(MAX_SKIP_EVENTS) else skips
+            writeSkipsLocked(trimmed)
         }
         if (written) notifyStatsChanged()
     }
@@ -468,7 +470,7 @@ class PlaybackStatsRepository @Inject constructor(
         )
 
         // ---- LMusic insights: skips and first-time listens in this period ----
-        val lowerBound = startBound ?: Long.MIN_VALUE
+        val lowerBound = if (range == StatsTimeRange.ALL) Long.MIN_VALUE else (startBound ?: Long.MIN_VALUE)
         val skipCount = skipEvents.count { it.timestamp in lowerBound..endBound }
         val firstPlayBySong = HashMap<String, Long>()
         allEvents.forEach { event ->
@@ -1209,6 +1211,7 @@ class PlaybackStatsRepository @Inject constructor(
         // LMusic keeps listening history for life (lifetime stats); this is only a safety cap.
         private val MAX_HISTORY_AGE_MS = TimeUnit.DAYS.toMillis(365L * 100)
         private const val SEGMENT_JOIN_TOLERANCE_MS = 0L
+        private const val MAX_SKIP_EVENTS = 50_000
     }
 }
 

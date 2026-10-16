@@ -832,6 +832,7 @@ private fun rememberYourMixTitleStyle(): TextStyle {
             fontFamily = FontFamily(
                 Font(
                     resId = R.font.bricolage_variable,
+                    weight = FontWeight.ExtraBold,
                     variationSettings = FontVariation.Settings(
                         FontVariation.weight(800),
                         FontVariation.width(100f),

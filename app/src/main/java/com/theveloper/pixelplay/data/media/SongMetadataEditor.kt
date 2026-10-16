@@ -471,7 +471,7 @@ class SongMetadataEditor(
                     val current = musicDao.getSongById(songId).first()
                     musicDao.updateSongAlbumArtistAndYear(
                         songId = songId,
-                        albumArtist = extra.albumArtist?.trim()?.ifBlank { null } ?: current?.albumArtist,
+                        albumArtist = if (extra.albumArtist != null) extra.albumArtist.trim().ifBlank { null } else current?.albumArtist,
                         year = if (extra.year != null) (extra.yearNumber ?: 0) else (current?.year ?: 0)
                     )
                 }.onFailure { Timber.tag(TAG).w(it, "Could not update album artist/year in library") }

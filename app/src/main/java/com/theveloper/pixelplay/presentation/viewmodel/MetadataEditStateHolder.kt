@@ -63,7 +63,8 @@ class MetadataEditStateHolder @Inject constructor(
         newDiscNumber: Int?,
         newReplayGainTrackGainDb: String? = null,
         newReplayGainAlbumGainDb: String? = null,
-        coverArtUpdate: CoverArtUpdate?
+        coverArtUpdate: CoverArtUpdate?,
+        extendedTags: com.theveloper.pixelplay.data.media.ExtendedTagUpdate? = null
     ): MetadataEditResult = withContext(Dispatchers.IO) {
         
         Log.d("MetadataEditStateHolder", "Starting saveMetadata for: ${song.title}")
@@ -106,7 +107,6 @@ class MetadataEditStateHolder @Inject constructor(
             )
         }
 
-        val extendedTags = com.theveloper.pixelplay.data.media.PendingExtendedTags.take(song.id)
         val result = songMetadataEditor.editSongMetadata(
             newTitle = newTitle,
             newArtist = newArtist,
@@ -147,7 +147,7 @@ class MetadataEditStateHolder @Inject constructor(
                 trackNumber = newTrackNumber,
                 discNumber = newDiscNumber,
                 albumArtUriString = refreshedAlbumArtUri,
-                albumArtist = extendedTags?.albumArtist?.trim()?.ifBlank { null } ?: song.albumArtist,
+                albumArtist = if (extendedTags?.albumArtist != null) extendedTags.albumArtist.trim().ifBlank { null } else song.albumArtist,
                 year = if (extendedTags?.year != null) (extendedTags.yearNumber ?: 0) else song.year,
             )
 
