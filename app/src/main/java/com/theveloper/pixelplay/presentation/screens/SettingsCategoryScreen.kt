@@ -520,6 +520,7 @@ fun SettingsCategoryScreen(
                         }
                         SettingsCategory.APPEARANCE -> {
                             val useSmoothCorners by settingsViewModel.useSmoothCorners.collectAsStateWithLifecycle()
+                            val appColorStyle by settingsViewModel.appColorStyle.collectAsStateWithLifecycle()
 
                             SettingsSubsection(title = stringResource(R.string.setcat_global_theme)) {
                                 ThemeSelectorItem(
@@ -544,6 +545,17 @@ fun SettingsCategoryScreen(
                                     selectedKey = uiState.appThemeMode,
                                     onSelectionChanged = { settingsViewModel.setAppThemeMode(it) },
                                     leadingIcon = { Icon(Icons.Outlined.LightMode, null, tint = MaterialTheme.colorScheme.secondary) }
+                                )
+                                ThemeSelectorItem(
+                                    label = stringResource(R.string.lmusic_color_style_label),
+                                    description = stringResource(R.string.lmusic_color_style_desc),
+                                    options = mapOf(
+                                        com.theveloper.pixelplay.data.preferences.AppColorStyle.YUYU to stringResource(R.string.lmusic_color_style_yuyu),
+                                        com.theveloper.pixelplay.data.preferences.AppColorStyle.MATERIAL_YOU to stringResource(R.string.lmusic_color_style_material_you)
+                                    ),
+                                    selectedKey = appColorStyle,
+                                    onSelectionChanged = { settingsViewModel.setAppColorStyle(it) },
+                                    leadingIcon = { Icon(Icons.Outlined.Style, null, tint = MaterialTheme.colorScheme.secondary) }
                                 )
                                 SwitchSettingItem(
                                     title = stringResource(R.string.setcat_smooth_corners_title),

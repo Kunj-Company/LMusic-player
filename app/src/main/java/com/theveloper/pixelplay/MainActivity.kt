@@ -235,6 +235,7 @@ class MainActivity : ComponentActivity() {
                 AppThemeMode.LIGHT -> false
                 else -> systemDarkTheme
             }
+            val appColorStyle by themePreferencesRepository.appColorStyleFlow.collectAsStateWithLifecycle(initialValue = com.theveloper.pixelplay.data.preferences.AppColorStyle.YUYU)
             val isSetupComplete by mainViewModel.isSetupComplete.collectAsStateWithLifecycle()
             
             // Crash report dialog state
@@ -276,7 +277,8 @@ class MainActivity : ComponentActivity() {
             }
 
             PixelPlayTheme(
-                darkTheme = useDarkTheme
+                darkTheme = useDarkTheme,
+                useYuyuColors = appColorStyle != com.theveloper.pixelplay.data.preferences.AppColorStyle.MATERIAL_YOU
             ) {
                 var contentVisible by remember { mutableStateOf(false) }
                 val contentAlpha by animateFloatAsState(

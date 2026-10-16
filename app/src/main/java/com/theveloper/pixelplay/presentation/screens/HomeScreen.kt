@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.em
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavController
@@ -830,20 +831,18 @@ private fun rememberYourMixTitleStyle(): TextStyle {
         TextStyle(
             fontFamily = FontFamily(
                 Font(
-                    resId = R.font.gflex_variable,
+                    resId = R.font.bricolage_variable,
                     variationSettings = FontVariation.Settings(
-                        FontVariation.weight(636),
-                        FontVariation.width(152f),
-                        FontVariation.Setting("ROND", 50f),
-                        FontVariation.Setting("XTRA", 520f),
-                        FontVariation.Setting("YOPQ", 90f),
-                        FontVariation.Setting("YTLC", 505f)
+                        FontVariation.weight(800),
+                        FontVariation.width(100f),
+                        FontVariation.Setting("opsz", 72f)
                     )
                 )
             ),
-            fontWeight = FontWeight(760),
-            fontSize = 64.sp,
-            lineHeight = 62.sp
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 60.sp,
+            lineHeight = 58.sp,
+            letterSpacing = (-0.035).em
         )
     }
 }

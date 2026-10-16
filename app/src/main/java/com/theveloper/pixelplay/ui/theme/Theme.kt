@@ -89,14 +89,100 @@ val LightColorScheme = lightColorScheme(
     onError = PixelPlayWhite
 )
 
+/** Yuyu light scheme — ink primary, paper surfaces, Ember accent as tertiary. */
+val YuyuLightColorScheme = lightColorScheme(
+    primary = YuyuColors.Text,
+    onPrimary = YuyuColors.BgCanvas,
+    primaryContainer = YuyuColors.BgEmphasis,
+    onPrimaryContainer = YuyuColors.Text,
+    inversePrimary = YuyuColors.DarkText,
+    secondary = YuyuColors.TextSecondary,
+    onSecondary = YuyuColors.BgCanvas,
+    secondaryContainer = YuyuColors.BgMuted,
+    onSecondaryContainer = YuyuColors.Text,
+    tertiary = YuyuColors.Accent,
+    onTertiary = Color.White,
+    tertiaryContainer = YuyuColors.AccentSoft,
+    onTertiaryContainer = YuyuColors.AccentText,
+    background = YuyuColors.BgCanvas,
+    onBackground = YuyuColors.Text,
+    surface = YuyuColors.BgCanvas,
+    onSurface = YuyuColors.Text,
+    surfaceVariant = YuyuColors.BgMuted,
+    onSurfaceVariant = YuyuColors.TextMuted,
+    surfaceTint = YuyuColors.Text,
+    inverseSurface = YuyuColors.Text,
+    inverseOnSurface = YuyuColors.DarkText,
+    error = YuyuColors.DangerFg,
+    onError = Color.White,
+    errorContainer = YuyuColors.DangerBg,
+    onErrorContainer = YuyuColors.DangerFg,
+    outline = YuyuColors.BorderStrong,
+    outlineVariant = YuyuColors.Border,
+    scrim = Color.Black,
+    surfaceBright = YuyuColors.BgCanvas,
+    surfaceDim = YuyuColors.BgMuted,
+    surfaceContainerLowest = YuyuColors.BgCanvas,
+    surfaceContainerLow = YuyuColors.BgSubtle,
+    surfaceContainer = YuyuColors.BgMuted,
+    surfaceContainerHigh = YuyuColors.BgEmphasis,
+    surfaceContainerHighest = YuyuColors.Border,
+)
+
+/** Yuyu dark scheme — inverted ink, near-black surfaces, lightened Ember for text. */
+val YuyuDarkColorScheme = darkColorScheme(
+    primary = YuyuColors.DarkText,
+    onPrimary = YuyuColors.Text,
+    primaryContainer = YuyuColors.DarkBgEmphasis,
+    onPrimaryContainer = YuyuColors.DarkText,
+    inversePrimary = YuyuColors.Text,
+    secondary = YuyuColors.DarkTextSecondary,
+    onSecondary = YuyuColors.Text,
+    secondaryContainer = YuyuColors.DarkBgMuted,
+    onSecondaryContainer = YuyuColors.DarkText,
+    tertiary = YuyuColors.DarkAccentText,
+    onTertiary = YuyuColors.Text,
+    tertiaryContainer = YuyuColors.DarkAccentSoft,
+    onTertiaryContainer = YuyuColors.DarkAccentText,
+    background = YuyuColors.DarkBgCanvas,
+    onBackground = YuyuColors.DarkText,
+    surface = YuyuColors.DarkBgCanvas,
+    onSurface = YuyuColors.DarkText,
+    surfaceVariant = YuyuColors.DarkBgMuted,
+    onSurfaceVariant = YuyuColors.DarkTextMuted,
+    surfaceTint = YuyuColors.DarkText,
+    inverseSurface = YuyuColors.DarkText,
+    inverseOnSurface = YuyuColors.Text,
+    error = YuyuColors.DarkDangerFg,
+    onError = YuyuColors.Text,
+    errorContainer = YuyuColors.DarkDangerBg,
+    onErrorContainer = YuyuColors.DarkDangerFg,
+    outline = YuyuColors.DarkBorderStrong,
+    outlineVariant = YuyuColors.DarkBgEmphasis,
+    scrim = Color.Black,
+    surfaceBright = YuyuColors.DarkBgEmphasis,
+    surfaceDim = YuyuColors.DarkBgCanvas,
+    surfaceContainerLowest = Color(0xFF0C0C0E),
+    surfaceContainerLow = YuyuColors.DarkBgSubtle,
+    surfaceContainer = YuyuColors.DarkBgInverse,
+    surfaceContainerHigh = YuyuColors.DarkBgMuted,
+    surfaceContainerHighest = YuyuColors.DarkBgEmphasis,
+)
+
 @Composable
 fun PixelPlayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     colorSchemePairOverride: ColorSchemePair? = null,
+    useYuyuColors: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
     val finalColorScheme = when {
+        // LMusic default: the Yuyu palette app-wide. The now-playing screen still takes its
+        // colors from the album art through colorSchemePairOverride.
+        colorSchemePairOverride == null && useYuyuColors -> {
+            if (darkTheme) YuyuDarkColorScheme else YuyuLightColorScheme
+        }
         colorSchemePairOverride == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             // Tema dinámico del sistema como prioridad si no hay override
             try {

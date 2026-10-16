@@ -1196,6 +1196,17 @@ class SettingsViewModel @Inject constructor(
     val useSmoothCorners: StateFlow<Boolean> = userPreferencesRepository.useSmoothCornersFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val appColorStyle: StateFlow<String> = themePreferencesRepository.appColorStyleFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            com.theveloper.pixelplay.data.preferences.AppColorStyle.YUYU
+        )
+
+    fun setAppColorStyle(style: String) {
+        viewModelScope.launch { themePreferencesRepository.setAppColorStyle(style) }
+    }
+
     val tapBackgroundClosesPlayer: StateFlow<Boolean> = userPreferencesRepository.tapBackgroundClosesPlayerFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 

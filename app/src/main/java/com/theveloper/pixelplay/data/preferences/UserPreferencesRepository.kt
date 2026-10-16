@@ -41,6 +41,12 @@ object ThemePreference {
     const val GLOBAL = "global"
 }
 
+/** App-wide color source. LMusic defaults to the Yuyu design system. */
+object AppColorStyle {
+    const val YUYU = "yuyu"
+    const val MATERIAL_YOU = "material_you"
+}
+
 object AppThemeMode {
     const val FOLLOW_SYSTEM = "follow_system"
     const val LIGHT = "light"
