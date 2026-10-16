@@ -85,8 +85,10 @@ APKs install as updates only when every build is signed with the same key.
 
 ## Releasing
 
-Push a tag: `git tag v1.1.0 && git push origin v1.1.0`. The workflow builds the APK and
-publishes a GitHub Release with it. Notes come from `release-notes/v1.1.0.md` if present.
+Bump `APP_VERSION_NAME` in `gradle.properties` (e.g. `1.1.0`), add
+`release-notes/v1.1.0.md`, and push to `main`. The workflow sees there's no release
+for that version yet, builds the APK and publishes **LMusic v1.1.0** with it (and creates
+the tag). Pushing a `v*` tag yourself works too. Other pushes just build an APK artifact.
 
 ## Credits and licence
 

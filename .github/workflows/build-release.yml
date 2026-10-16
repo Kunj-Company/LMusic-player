@@ -1,7 +1,10 @@
 name: Build & Release LMusic
 
 # Every push to main builds a signed APK (download it from the run's "Artifacts").
-# Pushing a tag like v1.2.0 also publishes a GitHub Release with the APK attached.
+# Releases: when a push to main carries a version (APP_VERSION_NAME in gradle.properties)
+# that has no GitHub Release yet, the build is published as release v<version> with the
+# APK attached. So to ship 1.1.0: bump APP_VERSION_NAME, add release-notes/v1.1.0.md, push.
+# Pushing a tag like v1.2.0 publishes that version too.
 
 on:
   push:
@@ -110,16 +113,26 @@ jobs:
       # ---- Version -------------------------------------------------------------
       - name: Work out version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           CODE=$(( GITHUB_RUN_NUMBER + 100 ))
+          BASE="$(grep '^APP_VERSION_NAME=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          RELEASE=false
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             NAME="${GITHUB_REF#refs/tags/v}"
+            RELEASE=true
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]] && \
+               ! gh release view "v$BASE" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            NAME="$BASE"
+            RELEASE=true
           else
-            NAME="$(grep '^APP_VERSION_NAME=' gradle.properties | cut -d= -f2)-build.${GITHUB_RUN_NUMBER}"
+            NAME="$BASE-build.${GITHUB_RUN_NUMBER}"
           fi
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "Building LMusic $NAME ($CODE)"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "Building LMusic $NAME ($CODE), release=$RELEASE"
 
       # ---- Build ---------------------------------------------------------------
       - name: Build release APK
@@ -153,14 +166,12 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.version.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="v${{ steps.version.outputs.name }}"
           NOTES_FILE="release-notes/${TAG}.md"
-          if [ -f "$NOTES_FILE" ]; then
-            gh release create "$TAG" "${{ steps.apk.outputs.file }}" --title "LMusic ${TAG}" --notes-file "$NOTES_FILE"
-          else
-            gh release create "$TAG" "${{ steps.apk.outputs.file }}" --title "LMusic ${TAG}" --generate-notes
-          fi
+          ARGS=(--title "LMusic ${TAG}" --target "$GITHUB_SHA")
+          if [ -f "$NOTES_FILE" ]; then ARGS+=(--notes-file "$NOTES_FILE"); else ARGS+=(--generate-notes); fi
+          gh release create "$TAG" "${{ steps.apk.outputs.file }}" "${ARGS[@]}"
