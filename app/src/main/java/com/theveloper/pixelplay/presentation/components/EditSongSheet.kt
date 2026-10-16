@@ -16,6 +16,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Piano
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material.icons.rounded.Info
@@ -172,6 +176,17 @@ private fun EditSongContent(
     var pendingCoverArtUri by remember { mutableStateOf<Uri?>(null) }
 
     var showInfoDialog by remember { mutableStateOf(false) }
+
+    // LMusic: extra tag fields + autofill
+    var albumArtist by remember { mutableStateOf(song.albumArtist ?: "") }
+    var year by remember { mutableStateOf(song.year.takeIf { it > 0 }?.toString() ?: "") }
+    var composer by remember { mutableStateOf("") }
+    var initialExtended by remember { mutableStateOf(com.theveloper.pixelplay.data.media.ExtendedTagSnapshot(albumArtist, year, "")) }
+    var showAutofill by remember { mutableStateOf(false) }
+    var autofillIds by remember { mutableStateOf<com.theveloper.pixelplay.data.autofill.AutofillCandidate?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val autofillAppliedMessage = stringResource(R.string.lmusic_autofill_applied)
+    val sheetScope = rememberCoroutineScope()
     val context = LocalContext.current
     val pickCoverArtLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) {
@@ -217,7 +232,62 @@ private fun EditSongContent(
 
             replayGainTrackGainDb = formatReplayGainForInput(embeddedMetadata?.replayGainTrackGainDb)
             replayGainAlbumGainDb = formatReplayGainForInput(embeddedMetadata?.replayGainAlbumGainDb)
+
+            val extended = withContext(Dispatchers.IO) {
+                com.theveloper.pixelplay.data.media.ExtendedTagReader.read(java.io.File(song.path))
+            }
+            if (extended != null) {
+                albumArtist = extended.albumArtist.ifBlank { song.albumArtist.orEmpty() }
+                year = extended.year.ifBlank { song.year.takeIf { it > 0 }?.toString().orEmpty() }
+                composer = extended.composer
+                initialExtended = com.theveloper.pixelplay.data.media.ExtendedTagSnapshot(albumArtist, year, composer)
+            }
         }
+    }
+
+    if (showAutofill) {
+        MetadataAutofillDialog(
+            song = song,
+            current = com.theveloper.pixelplay.data.autofill.MetadataFields(
+                title = title,
+                artist = artist,
+                album = album,
+                albumArtist = albumArtist,
+                year = year,
+                genre = genre,
+                trackNumber = trackNumber.takeIf { it != "0" }.orEmpty(),
+                discNumber = discNumber,
+                composer = composer
+            ),
+            onDismiss = { showAutofill = false },
+            onApply = { result ->
+                val f = result.fields
+                result.selected.forEach { field ->
+                    when (field) {
+                        com.theveloper.pixelplay.data.autofill.AutofillField.TITLE -> title = f.title
+                        com.theveloper.pixelplay.data.autofill.AutofillField.ARTIST -> artist = f.artist
+                        com.theveloper.pixelplay.data.autofill.AutofillField.ALBUM -> album = f.album
+                        com.theveloper.pixelplay.data.autofill.AutofillField.ALBUM_ARTIST -> albumArtist = f.albumArtist
+                        com.theveloper.pixelplay.data.autofill.AutofillField.YEAR -> year = f.year
+                        com.theveloper.pixelplay.data.autofill.AutofillField.GENRE -> genre = f.genre
+                        com.theveloper.pixelplay.data.autofill.AutofillField.TRACK -> trackNumber = f.trackNumber
+                        com.theveloper.pixelplay.data.autofill.AutofillField.DISC -> discNumber = f.discNumber
+                        com.theveloper.pixelplay.data.autofill.AutofillField.COMPOSER -> composer = f.composer
+                    }
+                }
+                result.coverArt?.let { art ->
+                    editedCoverArt = CoverArtUpdate(art.bytes, art.mimeType)
+                    isCoverArtDeleted = false
+                    coverArtPreview = runCatching {
+                        android.graphics.BitmapFactory.decodeByteArray(art.bytes, 0, art.bytes.size)?.asImageBitmap()
+                    }.getOrNull()
+                }
+                if (result.candidate.source == com.theveloper.pixelplay.data.autofill.AutofillSource.MUSICBRAINZ) {
+                    autofillIds = result.candidate
+                }
+                sheetScope.launch { snackbarHostState.showSnackbar(autofillAppliedMessage) }
+            }
+        )
     }
 
     if (showCoverArtCropper && pendingCoverArtUri != null) {
@@ -294,6 +364,18 @@ private fun EditSongContent(
                     )
                 },
                 actions = {
+                    FilledTonalButton(
+                        onClick = { showAutofill = true },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.lmusic_autofill))
+                    }
                     FilledTonalIconButton(
                         modifier = Modifier.padding(end = 10.dp),
                         onClick = { showInfoDialog = true },
@@ -304,6 +386,7 @@ private fun EditSongContent(
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.statusBars
@@ -527,6 +610,70 @@ private fun EditSongContent(
                 }
             }
 
+            // --- LMusic: Album artist / Year / Composer ---
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        modifier = Modifier.padding(start = 4.dp),
+                        text = stringResource(R.string.lmusic_field_album_artist),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    OutlinedTextField(
+                        value = albumArtist,
+                        colors = textFieldColors,
+                        shape = textFieldShape,
+                        onValueChange = { albumArtist = it },
+                        placeholder = { Text(stringResource(R.string.lmusic_field_album_artist)) },
+                        leadingIcon = { Icon(Icons.Rounded.Groups, tint = MaterialTheme.colorScheme.primary, contentDescription = null) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(modifier = Modifier.weight(0.4f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            modifier = Modifier.padding(start = 4.dp),
+                            text = stringResource(R.string.lmusic_field_year),
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        OutlinedTextField(
+                            value = year,
+                            colors = textFieldColors,
+                            shape = textFieldShape,
+                            onValueChange = { input -> year = input.filter { it.isDigit() || it == '-' }.take(10) },
+                            placeholder = { Text("2024") },
+                            leadingIcon = { Icon(Icons.Rounded.CalendarMonth, tint = MaterialTheme.colorScheme.secondary, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            modifier = Modifier.padding(start = 4.dp),
+                            text = stringResource(R.string.lmusic_field_composer),
+                            color = MaterialTheme.colorScheme.tertiary,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                        OutlinedTextField(
+                            value = composer,
+                            colors = textFieldColors,
+                            shape = textFieldShape,
+                            onValueChange = { composer = it },
+                            placeholder = { Text(stringResource(R.string.lmusic_field_composer)) },
+                            leadingIcon = { Icon(Icons.Rounded.Piano, tint = MaterialTheme.colorScheme.tertiary, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+            }
+
             // --- Campo de Género ---
             item {
                 Column(
@@ -630,6 +777,28 @@ private fun EditSongContent(
                             onClick = {
                                 val resolvedTrackNumber = trackNumber.toIntOrNull() ?: song.trackNumber
                                 val resolvedDiscNumber = discNumber.toIntOrNull()
+                                // Only send fields the user changed, so an untouched sheet keeps
+                                // PixelPlayer's original behaviour for the file.
+                                val ids = autofillIds
+                                val extended = com.theveloper.pixelplay.data.media.ExtendedTagUpdate(
+                                    albumArtist = albumArtist.trim().takeIf { it != initialExtended.albumArtist.trim() },
+                                    year = year.trim().takeIf { it != initialExtended.year.trim() },
+                                    composer = composer.trim().takeIf { it != initialExtended.composer.trim() },
+                                    musicBrainzRecordingId = ids?.recordingId,
+                                    musicBrainzReleaseId = ids?.releaseId,
+                                    musicBrainzArtistId = ids?.artistId,
+                                    musicBrainzReleaseGroupId = ids?.releaseGroupId,
+                                )
+                                val albumArtistUnchanged = extended.albumArtist == null
+                                com.theveloper.pixelplay.data.media.PendingExtendedTags.put(
+                                    song.id,
+                                    // Keep an existing album artist instead of letting it be reset to the artist.
+                                    if (albumArtistUnchanged && initialExtended.albumArtist.isNotBlank()) {
+                                        extended.copy(albumArtist = initialExtended.albumArtist)
+                                    } else {
+                                        extended
+                                    }
+                                )
                                 onSave(
                                     title.trim(),
                                     artist.trim(),

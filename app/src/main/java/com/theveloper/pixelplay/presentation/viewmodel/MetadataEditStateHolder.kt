@@ -106,6 +106,7 @@ class MetadataEditStateHolder @Inject constructor(
             )
         }
 
+        val extendedTags = com.theveloper.pixelplay.data.media.PendingExtendedTags.take(song.id)
         val result = songMetadataEditor.editSongMetadata(
             newTitle = newTitle,
             newArtist = newArtist,
@@ -117,6 +118,7 @@ class MetadataEditStateHolder @Inject constructor(
             newReplayGainTrackGainDb = newReplayGainTrackGainDb,
             newReplayGainAlbumGainDb = newReplayGainAlbumGainDb,
             coverArtUpdate = finalCoverArtUpdate,
+            extendedTags = extendedTags,
             songId = resolvedSongId,
         )
 
@@ -145,6 +147,8 @@ class MetadataEditStateHolder @Inject constructor(
                 trackNumber = newTrackNumber,
                 discNumber = newDiscNumber,
                 albumArtUriString = refreshedAlbumArtUri,
+                albumArtist = extendedTags?.albumArtist?.trim()?.ifBlank { null } ?: song.albumArtist,
+                year = if (extendedTags?.year != null) (extendedTags.yearNumber ?: 0) else song.year,
             )
 
             // CRITICAL: Fetch the authoritative song object from the repository (MediaStore/DB).

@@ -236,6 +236,7 @@ class SongMetadataEditor(
         newReplayGainTrackGainDb: String? = null,
         newReplayGainAlbumGainDb: String? = null,
         coverArtUpdate: CoverArtUpdate? = null,
+        extendedTags: ExtendedTagUpdate? = null,
     ): SongMetadataEditResult = withContext(Dispatchers.IO) {
         val validationError = validateMetadataInput(newTitle, newArtist, newAlbum, newGenre, newLyrics)
         if (validationError != null) {
@@ -360,7 +361,8 @@ class SongMetadataEditor(
                         newDiscNumber = newDiscNumber,
                         replayGainTrackUpdate = replayGainTrackUpdate,
                         replayGainAlbumUpdate = replayGainAlbumUpdate,
-                        coverArtUpdate = coverArtUpdate
+                        coverArtUpdate = coverArtUpdate,
+                        extendedTags = extendedTags
                     )
                 } else {
                     Timber.tag(TAG).d("METADATA_EDIT: Using TagLib for $effectiveExtension: $path")
@@ -375,7 +377,8 @@ class SongMetadataEditor(
                         newDiscNumber = newDiscNumber,
                         replayGainTrackUpdate = replayGainTrackUpdate,
                         replayGainAlbumUpdate = replayGainAlbumUpdate,
-                        coverArtUpdate = coverArtUpdate
+                        coverArtUpdate = coverArtUpdate,
+                        extendedTags = extendedTags
                     )
                     if (!tagLibSuccess) {
                         Timber.tag(TAG)
@@ -391,7 +394,8 @@ class SongMetadataEditor(
                             newDiscNumber = newDiscNumber,
                             replayGainTrackUpdate = replayGainTrackUpdate,
                             replayGainAlbumUpdate = replayGainAlbumUpdate,
-                            coverArtUpdate = coverArtUpdate
+                            coverArtUpdate = coverArtUpdate,
+                            extendedTags = extendedTags
                         )
                     } else true
                 }
@@ -461,6 +465,17 @@ class SongMetadataEditor(
                 trackNumber = newTrackNumber,
                 discNumber = newDiscNumber
             )
+
+            extendedTags?.let { extra ->
+                runCatching {
+                    val current = musicDao.getSongById(songId).first()
+                    musicDao.updateSongAlbumArtistAndYear(
+                        songId = songId,
+                        albumArtist = extra.albumArtist?.trim()?.ifBlank { null } ?: current?.albumArtist,
+                        year = if (extra.year != null) (extra.yearNumber ?: 0) else (current?.year ?: 0)
+                    )
+                }.onFailure { Timber.tag(TAG).w(it, "Could not update album artist/year in library") }
+            }
 
             coverArtUpdate?.let {
                 AlbumArtUtils.clearCacheForSong(context, songId)
@@ -733,7 +748,8 @@ class SongMetadataEditor(
         newDiscNumber: Int?,
         replayGainTrackUpdate: ReplayGainUpdate = ReplayGainUpdate.Keep,
         replayGainAlbumUpdate: ReplayGainUpdate = ReplayGainUpdate.Keep,
-        coverArtUpdate: CoverArtUpdate? = null
+        coverArtUpdate: CoverArtUpdate? = null,
+        extendedTags: ExtendedTagUpdate? = null
     ): Boolean {
         // Check for problematic FLAC files first
         when (val flacResult = isProblematicFlacFile(filePath)) {
@@ -779,7 +795,17 @@ class SongMetadataEditor(
                 } else {
                     propertyMap.remove("DISCNUMBER")
                 }
-                propertyMap["ALBUMARTIST"] = arrayOf(newArtist)
+                if (extendedTags?.albumArtist != null) {
+                    propertyMap.upsertOrRemove("ALBUMARTIST", extendedTags.albumArtist.trim())
+                } else {
+                    propertyMap["ALBUMARTIST"] = arrayOf(newArtist)
+                }
+                extendedTags?.year?.let { propertyMap.upsertOrRemove("DATE", it.trim()) }
+                extendedTags?.composer?.let { propertyMap.upsertOrRemove("COMPOSER", it.trim()) }
+                extendedTags?.musicBrainzRecordingId?.takeIf { it.isNotBlank() }?.let { propertyMap["MUSICBRAINZ_TRACKID"] = arrayOf(it) }
+                extendedTags?.musicBrainzReleaseId?.takeIf { it.isNotBlank() }?.let { propertyMap["MUSICBRAINZ_ALBUMID"] = arrayOf(it) }
+                extendedTags?.musicBrainzArtistId?.takeIf { it.isNotBlank() }?.let { propertyMap["MUSICBRAINZ_ARTISTID"] = arrayOf(it) }
+                extendedTags?.musicBrainzReleaseGroupId?.takeIf { it.isNotBlank() }?.let { propertyMap["MUSICBRAINZ_RELEASEGROUPID"] = arrayOf(it) }
                 propertyMap.applyReplayGainUpdate(REPLAYGAIN_TRACK_GAIN_KEY, replayGainTrackUpdate)
                 propertyMap.applyReplayGainUpdate(REPLAYGAIN_ALBUM_GAIN_KEY, replayGainAlbumUpdate)
                 Timber.tag(TAG).e("TAGLIB: Updated property map, saving...")
@@ -854,7 +880,8 @@ class SongMetadataEditor(
         newDiscNumber: Int?,
         replayGainTrackUpdate: ReplayGainUpdate = ReplayGainUpdate.Keep,
         replayGainAlbumUpdate: ReplayGainUpdate = ReplayGainUpdate.Keep,
-        coverArtUpdate: CoverArtUpdate? = null
+        coverArtUpdate: CoverArtUpdate? = null,
+        extendedTags: ExtendedTagUpdate? = null
     ): Boolean {
         val targetFile = File(filePath)
         
@@ -869,7 +896,24 @@ class SongMetadataEditor(
             tag.setField(FieldKey.TITLE, newTitle)
             tag.setField(FieldKey.ARTIST, newArtist)
             tag.setField(FieldKey.ALBUM, newAlbum)
-            tag.setField(FieldKey.ALBUM_ARTIST, newArtist)
+            val albumArtistValue = extendedTags?.albumArtist?.trim()
+            when {
+                albumArtistValue == null -> tag.setField(FieldKey.ALBUM_ARTIST, newArtist)
+                albumArtistValue.isBlank() -> tag.deleteField(FieldKey.ALBUM_ARTIST)
+                else -> tag.setField(FieldKey.ALBUM_ARTIST, albumArtistValue)
+            }
+            extendedTags?.year?.trim()?.let { year ->
+                if (year.isBlank()) tag.deleteField(FieldKey.YEAR) else tag.setField(FieldKey.YEAR, year)
+            }
+            extendedTags?.composer?.trim()?.let { composer ->
+                if (composer.isBlank()) tag.deleteField(FieldKey.COMPOSER) else tag.setField(FieldKey.COMPOSER, composer)
+            }
+            runCatching {
+                extendedTags?.musicBrainzRecordingId?.takeIf { it.isNotBlank() }?.let { tag.setField(FieldKey.MUSICBRAINZ_TRACK_ID, it) }
+                extendedTags?.musicBrainzReleaseId?.takeIf { it.isNotBlank() }?.let { tag.setField(FieldKey.MUSICBRAINZ_RELEASEID, it) }
+                extendedTags?.musicBrainzArtistId?.takeIf { it.isNotBlank() }?.let { tag.setField(FieldKey.MUSICBRAINZ_ARTISTID, it) }
+                extendedTags?.musicBrainzReleaseGroupId?.takeIf { it.isNotBlank() }?.let { tag.setField(FieldKey.MUSICBRAINZ_RELEASE_GROUP_ID, it) }
+            }.onFailure { Timber.tag(TAG).w(it, "JAUDIOTAGGER: Could not write MusicBrainz IDs") }
             
             if (newGenre.isNotBlank()) {
                 tag.setField(FieldKey.GENRE, newGenre)
