@@ -34,9 +34,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         JellyfinSongEntity::class,
         JellyfinPlaylistEntity::class,
         AiCacheEntity::class,
-        AiUsageEntity::class
+        AiUsageEntity::class,
+        SongFeaturesEntity::class
     ],
-    version = 40,
+    version = 41,
     exportSchema = true
 )
 abstract class LMusicDatabase : RoomDatabase() {
@@ -56,6 +57,7 @@ abstract class LMusicDatabase : RoomDatabase() {
     abstract fun jellyfinDao(): JellyfinDao
     abstract fun aiCacheDao(): AiCacheDao
     abstract fun aiUsageDao(): AiUsageDao
+    abstract fun songFeaturesDao(): SongFeaturesDao
 
     companion object {
         // Gap-bridging no-op migrations for missing version ranges.
@@ -621,6 +623,20 @@ abstract class LMusicDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_songs_parent_directory_path_source_type_id " +
                         "ON songs(parent_directory_path, source_type, id)"
+                )
+            }
+        }
+
+        /** Smart features (experimental): on-device audio features per song. */
+        val MIGRATION_40_41 = object : Migration(40, 41) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `song_features` (" +
+                        "`song_id` TEXT NOT NULL, `model_version` INTEGER NOT NULL, " +
+                        "`analyzed_at` INTEGER NOT NULL, `scores` BLOB, `energy` REAL NOT NULL, " +
+                        "`energy_var` REAL NOT NULL, `tempo` REAL NOT NULL, `brightness` REAL NOT NULL, " +
+                        "`mood_tags` TEXT NOT NULL, `genre_tags` TEXT NOT NULL, `status` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`song_id`))"
                 )
             }
         }

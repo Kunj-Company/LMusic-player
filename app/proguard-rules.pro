@@ -214,3 +214,8 @@
     public static int d(...);
     public static int i(...);
 }
+
+# LMusic smart features: TensorFlow Lite runtime (JNI) and Gson-cached mixes
+-keep class org.tensorflow.lite.** { *; }
+-dontwarn org.tensorflow.lite.**
+-keep class com.twilighty.lmusic.data.smart.SmartMix { *; }

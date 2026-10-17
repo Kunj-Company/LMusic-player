@@ -41,7 +41,7 @@ class BarWidget4x1 : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val playerInfo = currentState<PlayerInfo>()
-            GlanceTheme {
+            GlanceTheme(colors = YuyuGlanceColors) {
                 BarWidget4x1Content(playerInfo = playerInfo, context = context)
             }
         }
@@ -60,10 +60,10 @@ class BarWidget4x1 : GlanceAppWidget() {
 
         val colors = playerInfo.getWidgetColors()
 
-        val widgetCornerRadius = 28.dp
-        val albumArtCornerRadius = 16.dp
-        val playButtonCornerRadius = if (isPlaying) 16.dp else 20.dp
-        val controlButtonCornerRadius = 16.dp
+        val widgetCornerRadius = 24.dp
+        val albumArtCornerRadius = 12.dp
+        val playButtonCornerRadius = 60.dp
+        val controlButtonCornerRadius = 60.dp
 
         Box(
             modifier = GlanceModifier

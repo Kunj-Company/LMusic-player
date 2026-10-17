@@ -279,7 +279,7 @@ fun PlaylistItems(
                     )
                 ),
             state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(bottom = bottomBarHeight + MiniPlayerHeight + 30.dp)
         ) {
             items(filteredPlaylists, key = { it.id }) { playlist ->
@@ -372,32 +372,29 @@ fun PlaylistItem(
         label = "playlistSelectionBorderAnimation"
     )
 
+    // Yuyu playlist row: flat, no card fill; a muted fill marks selection.
     val containerColor by animateColorAsState(
         targetValue = when {
-            isAddingToPlaylist -> MaterialTheme.colorScheme.surfaceContainerHigh
-            isSelected -> MaterialTheme.colorScheme.secondaryContainer
-            else -> MaterialTheme.colorScheme.surfaceContainerLow
+            isSelected -> com.twilighty.lmusic.presentation.yuyu.Yuyu.muted
+            else -> Color.Transparent
         },
         animationSpec = tween(durationMillis = 300),
         label = "playlistContainerColorAnimation"
     )
+    val rowShape = com.twilighty.lmusic.presentation.yuyu.YuyuShapes.lg
 
-    val selectionBorderColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0f),
-        animationSpec = tween(durationMillis = 250),
-        label = "playlistBorderColorAnimation"
-    )
-
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .scale(selectionScale)
+            .clip(rowShape)
+            .background(containerColor)
             .then(
                 if (isSelected && !isAddingToPlaylist) {
                     Modifier.border(
                         width = selectionBorderWidth,
-                        color = selectionBorderColor,
-                        shape = RoundedCornerShape(12.dp)
+                        color = com.twilighty.lmusic.presentation.yuyu.Yuyu.ink,
+                        shape = rowShape
                     )
                 } else {
                     Modifier
@@ -414,20 +411,19 @@ fun PlaylistItem(
                 onLongClick = {
                     onLongPress()
                 }
-            ),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+            )
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             PlaylistCover(
                 playlist = playlist,
                 playlistSongs = playlistSongs ?: emptyList(),
-                size = 48.dp
+                size = 56.dp
             )
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
@@ -436,8 +432,8 @@ fun PlaylistItem(
                 ) {
                     Text(
                         text = playlist.name,
-                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = GoogleSansRounded),
-                        fontWeight = FontWeight.Bold,
+                        style = com.twilighty.lmusic.presentation.yuyu.YuyuType.title,
+                        color = com.twilighty.lmusic.presentation.yuyu.Yuyu.text,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -499,8 +495,8 @@ fun PlaylistItem(
                 }
                 Text(
                     text = formatSongCount(playlist.songIds.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = com.twilighty.lmusic.presentation.yuyu.YuyuType.meta,
+                    color = com.twilighty.lmusic.presentation.yuyu.Yuyu.textMuted
                 )
             }
 
@@ -553,70 +549,28 @@ fun CreatePlaylistDialogRedesigned(
 ) {
     var playlistName by remember { mutableStateOf("") }
 
-    BasicAlertDialog(
+    com.twilighty.lmusic.presentation.yuyu.YuyuDialog(
         onDismissRequest = onDismiss,
-    ) {
-        Surface(
-            shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
-                Text(
-                    text = stringResource(R.string.create_playlist_dialog_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = GoogleSansRounded,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-
-                OutlinedTextField(
-                    value = playlistName,
-                    onValueChange = { playlistName = it },
-                    label = { Text(stringResource(R.string.create_playlist_name_label)) },
-                    placeholder = { Text(stringResource(R.string.create_playlist_name_placeholder)) },
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp),
-                    singleLine = true,
-                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                    )
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(stringResource(R.string.cancel), fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Button(
-                        onClick = { onCreate(playlistName) },
-                        modifier = Modifier.weight(1f),
-                        enabled = playlistName.isNotEmpty(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        Text(stringResource(R.string.action_create), fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
+        title = stringResource(R.string.create_playlist_dialog_title),
+        actions = {
+            com.twilighty.lmusic.presentation.yuyu.YuyuButton(
+                text = stringResource(R.string.cancel),
+                onClick = onDismiss,
+                style = com.twilighty.lmusic.presentation.yuyu.YuyuButtonStyle.Secondary
+            )
+            com.twilighty.lmusic.presentation.yuyu.YuyuButton(
+                text = stringResource(R.string.action_create),
+                onClick = { onCreate(playlistName) },
+                enabled = playlistName.isNotBlank()
+            )
         }
+    ) {
+        com.twilighty.lmusic.presentation.yuyu.YuyuTextField(
+            value = playlistName,
+            onValueChange = { playlistName = it },
+            label = stringResource(R.string.create_playlist_name_label),
+            placeholder = stringResource(R.string.create_playlist_name_placeholder),
+            singleLine = true
+        )
     }
 }

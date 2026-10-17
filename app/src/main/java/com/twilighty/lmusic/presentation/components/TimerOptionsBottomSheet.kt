@@ -50,13 +50,34 @@ import androidx.compose.ui.unit.dp
 import com.twilighty.lmusic.ui.theme.GoogleSansRounded
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import kotlin.math.roundToInt
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material3.TimePickerDefaults
+import androidx.compose.ui.unit.sp
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonSize
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuDialog
+import com.twilighty.lmusic.presentation.yuyu.YuyuDivider
+import com.twilighty.lmusic.presentation.yuyu.YuyuOverline
+import com.twilighty.lmusic.presentation.yuyu.YuyuRadioRow
+import com.twilighty.lmusic.presentation.yuyu.YuyuSegmented
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuSheetHandle
+import com.twilighty.lmusic.presentation.yuyu.YuyuSheetShape
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.twilighty.lmusic.R
 
 val predefinedTimes = listOf(0, 5, 10, 15, 20, 30, 45, 60) // 0 represents 'Off'
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun TimerOptionsBottomSheet(
     onPlayCounter: (count: Int) -> Unit,
@@ -81,17 +102,8 @@ fun TimerOptionsBottomSheet(
     var counterSliderPosition by remember { mutableStateOf(1f) }
     var isTimerMode by remember { mutableStateOf(true) } // true = timer mode, false = counter mode
 
-    // Animate background color
-    val boxBackgroundColor by animateColorAsState(
-        targetValue = if (isSwitchEnabled) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceContainerHigh,
-        label = "boxBackgroundColorAnimation"
-    )
-
-    // Animate corner radius
-    val boxCornerRadius by animateDpAsState(
-        targetValue = if (isSwitchEnabled) 18.dp else 50.dp,
-        label = "boxCornerRadiusAnimation"
-    )
+    val timerPresets = remember { predefinedTimes.filter { it > 0 } }
+    val countPresets = remember { (1..10).toList() }
 
     LaunchedEffect(activeTimerDurationMinutes, activeTimerValueDisplay, playCount) {
         timerSliderPosition = when {
@@ -99,8 +111,6 @@ fun TimerOptionsBottomSheet(
                 val index = predefinedTimes.indexOf(activeTimerDurationMinutes)
                 if (index != -1) index.toFloat() else 0f
             }
-            activeTimerValueDisplay == null -> 0f
-            activeTimerValueDisplay.startsWith("Custom:") -> 0f
             else -> 0f
         }
         counterSliderPosition = playCount
@@ -110,121 +120,126 @@ fun TimerOptionsBottomSheet(
         }
     }
 
+    val isCounterActive = playCount > 1f
+    val hasActiveTimer = activeTimerValueDisplay != null || isCounterActive
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = Yuyu.canvas,
+        tonalElevation = 0.dp,
+        shape = YuyuSheetShape,
+        dragHandle = { YuyuSheetHandle() }
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = 18.dp, vertical = 4.dp)
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 20.dp)
                 .fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                        shape = CircleShape
-                    )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(top = 4.dp)
             ) {
+                Icon(Icons.Rounded.Bedtime, contentDescription = null, tint = Yuyu.text)
                 Text(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     text = stringResource(R.string.sleep_timer_ui_title),
-                    fontFamily = GoogleSansRounded,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    style = YuyuType.h2,
+                    color = Yuyu.text,
+                    modifier = Modifier.weight(1f)
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // Predefined times replaced by Slider
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                val currentIndex =
-                    timerSliderPosition.roundToInt().coerceIn(0, predefinedTimes.size - 1)
-                val currentMinutes = predefinedTimes[currentIndex]
-                val timerDisplayText = if (currentMinutes == 0) {
-                    stringResource(R.string.sleep_timer_ui_slider_label_timer)
-                } else {
-                    stringResource(R.string.sleep_timer_n_minutes_format, currentMinutes)
-                }
-                Text(
-                    text = timerDisplayText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
-                )
-                Box(
+            if (hasActiveTimer) {
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 0.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(
-                                topEnd = 18.dp,
-                                topStart = 18.dp,
-                                bottomStart = 18.dp,
-                                bottomEnd = 18.dp
-                            )
-                        )
+                        .clip(YuyuShapes.lg)
+                        .background(Yuyu.accentSoft)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Slider(
-                        value = timerSliderPosition,
-                        onValueChange = {
-                            timerSliderPosition = it
-                            isTimerMode = true
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = if (isCounterActive && activeTimerValueDisplay == null) "Music stops after" else "Music stops in",
+                            style = YuyuType.label,
+                            color = Yuyu.accentText
+                        )
+                        Text(
+                            text = when {
+                                activeTimerValueDisplay != null -> activeTimerValueDisplay
+                                else -> pluralStringResource(R.plurals.sleep_timer_play_count_times, playCount.toInt(), playCount.toInt())
+                            },
+                            style = YuyuType.display(30.sp),
+                            color = Yuyu.accentText,
+                            maxLines = 1
+                        )
+                    }
+                    YuyuButton(
+                        text = "Turn off",
+                        onClick = {
+                            onCancelTimer()
+                            onDismiss()
+                            onCancelCountedPlay()
                         },
-                        valueRange = 0f..(predefinedTimes.size - 1).toFloat(),
-                        steps = predefinedTimes.size - 2, // Number of discrete intervals
-                        enabled = isTimerMode || counterSliderPosition == 1f,
-                        onValueChangeFinished = {
-                            val selectedIndexOnFinish = timerSliderPosition.roundToInt()
-                                .coerceIn(0, predefinedTimes.size - 1)
-                            val selectedMinutesOnFinish = predefinedTimes[selectedIndexOnFinish]
-                            if (selectedMinutesOnFinish == 0) {
-                                if (activeTimerDurationMinutes != null) {
-                                    onCancelTimer()
-                                }
-                            } else {
-                                onSetPredefinedTimer(selectedMinutesOnFinish)
-                            }
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                modifier = Modifier
-                                    .heightIn(min = 32.dp),
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                        style = YuyuButtonStyle.DangerQuiet,
+                        size = YuyuButtonSize.Small
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .fillMaxWidth()
-                        .padding(horizontal = 0.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(
-                                bottomEnd = 18.dp,
-                                bottomStart = 18.dp,
-                                topEnd = 6.dp,
-                                topStart = 6.dp
-                            )
-                        )
-                )
             }
-            Spacer(modifier = Modifier.height(16.dp))
 
-            Column(modifier = Modifier.fillMaxWidth()) {
+            YuyuSegmented(
+                options = listOf(stringResource(R.string.sleep_timer_ui_slider_label_timer), "Song count"),
+                selectedIndex = if (isTimerMode) 0 else 1,
+                onSelect = { isTimerMode = it == 0 }
+            )
 
-
-                val currentPlayCount = counterSliderPosition.toInt()
+            if (isTimerMode) {
+                YuyuOverline("Stop after")
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    timerPresets.forEach { minutes ->
+                        YuyuChip(
+                            text = if (minutes >= 60 && minutes % 60 == 0) "${minutes / 60} h" else "$minutes min",
+                            selected = activeTimerDurationMinutes == minutes && !isEndOfTrackTimerActive,
+                            onClick = {
+                                if (activeTimerDurationMinutes == minutes) {
+                                    onCancelTimer()
+                                } else {
+                                    onCancelCountedPlay()
+                                    onSetPredefinedTimer(minutes)
+                                }
+                            }
+                        )
+                    }
+                }
+                Column {
+                    YuyuRadioRow(
+                        title = stringResource(R.string.sleep_timer_ui_end_of_current_track),
+                        selected = isEndOfTrackTimerActive,
+                        onClick = { onSetEndOfTrackTimer(!isEndOfTrackTimerActive) }
+                    )
+                    YuyuDivider()
+                    YuyuRadioRow(
+                        title = stringResource(R.string.sleep_timer_ui_custom_time),
+                        selected = false,
+                        onClick = { showCustomTimePicker = true },
+                        trailing = {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = Yuyu.textMuted
+                            )
+                        }
+                    )
+                }
+            } else {
+                val currentPlayCount = counterSliderPosition.toInt().coerceAtLeast(1)
                 val timesPart = if (currentPlayCount == 1) {
                     stringResource(R.string.sleep_timer_ui_play_count_one_time)
                 } else {
@@ -234,168 +249,39 @@ fun TimerOptionsBottomSheet(
                         currentPlayCount
                     )
                 }
-                val counterDisplayText = stringResource(R.string.sleep_timer_ui_play_count_label, timesPart)
+                YuyuOverline(stringResource(R.string.sleep_timer_ui_play_count_label, timesPart))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    countPresets.forEach { count ->
+                        YuyuChip(
+                            text = count.toString(),
+                            selected = isCounterActive && playCount.toInt() == count,
+                            onClick = {
+                                counterSliderPosition = count.toFloat()
+                                onCancelTimer()
+                                onSetEndOfTrackTimer(false)
+                                onPlayCounter(count)
+                            },
+                            modifier = Modifier.widthIn(min = 48.dp)
+                        )
+                    }
+                }
                 Text(
-                    text = counterDisplayText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+                    "Playback stops after this many songs.",
+                    style = YuyuType.caption,
+                    color = Yuyu.textMuted
                 )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 0.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            shape = RoundedCornerShape(18.dp)
-                        )
-                ) {
-                    Slider(
-                        value = counterSliderPosition,
-                        onValueChange = {
-                            counterSliderPosition = it
-                            isTimerMode = false
-                        },
-                        valueRange = 1f..10f,
-                        steps = 8,
-                        enabled = !isTimerMode || timerSliderPosition == 0f,
-                        onValueChangeFinished = {
-                            onCancelTimer()
-                            onSetEndOfTrackTimer(false)
-                            onPlayCounter(counterSliderPosition.toInt())
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                modifier = Modifier
-                                    .heightIn(min = 32.dp),
-                            )
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp)
-                    )
-                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // End of track option
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 0.dp)
-                    .clip(
-                        AbsoluteSmoothCornerShape(
-                            cornerRadiusBL = boxCornerRadius,
-                            smoothnessAsPercentBR = 60,
-                            cornerRadiusTR = boxCornerRadius,
-                            smoothnessAsPercentTL = 60,
-                            cornerRadiusTL = boxCornerRadius,
-                            smoothnessAsPercentBL = 60,
-                            cornerRadiusBR = boxCornerRadius,
-                            smoothnessAsPercentTR = 60
-                        )
-                    ) // Apply animated corner radius for clipping
-                    .background(color = boxBackgroundColor)   // Apply animated background color
-                    .clickable(
-                        enabled = isTimerMode || counterSliderPosition == 1f,
-                        onClick = {
-                            onSetEndOfTrackTimer(!isSwitchEnabled)
-                        }
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp, horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.sleep_timer_ui_end_of_current_track),
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp),
-                        color = if (isSwitchEnabled) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurface // Adjust text color for contrast
-                    )
-                    Switch(
-                        checked = isSwitchEnabled,
-                        enabled = isTimerMode || counterSliderPosition == 1f,
-                        onCheckedChange = {
-                            onSetEndOfTrackTimer(it)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.tertiary,
-                            checkedTrackColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        thumbContent = if (isSwitchEnabled) {
-                            {
-                                Icon(
-                                    imageVector = Icons.Rounded.Check,
-                                    contentDescription = stringResource(R.string.cd_switch_on),
-                                    tint = MaterialTheme.colorScheme.tertiaryContainer,
-                                    modifier = Modifier.size(SwitchDefaults.IconSize),
-                                )
-                            }
-                        } else {
-                            null
-                        }
-                    )
-                }
-            }
-
-            val buttonHeight = 68.dp
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp, horizontal = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    enabled = counterSliderPosition == 1f,
-                    onClick = {
-                        showCustomTimePicker = true
-                    },
-                    shape = RoundedCornerShape(
-                        topStart = 50.dp,
-                        bottomStart = 50.dp,
-                        topEnd = 8.dp,
-                        bottomEnd = 8.dp
-                    ),
-                    modifier = Modifier
-                        .weight(1f) // Give buttons equal space if desired
-                        .height(buttonHeight)
-                ) {
-                    Text(stringResource(R.string.sleep_timer_ui_custom_time))
-                }
-                Button(
-                    onClick = {
-                        onCancelTimer()
-                        onDismiss()
-                        onCancelCountedPlay()
-                    },
-                    shape = RoundedCornerShape(
-                        topStart = 8.dp,
-                        bottomStart = 8.dp,
-                        topEnd = 50.dp,
-                        bottomEnd = 50.dp
-                    ),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    ),
-                    enabled = activeTimerValueDisplay != null || counterSliderPosition != 1f,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(buttonHeight)
-                ) {
-                    Text(stringResource(R.string.sleep_timer_ui_cancel_timer))
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
+            YuyuButton(
+                text = "Done",
+                onClick = onDismiss,
+                style = YuyuButtonStyle.Accent,
+                size = YuyuButtonSize.Large,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 
@@ -406,45 +292,45 @@ fun TimerOptionsBottomSheet(
         val timePickerState = rememberTimePickerState(
             initialHour = initialHour,
             initialMinute = initialMinute,
-            is24Hour = true // Consistent with your previous setting (24-hour format)
+            is24Hour = true
         )
 
-        AlertDialog(
-            onDismissRequest = {
-                showCustomTimePicker = false // Dismiss the M3 dialog
-                // No need to call onDismiss() for the bottom sheet here,
-                // as that's handled by the confirm button or if the user specifically dismisses the bottom sheet.
-            },
-            title = { Text(stringResource(R.string.sleep_timer_ui_set_custom_duration)) },
-            text = {
-                TimePicker(state = timePickerState)
-            },
-            confirmButton = {
-                TextButton(
+        YuyuDialog(
+            onDismissRequest = { showCustomTimePicker = false },
+            title = stringResource(R.string.sleep_timer_ui_set_custom_duration),
+            actions = {
+                YuyuButton(
+                    text = stringResource(R.string.cancel),
+                    onClick = { showCustomTimePicker = false },
+                    style = YuyuButtonStyle.Secondary
+                )
+                YuyuButton(
+                    text = "Start timer",
                     onClick = {
-                        val hour = timePickerState.hour
-                        val minute = timePickerState.minute
-                        val totalMinutes = hour * 60 + minute
-
-                        if (totalMinutes > 0) { // Ensure some time is set
-                            onSetPredefinedTimer(totalMinutes) // Your existing callback
+                        val totalMinutes = timePickerState.hour * 60 + timePickerState.minute
+                        if (totalMinutes > 0) {
+                            onCancelCountedPlay()
+                            onSetPredefinedTimer(totalMinutes)
                         }
-                        showCustomTimePicker = false // Dismiss the M3 dialog
-                        onDismiss() // Dismiss the bottom sheet after setting time, as per original logic
-                    }
-                ) {
-                    Text(stringResource(R.string.ok))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showCustomTimePicker = false // Dismiss the M3 dialog
-                    }
-                ) {
-                    Text(stringResource(R.string.cancel))
-                }
+                        showCustomTimePicker = false
+                        onDismiss()
+                    },
+                    style = YuyuButtonStyle.Accent
+                )
             }
-        )
+        ) {
+            TimePicker(
+                state = timePickerState,
+                colors = TimePickerDefaults.colors(
+                    clockDialColor = Yuyu.muted,
+                    selectorColor = Yuyu.accent,
+                    containerColor = Yuyu.canvas,
+                    timeSelectorSelectedContainerColor = Yuyu.accentSoft,
+                    timeSelectorSelectedContentColor = Yuyu.accentText,
+                    timeSelectorUnselectedContainerColor = Yuyu.muted,
+                    timeSelectorUnselectedContentColor = Yuyu.text,
+                )
+            )
+        }
     }
 }

@@ -2,6 +2,17 @@
 
 package com.twilighty.lmusic.presentation.screens
 
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuOverline
+import com.twilighty.lmusic.presentation.yuyu.YuyuSegmented
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuTextField
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -360,12 +371,8 @@ private fun CreatePlaylistContent(
                             } else {
                                 stringResource(R.string.presentation_batch_f_add_songs)
                             },
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 24.sp,
-                                textGeometricTransform = TextGeometricTransform(scaleX = 1.2f),
-                            ),
-                            fontFamily = GoogleSansRounded,
-                            fontWeight = FontWeight.Bold
+                            style = YuyuType.h2,
+                            color = Yuyu.text
                         )
                     }
                 },
@@ -373,8 +380,8 @@ private fun CreatePlaylistContent(
                     FilledIconButton(
                         modifier = Modifier.padding(start = 6.dp),
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                            contentColor = MaterialTheme.colorScheme.onSurface
+                            containerColor = Color.Transparent,
+                            contentColor = Yuyu.text
                         ),
                         onClick = {
                             if (currentStep == 1 && creationMode == PlaylistCreationMode.MANUAL) currentStep = 0 else onDismiss()
@@ -391,13 +398,14 @@ private fun CreatePlaylistContent(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = Yuyu.canvas
                 )
             )
         },
         floatingActionButton = {
             if (!showCropUi) {
                 MediumExtendedFloatingActionButton(
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                     text = {
                         Text(
                             if (currentStep == 0 && creationMode == PlaylistCreationMode.MANUAL) {
@@ -493,8 +501,8 @@ private fun CreatePlaylistContent(
                     modifier = Modifier
                         .padding(bottom = 8.dp, end = 8.dp)
                         .height(56.dp), // Standard height, feels substantial
-                    containerColor = if (currentStep == 0 && playlistName.isBlank()) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = if (currentStep == 0 && playlistName.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f) else MaterialTheme.colorScheme.onTertiaryContainer,
+                    containerColor = if (currentStep == 0 && playlistName.isBlank()) Yuyu.emphasis else Yuyu.ink,
+                    contentColor = if (currentStep == 0 && playlistName.isBlank()) Yuyu.textMuted else Yuyu.onInk,
                 )
             }
         },
@@ -665,20 +673,16 @@ fun EditPlaylistContent(
                 title = {
                     Text(
                         stringResource(R.string.presentation_batch_f_edit_playlist),
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 24.sp,
-                            textGeometricTransform = TextGeometricTransform(scaleX = 1.2f),
-                        ),
-                        fontFamily = GoogleSansRounded,
-                        fontWeight = FontWeight.Bold
+                        style = YuyuType.h2,
+                        color = Yuyu.text
                     )
                 },
                 navigationIcon = {
                     FilledIconButton(
                         modifier = Modifier.padding(start = 6.dp),
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-                            contentColor = MaterialTheme.colorScheme.onSurface
+                            containerColor = Color.Transparent,
+                            contentColor = Yuyu.text
                         ),
                         onClick = onDismiss
                     ) {
@@ -686,13 +690,14 @@ fun EditPlaylistContent(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    containerColor = Yuyu.canvas
                 )
             )
         },
         floatingActionButton = {
             if (!showCropUi) {
                 MediumExtendedFloatingActionButton(
+                    elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                     text = { Text(stringResource(R.string.presentation_batch_f_save)) },
                     icon = { Icon(Icons.Rounded.Check, contentDescription = null) },
                     onClick = {
@@ -730,8 +735,8 @@ fun EditPlaylistContent(
                     modifier = Modifier
                         .padding(bottom = 8.dp, end = 8.dp)
                         .height(56.dp),
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    containerColor = Yuyu.ink,
+                    contentColor = Yuyu.onInk,
                 )
             }
         },
@@ -1022,71 +1027,44 @@ private fun PlaylistFormContent(
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             
-            OutlinedTextField(
+            YuyuTextField(
                 value = playlistName,
                 onValueChange = onNameChange,
-                label = { Text(stringResource(R.string.presentation_batch_f_playlist_name_label)) },
-                placeholder = { Text(stringResource(R.string.presentation_batch_f_playlist_name_placeholder)) },
-                shape = RoundedCornerShape(16.dp),
+                label = stringResource(R.string.presentation_batch_f_playlist_name_label),
+                placeholder = stringResource(R.string.presentation_batch_f_playlist_name_placeholder),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 22.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent
-                )
+                singleLine = true
             )
             
             Spacer(modifier = Modifier.height(8.dp))
 
             if (showCreationModeSelector) {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 22.dp)
-                ) {
-                    SegmentedButton(
-                        selected = creationMode == PlaylistCreationMode.MANUAL,
-                        onClick = { onCreationModeChange(PlaylistCreationMode.MANUAL) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) {
-                        Text(stringResource(R.string.presentation_batch_f_creation_mode_manual))
-                    }
-                    SegmentedButton(
-                        selected = creationMode == PlaylistCreationMode.SMART,
-                        onClick = { onCreationModeChange(PlaylistCreationMode.SMART) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) {
-                        Text(stringResource(R.string.presentation_batch_f_creation_mode_smart))
-                    }
-                }
+                YuyuSegmented(
+                    options = listOf(
+                        stringResource(R.string.presentation_batch_f_creation_mode_manual),
+                        stringResource(R.string.presentation_batch_f_creation_mode_smart)
+                    ),
+                    selectedIndex = if (creationMode == PlaylistCreationMode.SMART) 1 else 0,
+                    onSelect = { index ->
+                        onCreationModeChange(if (index == 1) PlaylistCreationMode.SMART else PlaylistCreationMode.MANUAL)
+                    },
+                    modifier = Modifier.padding(horizontal = 22.dp)
+                )
             }
 
             // AI Generation Button - only show in Create mode (not Edit mode)
             if (onGenerateClick != null) {
-                androidx.compose.material3.FilledTonalButton(
+                YuyuButton(
+                    text = stringResource(R.string.presentation_batch_f_generate_with_ai),
                     onClick = onGenerateClick,
+                    style = YuyuButtonStyle.Secondary,
+                    icon = rememberVectorPainter(Icons.Rounded.AutoAwesome),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 22.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AutoAwesome, // Use built-in icon
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.presentation_batch_f_generate_with_ai), fontWeight = FontWeight.SemiBold)
-                }
+                        .padding(horizontal = 22.dp, vertical = 4.dp)
+                )
             }
 
             AnimatedVisibility(visible = creationMode == PlaylistCreationMode.SMART) {
@@ -1096,21 +1074,17 @@ private fun PlaylistFormContent(
                         .padding(horizontal = 22.dp, vertical = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.presentation_batch_f_smart_rule),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    YuyuOverline(stringResource(R.string.presentation_batch_f_smart_rule))
 
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SmartPlaylistRule.entries.forEach { rule ->
-                            FilterChip(
+                            YuyuChip(
+                                text = smartPlaylistRuleTitle(rule),
                                 selected = selectedSmartRule == rule,
-                                onClick = { onSmartRuleChange(rule) },
-                                label = { Text(smartPlaylistRuleTitle(rule)) }
+                                onClick = { onSmartRuleChange(rule) }
                             )
                         }
                     }

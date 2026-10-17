@@ -146,6 +146,9 @@ fun StatsScreen(
 ) {
     val uiState by statsViewModel.uiState.collectAsStateWithLifecycle()
     val summary = uiState.summary
+    // Smart features (experimental): insights card shown only when the toggle is on.
+    val smartInsightsViewModel: com.twilighty.lmusic.presentation.smart.SmartInsightsViewModel = hiltViewModel()
+    val smartEnabled by smartInsightsViewModel.isEnabled.collectAsStateWithLifecycle()
     val lazyListState = rememberLazyListState()
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
@@ -291,11 +294,31 @@ fun StatsScreen(
                             modifier = Modifier.padding(horizontal = 20.dp)
                         )
                     }
+                    item(key = "lmusic_recap") {
+                        com.twilighty.lmusic.presentation.recap.RecapEntryCard(
+                            onOpen = { period ->
+                                navController.navigate(
+                                    com.twilighty.lmusic.presentation.navigation.Screen.Recap.createRoute(period.routeValue)
+                                )
+                            },
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        )
+                    }
                     item(key = "lmusic_insights") {
                         com.twilighty.lmusic.presentation.stats.LMusicInsightsCard(
                             summary = summary,
                             modifier = Modifier.padding(horizontal = 20.dp)
                         )
+                    }
+                    if (smartEnabled) {
+                        item(key = "smart_insights") {
+                            com.twilighty.lmusic.presentation.smart.SmartInsightsCard(
+                                range = summary?.range ?: uiState.selectedRange,
+                                refreshKey = summary,
+                                viewModel = smartInsightsViewModel,
+                                modifier = Modifier.padding(horizontal = 20.dp)
+                            )
+                        }
                     }
                     item {
                         ListeningTimelineSection(

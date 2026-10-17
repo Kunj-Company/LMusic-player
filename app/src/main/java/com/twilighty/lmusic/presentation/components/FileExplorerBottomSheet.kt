@@ -114,7 +114,11 @@ fun FileExplorerDialog(
     onRefresh: () -> Unit,
     onStorageSelected: (Int) -> Unit,
     onDone: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    title: String? = null,
+    hint: String? = null,
+    /** Non-null switches the explorer to "pick folders" mode; holds the picked folder paths. */
+    pickSelectedPaths: Set<String>? = null
 ) {
     val transitionState = remember { MutableTransitionState(false) }
     transitionState.targetState = visible
@@ -162,6 +166,9 @@ fun FileExplorerDialog(
                         onStorageSelected = onStorageSelected,
                         onDone = onDone,
                         onDismiss = onDismiss,
+                        title = title ?: "Excluded folders",
+                        hint = hint,
+                        pickSelectedPaths = pickSelectedPaths,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -193,7 +200,9 @@ fun FileExplorerContent(
     onDismiss: () -> Unit,
     title: String = "Excluded folders",
     leadingContent: @Composable (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    pickSelectedPaths: Set<String>? = null
 ) {
     val listState = rememberLazyListState()
     val safeSelectedStorageIndex = remember(availableStorages, selectedStorageIndex) {
@@ -340,7 +349,7 @@ fun FileExplorerContent(
             }
 
             Text(
-                text = stringResource(R.string.presentation_batch_g_file_explorer_hint),
+                text = hint ?: stringResource(R.string.presentation_batch_g_file_explorer_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
@@ -411,7 +420,11 @@ fun FileExplorerContent(
                                         isBlocked = directoryEntry.isBlocked,
                                         onNavigate = { onNavigateTo(directoryEntry.file) },
                                         onToggleAllowed = { onToggleAllowed(directoryEntry.file) },
-                                        navigationEnabled = true
+                                        navigationEnabled = true,
+                                        pickMode = pickSelectedPaths != null,
+                                        isPicked = pickSelectedPaths?.let { picked ->
+                                            isPathPicked(directoryEntry.file.absolutePath, picked)
+                                        } ?: false
                                     )
                                 }
                                 item { Spacer(modifier = Modifier.height(76.dp)) }
@@ -516,28 +529,33 @@ private fun FileExplorerItem(
     isBlocked: Boolean,
     onNavigate: () -> Unit,
     onToggleAllowed: () -> Unit,
-    navigationEnabled: Boolean
+    navigationEnabled: Boolean,
+    pickMode: Boolean = false,
+    isPicked: Boolean = false
 ) {
     val shape = RoundedCornerShape(18.dp)
 
     val isAllowed = !isBlocked
 
-    val containerColor = if (isBlocked) {
-        MaterialTheme.colorScheme.errorContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerHigh
+    val containerColor = when {
+        pickMode && isPicked -> MaterialTheme.colorScheme.tertiaryContainer
+        pickMode -> MaterialTheme.colorScheme.surfaceContainerHigh
+        isBlocked -> MaterialTheme.colorScheme.errorContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
 
-    val contentColor = if (isBlocked) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
+    val contentColor = when {
+        pickMode && isPicked -> MaterialTheme.colorScheme.onTertiaryContainer
+        pickMode -> MaterialTheme.colorScheme.onSurface
+        isBlocked -> MaterialTheme.colorScheme.onErrorContainer
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
-    val badgeColor = if (isBlocked) {
-        MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.secondary
+    val badgeColor = when {
+        pickMode && isPicked -> MaterialTheme.colorScheme.onTertiaryContainer
+        pickMode -> MaterialTheme.colorScheme.secondary
+        isBlocked -> MaterialTheme.colorScheme.onErrorContainer
+        else -> MaterialTheme.colorScheme.secondary
     }
 
     Row(
@@ -619,6 +637,21 @@ private fun FileExplorerItem(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            if (pickMode) {
+                Text(
+                    text = if (isPicked) "Added" else "Add",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = contentColor
+                )
+                RadioButton(
+                    selected = isPicked,
+                    onClick = onToggleAllowed,
+                    colors = RadioButtonDefaults.colors(
+                        selectedColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            } else {
             Text(
                 text = if (isBlocked) "Excluded" else "Included",
                 style = MaterialTheme.typography.labelMedium,
@@ -632,6 +665,7 @@ private fun FileExplorerItem(
                     unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
+            }
         }
     }
 }
@@ -816,5 +850,14 @@ private fun FileExplorerHeader(
                 }
             }
         }
+    }
+}
+
+/** True when [path] is one of [picked] or sits inside one of them. */
+private fun isPathPicked(path: String, picked: Set<String>): Boolean {
+    val normalized = path.trimEnd('/')
+    return picked.any { root ->
+        val r = root.trimEnd('/')
+        normalized.equals(r, ignoreCase = true) || normalized.startsWith("$r/", ignoreCase = true)
     }
 }

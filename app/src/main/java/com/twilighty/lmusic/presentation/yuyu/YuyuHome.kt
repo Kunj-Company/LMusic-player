@@ -2,6 +2,8 @@ package com.twilighty.lmusic.presentation.yuyu
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -161,49 +164,306 @@ fun YuyuRecentlyPlayedRow(
     onSongClick: (Song) -> Unit,
     onSeeAll: () -> Unit,
     modifier: Modifier = Modifier,
+) = YuyuSongCoverRow(
+    title = "Recently played",
+    songs = songs,
+    currentSongId = currentSongId,
+    onSongClick = onSongClick,
+    actionLabel = "See all",
+    onAction = onSeeAll,
+    keyPrefix = "recent",
+    modifier = modifier
+)
+
+/** A section with a header and a horizontal row of 148dp song covers (title 15/700, meta muted). */
+@Composable
+fun YuyuSongCoverRow(
+    title: String,
+    songs: List<Song>,
+    currentSongId: String?,
+    onSongClick: (Song) -> Unit,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    keyPrefix: String = title,
 ) {
     Column(modifier) {
         YuyuSectionHeader(
-            title = "Recently played",
-            actionLabel = "See all",
-            onAction = onSeeAll,
+            title = title,
+            actionLabel = actionLabel,
+            onAction = onAction,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(songs, key = { "recent_${it.id}" }) { song ->
+            items(songs, key = { "${keyPrefix}_${it.id}" }) { song ->
+                YuyuCoverCard(
+                    artModel = song.albumArtUriString,
+                    artKey = song.album.ifBlank { song.title },
+                    title = song.title,
+                    meta = song.displayArtist,
+                    highlighted = song.id == currentSongId,
+                    onClick = { onSongClick(song) }
+                )
+            }
+        }
+    }
+}
+
+/** Flat cover card: square art (r16), title 15/700, muted meta. Used on Home, Library and Search. */
+@Composable
+fun YuyuCoverCard(
+    artModel: Any?,
+    artKey: String,
+    title: String,
+    meta: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 148.dp,
+    highlighted: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+) {
+    Column(
+        modifier = modifier
+            .width(size)
+            .clip(YuyuShapes.lg)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+    ) {
+        YuyuArt(model = artModel, title = artKey, size = size, shape = YuyuShapes.lg)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            title,
+            style = YuyuType.title.copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+            color = if (highlighted) Yuyu.accentText else Yuyu.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            meta,
+            style = YuyuType.caption,
+            color = Yuyu.textMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * "Continue listening": the current (or last) song with art, title, artist, a thin
+ * progress line and a play / pause button. [progress] is read in the draw phase only,
+ * so position updates don't recompose the card.
+ */
+@Composable
+fun YuyuContinueListeningCard(
+    song: Song,
+    isPlaying: Boolean,
+    progress: () -> Float,
+    onPlayPause: () -> Unit,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = Yuyu.accent
+    val track = Yuyu.emphasis
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(YuyuShapes.lg)
+            .background(Yuyu.canvas)
+            .border(1.dp, Yuyu.border, YuyuShapes.lg)
+            .clickable(onClick = onOpen)
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            YuyuArt(
+                model = song.albumArtUriString,
+                title = song.album.ifBlank { song.title },
+                size = 56.dp,
+                shape = YuyuShapes.md
+            )
+            Column(Modifier.weight(1f)) {
+                YuyuOverline(if (isPlaying) "Now playing" else "Continue listening")
+                Text(song.title, style = YuyuType.title, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.displayArtist, style = YuyuType.meta, color = Yuyu.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Yuyu.ink)
+                    .clickable(role = Role.Button, onClick = onPlayPause),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Resume",
+                    tint = Yuyu.onInk,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .padding(bottom = 12.dp)
+                .height(4.dp)
+                .drawBehind {
+                    val radius = androidx.compose.ui.geometry.CornerRadius(size.height / 2, size.height / 2)
+                    drawRoundRect(color = track, cornerRadius = radius)
+                    val fraction = progress().coerceIn(0f, 1f)
+                    if (fraction > 0f) {
+                        drawRoundRect(
+                            color = accent,
+                            size = androidx.compose.ui.geometry.Size(size.width * fraction, size.height),
+                            cornerRadius = radius
+                        )
+                    }
+                }
+        )
+    }
+}
+
+private val mixTintIndex = listOf(0, 1, 2, 3)
+
+/** "Made for you": horizontal row of mix cards. Tapping a card plays the mix. */
+@Composable
+fun YuyuMadeForYouRow(
+    mixes: List<MadeForYouMix>,
+    onMixClick: (MadeForYouMix) -> Unit,
+    modifier: Modifier = Modifier,
+    // TODO: AI mixes appended here — pass generated mixes and they render after the rule-based ones.
+    extraMixes: List<MadeForYouMix> = emptyList(),
+) {
+    val all = remember(mixes, extraMixes) { (mixes + extraMixes).filter { it.songs.isNotEmpty() } }
+    if (all.isEmpty()) return
+    Column(modifier) {
+        YuyuSectionHeader(title = "Made for you", modifier = Modifier.padding(horizontal = 16.dp))
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(all.size, key = { "mfy_${all[it].id}" }) { index ->
+                YuyuMixCard(mix = all[index], tint = index % mixTintIndex.size, onClick = { onMixClick(all[index]) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun YuyuMixCard(mix: MadeForYouMix, tint: Int, onClick: () -> Unit) {
+    val background = when (tint) {
+        0 -> Yuyu.tintPeach
+        1 -> Yuyu.tintLavender
+        2 -> Yuyu.tintMint
+        else -> Yuyu.muted
+    }
+    val covers = remember(mix.songs) {
+        mix.songs.asSequence().distinctBy { it.albumId }.take(4).toList()
+            .let { if (it.size >= 4) it else mix.songs.take(4) }
+    }
+    Column(
+        modifier = Modifier
+            .width(164.dp)
+            .clip(YuyuShapes.xl)
+            .background(background)
+            .clickable(onClick = onClick)
+            .padding(12.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (rowIndex in 0 until 2) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for (colIndex in 0 until 2) {
+                        val song = covers.getOrNull(rowIndex * 2 + colIndex)
+                        if (song != null) {
+                            YuyuArt(
+                                model = song.albumArtUriString,
+                                title = song.album.ifBlank { song.title },
+                                size = 68.dp,
+                                shape = YuyuShapes.sm
+                            )
+                        } else {
+                            Box(Modifier.size(68.dp).clip(YuyuShapes.sm).background(Yuyu.emphasis))
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(mix.title, style = YuyuType.title.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(mix.subtitle, style = YuyuType.caption, color = Yuyu.textMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** "Your top artists": round avatars (artist image or initials). */
+@Composable
+fun YuyuTopArtistsRow(
+    artists: List<YuyuHomeArtist>,
+    onArtistClick: (YuyuHomeArtist) -> Unit,
+    modifier: Modifier = Modifier,
+    onSeeAll: (() -> Unit)? = null,
+) {
+    if (artists.isEmpty()) return
+    Column(modifier) {
+        YuyuSectionHeader(
+            title = "Your top artists",
+            actionLabel = if (onSeeAll != null) "Stats" else null,
+            onAction = onSeeAll,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            items(artists, key = { "top_artist_${it.id}" }) { artist ->
                 Column(
                     modifier = Modifier
-                        .width(148.dp)
+                        .width(92.dp)
                         .clip(YuyuShapes.lg)
-                        .clickable { onSongClick(song) }
+                        .clickable { onArtistClick(artist) },
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    YuyuArt(
-                        model = song.albumArtUriString,
-                        title = song.album.ifBlank { song.title },
-                        size = 148.dp,
-                        shape = YuyuShapes.lg
-                    )
+                    YuyuAvatar(model = artist.imageModel, name = artist.name, size = 88.dp)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        song.title,
-                        style = YuyuType.title.copy(fontSize = YuyuType.label.fontSize),
-                        color = if (song.id == currentSongId) Yuyu.accentText else Yuyu.text,
+                        artist.name,
+                        style = YuyuType.label,
+                        color = Yuyu.text,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        song.displayArtist,
-                        style = YuyuType.caption,
-                        color = Yuyu.textMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
+        }
+    }
+}
+
+/** Round artist avatar: image if there is one, otherwise the Yuyu colour + centred initials. */
+@Composable
+fun YuyuAvatar(model: Any?, name: String, size: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    val hasImage = model != null && (model !is String || model.isNotBlank())
+    if (hasImage) {
+        YuyuArt(model = model, title = name, size = size, shape = CircleShape, modifier = modifier)
+    } else {
+        val color = remember(name) { yuyuArtColor(name) }
+        Box(
+            modifier = modifier.size(size).clip(CircleShape).background(color),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                yuyuInitials(name),
+                color = Color.White,
+                style = YuyuType.display((size.value * 0.3f).sp),
+                maxLines = 1
+            )
         }
     }
 }

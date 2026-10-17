@@ -122,8 +122,9 @@ class FileExplorerStateHolder(
 
         // Observer for preferences
         combine(
-            userPreferencesRepository.allowedDirectoriesFlow,
-            userPreferencesRepository.blockedDirectoriesFlow
+            // Raw rules: the explorer edits "excluded subfolders", not the include list.
+            userPreferencesRepository.rawAllowedDirectoriesFlow,
+            userPreferencesRepository.rawBlockedDirectoriesFlow
         ) { allowed, blocked ->
             Pair(allowed, blocked)
         }

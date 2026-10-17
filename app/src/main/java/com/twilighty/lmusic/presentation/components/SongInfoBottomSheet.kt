@@ -1,5 +1,24 @@
 package com.twilighty.lmusic.presentation.components
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.style.TextOverflow
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuActionRow
+import com.twilighty.lmusic.presentation.yuyu.YuyuArt
+import com.twilighty.lmusic.presentation.yuyu.YuyuDivider
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuOverline
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuSheetHandle
+import com.twilighty.lmusic.presentation.yuyu.YuyuSheetShape
+import com.twilighty.lmusic.presentation.yuyu.YuyuStatus
+import com.twilighty.lmusic.presentation.yuyu.YuyuStatusChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -299,518 +318,230 @@ fun SongInfoBottomSheet(
             }
         },
         sheetState = sheetState,
+        containerColor = Yuyu.canvas,
+        tonalElevation = 0.dp,
+        shape = YuyuSheetShape,
+        dragHandle = { YuyuSheetHandle() }
     ) {
-        // AQUÍ APLICAMOS EL FIX: Anulamos la fábrica de overscroll para todo lo que esté aquí adentro
         CompositionLocalProvider(
             LocalOverscrollFactory provides null
         ) {
-            Box(
+            val shareSong: () -> Unit = {
+                try {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "audio/*"
+                        putExtra(Intent.EXTRA_STREAM, song.contentUriString.toUri())
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        Intent.createChooser(
+                            shareIntent,
+                            context.getString(R.string.song_info_share_chooser_title)
+                        )
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.error_share_song_format, e.localizedMessage ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.TopCenter
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        // Fila para la carátula del álbum y el título (Always visible)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp),
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            SmartImage(
-                                model = song.albumArtUriString,
-                                contentDescription = stringResource(R.string.widget_album_art),
-                                shape = albumArtShape,
-                                modifier = Modifier.size(80.dp),
-                                contentScale = ContentScale.Crop
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                AutoSizingTextToFill(
-                                    modifier = Modifier.padding(end = 4.dp),
-                                    fontWeight = FontWeight.Light,
-                                    text = song.title
-                                )
-                            }
-                            FilledTonalIconButton(
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .padding(vertical = 6.dp),
-                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceBright,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                ),
-                                onClick = { showEditSheet = true },
-                            ) {
-                                Icon(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                    imageVector = Icons.Rounded.Edit,
-                                    contentDescription = stringResource(R.string.cd_edit_song_metadata)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Swipeable Content
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .animateContentSize(
-                                animationSpec = tween(durationMillis = 280),
-                                alignment = Alignment.TopCenter
-                            )
-                    ) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier
-                                .wrapContentHeight()
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.Top
-                        ) { page ->
-                            when (page) {
-                                0 -> { // Options / Actions
-                                    LazyColumn(
-                                        modifier = Modifier
-                                            .fillMaxWidth(),
-                                        contentPadding = PaddingValues(horizontal = 16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        item {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(IntrinsicSize.Min),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                MediumExtendedFloatingActionButton(
-                                                    modifier = Modifier
-                                                        .weight(0.5f)
-                                                        .fillMaxHeight(),
-                                                    onClick = onPlaySong,
-                                                    elevation = FloatingActionButtonDefaults.elevation(0.dp),
-                                                    shape = playButtonShape,
-                                                    icon = {
-                                                        Icon(Icons.Rounded.PlayArrow, contentDescription = stringResource(R.string.cd_play_song_action))
-                                                    },
-                                                    text = {
-                                                        Text(
-                                                            modifier = Modifier.padding(end = 10.dp),
-                                                            text = stringResource(R.string.play_playback)
-                                                        )
-                                                    }
-                                                )
-
-                                                FilledIconButton(
-                                                    modifier = Modifier
-                                                        .weight(0.25f)
-                                                        .fillMaxHeight(),
-                                                    onClick = onToggleFavorite,
-                                                    shape = favoriteButtonShape,
-                                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                                        containerColor = favoriteButtonContainerColor,
-                                                        contentColor = favoriteButtonContentColor
-                                                    )
-                                                ) {
-                                                    Icon(
-                                                        modifier = Modifier.size(FloatingActionButtonDefaults.LargeIconSize),
-                                                        imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                                        contentDescription = stringResource(
-                                                            if (isFavorite) R.string.cd_remove_from_favorites else R.string.cd_add_to_favorites
-                                                        )
-                                                    )
-                                                }
-
-                                                FilledTonalIconButton(
-                                                    modifier = Modifier
-                                                        .weight(0.25f)
-                                                        .fillMaxHeight(),
-                                                    onClick = {
-                                                        try {
-                                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                                                type = "audio/*"
-                                                                putExtra(Intent.EXTRA_STREAM, song.contentUriString.toUri())
-                                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                            }
-                                                            context.startActivity(
-                                                                Intent.createChooser(
-                                                                    shareIntent,
-                                                                    context.getString(R.string.song_info_share_chooser_title)
-                                                                )
-                                                            )
-                                                        } catch (e: Exception) {
-                                                            Toast.makeText(
-                                                            context,
-                                                            context.getString(R.string.error_share_song_format, e.localizedMessage ?: ""),
-                                                            Toast.LENGTH_LONG
-                                                        ).show()
-                                                        }
-                                                    },
-                                                    shape = CircleShape
-                                                ) {
-                                                    Icon(
-                                                        modifier = Modifier.size(FloatingActionButtonDefaults.LargeIconSize),
-                                                        imageVector = Icons.Rounded.Share,
-                                                        contentDescription = stringResource(R.string.cd_share_song_file)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        item {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(IntrinsicSize.Min),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                FilledTonalButton(
-                                                    modifier = Modifier
-                                                        .weight(0.6f)
-                                                        .heightIn(min = 66.dp),
-                                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                                                    ),
-                                                    contentPadding = PaddingValues(horizontal = 0.dp),
-                                                    shape = CircleShape,
-                                                    onClick = onAddToQueue
-                                                ) {
-                                                    Icon(
-                                                        Icons.AutoMirrored.Rounded.QueueMusic,
-                                                        contentDescription = stringResource(R.string.cd_add_to_queue)
-                                                    )
-                                                    Spacer(Modifier.width(14.dp))
-                                                    Text(stringResource(R.string.action_add_to_queue))
-                                                }
-                                                FilledTonalButton(
-                                                    modifier = Modifier
-                                                        .weight(0.4f)
-                                                        .heightIn(min = 66.dp),
-                                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.tertiary,
-                                                        contentColor = MaterialTheme.colorScheme.onTertiary
-                                                    ),
-                                                    contentPadding = PaddingValues(horizontal = 0.dp),
-                                                    shape = CircleShape,
-                                                    onClick = onAddNextToQueue
-                                                ) {
-                                                    Icon(
-                                                        Icons.AutoMirrored.Filled.QueueMusic,
-                                                        contentDescription = stringResource(R.string.cd_play_next_in_queue)
-                                                    )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text(stringResource(R.string.action_queue_next))
-                                                }
-                                            }
-                                        }
-
-                                        item {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(IntrinsicSize.Min),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                            ) {
-                                                FilledTonalButton(
-                                                    modifier = Modifier
-                                                        .weight(0.5f)
-                                                        .heightIn(min = 66.dp),
-                                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                                    ),
-                                                    shape = CircleShape,
-                                                    onClick = onAddToPlayList
-                                                ) {
-                                                    Icon(
-                                                        Icons.AutoMirrored.Rounded.PlaylistAdd,
-                                                        contentDescription = stringResource(R.string.cd_add_to_playlist)
-                                                    )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text(stringResource(R.string.shortcut_playlist_short))
-                                                }
-
-                                                FilledTonalButton(
-                                                    modifier = Modifier
-                                                        .weight(0.5f)
-                                                        .heightIn(min = 66.dp),
-                                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                    ),
-                                                    shape = CircleShape,
-                                                    onClick = {
-                                                        (context as? Activity)?.let { activity ->
-                                                            onDeleteFromDevice(activity, song) { result ->
-                                                                if (result) {
-                                                                    removeFromListTrigger()
-                                                                    onDismiss()
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.DeleteForever,
-                                                        contentDescription = stringResource(R.string.delete_action)
-                                                    )
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Text(stringResource(R.string.delete_action))
-                                                }
-                                            }
-                                        }
-
-                                        val shouldRenderWatchTransferRow =
-                                            currentSongTransfer != null ||
-                                                    shouldOfferWatchTransfer ||
-                                                    shouldShowWatchTransferLoading
-                                        if (shouldRenderWatchTransferRow) {
-                                            item {
-                                                FilledTonalButton(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .heightIn(min = 66.dp),
-                                                    colors = ButtonDefaults.filledTonalButtonColors(
-                                                        containerColor = if (isLMusicWatchAvailable) {
-                                                            sendToWatchContainerColor
-                                                        } else {
-                                                            MaterialTheme.colorScheme.surfaceContainerHigh
-                                                        },
-                                                        contentColor = if (isLMusicWatchAvailable) {
-                                                            sendToWatchContentColor
-                                                        } else {
-                                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                                        },
-                                                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    ),
-                                                    shape = CircleShape,
-                                                    enabled = shouldOfferWatchTransfer && !isSendingToWatch,
-                                                    onClick = {
-                                                        songInfoViewModel.sendSongToWatch(song) { message ->
-                                                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    }
-                                                ) {
-                                                    if (shouldShowWatchTransferLoading) {
-                                                        LoadingIndicator(modifier = Modifier.size(18.dp))
-                                                        Spacer(Modifier.width(10.dp))
-                                                        Text(stringResource(R.string.song_info_checking_watch))
-                                                    } else if (isSendingToWatch) {
-                                                        LoadingIndicator(modifier = Modifier.size(18.dp))
-                                                        Spacer(Modifier.width(10.dp))
-                                                        Text(
-                                                            when {
-                                                                currentSongTransfer != null && currentSongTransfer.totalBytes > 0L ->
-                                                                    stringResource(
-                                                                        R.string.song_info_transferring_percent,
-                                                                        currentSongTransferPercent
-                                                                    )
-                                                                currentSongTransfer != null ->
-                                                                    stringResource(R.string.song_info_transferring_to_watch)
-                                                                else ->
-                                                                    stringResource(R.string.song_info_transfer_in_progress)
-                                                            }
-                                                        )
-                                                    } else {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.rounded_watch_arrow_down_24),
-                                                            contentDescription = stringResource(
-                                                                if (isLMusicWatchAvailable) {
-                                                                    R.string.cd_send_song_to_watch
-                                                                } else {
-                                                                    R.string.cd_watch_unavailable
-                                                                }
-                                                            )
-                                                        )
-                                                        Spacer(Modifier.width(8.dp))
-                                                        Text(
-                                                            stringResource(
-                                                                if (isLMusicWatchAvailable) {
-                                                                    R.string.song_info_send_to_watch
-                                                                } else {
-                                                                    R.string.song_info_watch_unavailable
-                                                                }
-                                                            )
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        item {
-                                            Spacer(Modifier.height(80.dp))
-                                        }
-                                    }
-                                }
-                                1 -> { // Details / Info
-                                    LazyColumn(
-                                        modifier = Modifier
-                                            .fillMaxWidth(),
-                                        contentPadding = PaddingValues(horizontal = 16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        item {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(infoSegmentContainerShape),
-                                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                SongInfoSegmentedListItem(
-                                                    headline = stringResource(R.string.song_info_label_duration),
-                                                    supporting = formatDuration(song.duration),
-                                                    icon = Icons.Rounded.Schedule,
-                                                    iconDescription = stringResource(R.string.cd_duration_icon),
-                                                    shape = infoSegmentItemShape,
-                                                )
-
-                                                if (!song.genre.isNullOrEmpty()) {
-                                                    SongInfoSegmentedListItem(
-                                                        headline = stringResource(R.string.song_field_genre),
-                                                        supporting = song.genre,
-                                                        icon = Icons.Rounded.MusicNote,
-                                                        iconDescription = stringResource(R.string.cd_genre_icon),
-                                                        shape = infoSegmentItemShape,
-                                                        onClick = onNavigateToGenre,
-                                                    )
-                                                }
-
-                                                SongInfoSegmentedListItem(
-                                                    headline = stringResource(R.string.song_field_album),
-                                                    supporting = song.album,
-                                                    icon = Icons.Rounded.Album,
-                                                    iconDescription = stringResource(R.string.cd_album_icon),
-                                                    shape = infoSegmentItemShape,
-                                                    onClick = onNavigateToAlbum,
-                                                )
-
-                                                SongInfoSegmentedListItem(
-                                                    headline = stringResource(R.string.song_field_artist),
-                                                    supporting = song.displayArtist,
-                                                    icon = Icons.Rounded.Person,
-                                                    iconDescription = stringResource(R.string.cd_artist_icon),
-                                                    shape = infoSegmentItemShape,
-                                                    onClick = onNavigateToArtist,
-                                                )
-
-                                                if (!audioMetaLabel.isNullOrEmpty()) {
-                                                    SongInfoSegmentedListItem(
-                                                        headline = stringResource(R.string.song_info_label_song_metadata),
-                                                        supporting = audioMetaLabel,
-                                                        icon = Icons.Rounded.Info,
-                                                        iconDescription = stringResource(R.string.cd_audio_format_icon),
-                                                        shape = infoSegmentItemShape,
-                                                    )
-                                                }
-
-                                                SongInfoSegmentedListItem(
-                                                    headline = songLocationInfo.label,
-                                                    supporting = songLocationInfo.value,
-                                                    icon = if (songLocationInfo.isCloud) Icons.Rounded.Cloud else Icons.Rounded.AudioFile,
-                                                    iconDescription = stringResource(
-                                                        if (songLocationInfo.isCloud) {
-                                                            R.string.cd_provider_icon
-                                                        } else {
-                                                            R.string.cd_file_icon
-                                                        }
-                                                    ),
-                                                    shape = infoSegmentItemShape,
-                                                )
-                                            }
-                                        }
-                                        item {
-                                            Spacer(Modifier.height(80.dp))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Bottom Tab Bar
-                PrimaryTabRow(
-                    selectedTabIndex = pagerState.currentPage,
+                // Header: art, title, artist · album, details, favourite
+                Row(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(5.dp),
-                    containerColor = Color.Transparent,
-                    divider = {},
-                    indicator = {}
+                        .padding(top = 8.dp, bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TabAnimation(
-                        index = 0,
-                        title = stringResource(R.string.song_info_tab_options),
-                        selectedIndex = pagerState.currentPage,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(0)
-                            }
-                        },
-                        transformOrigin = TransformOrigin(0f, 0.5f)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Rounded.Menu,
-                                contentDescription = stringResource(R.string.cd_options),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                stringResource(R.string.song_info_tab_options_badge),
-                                fontFamily = GoogleSansRounded,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
+                    YuyuArt(
+                        model = song.albumArtUriString,
+                        title = song.album.ifBlank { song.title },
+                        size = 64.dp,
+                        shape = YuyuShapes.md,
+                        contentDescription = stringResource(R.string.widget_album_art)
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = song.title,
+                            style = YuyuType.h3,
+                            color = Yuyu.text,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = listOf(song.displayArtist, song.album).filter { it.isNotBlank() }.joinToString(" · "),
+                            style = YuyuType.body,
+                            color = Yuyu.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = listOfNotNull(formatDuration(song.duration), audioMetaLabel).joinToString(" · "),
+                            style = YuyuType.caption,
+                            color = Yuyu.textMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-
-                    TabAnimation(
-                        index = 1,
-                        title = stringResource(R.string.song_info_tab_details),
-                        selectedIndex = pagerState.currentPage,
-                        onClick = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(1)
-                            }
-                        },
-                        transformOrigin = TransformOrigin(1f, 0.5f)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Rounded.Info,
-                                contentDescription = stringResource(R.string.cd_details_tab),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                stringResource(R.string.song_info_tab_info_badge),
-                                fontFamily = GoogleSansRounded,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                    YuyuIconButton(
+                        imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        contentDescription = stringResource(
+                            if (isFavorite) R.string.cd_remove_from_favorites else R.string.cd_add_to_favorites
+                        ),
+                        onClick = onToggleFavorite,
+                        tint = if (isFavorite) Yuyu.accentText else Yuyu.text
+                    )
                 }
+                YuyuDivider()
+                Spacer(Modifier.height(6.dp))
+
+                YuyuActionRow(
+                    text = stringResource(R.string.play_playback),
+                    icon = rememberVectorPainter(Icons.Rounded.PlayArrow),
+                    onClick = onPlaySong
+                )
+                YuyuActionRow(
+                    text = stringResource(R.string.action_queue_next),
+                    icon = rememberVectorPainter(Icons.Rounded.SkipNext),
+                    onClick = onAddNextToQueue
+                )
+                YuyuActionRow(
+                    text = stringResource(R.string.action_add_to_queue),
+                    icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.QueueMusic),
+                    onClick = onAddToQueue
+                )
+                // Smart features: "Play similar" (song radio); renders only when on and analysed.
+                com.twilighty.lmusic.presentation.smart.SmartSongActions(song = song, onDismiss = onDismiss)
+                YuyuActionRow(
+                    text = "Add to playlist…",
+                    icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.PlaylistAdd),
+                    onClick = onAddToPlayList
+                )
+                YuyuActionRow(
+                    text = "Edit tags",
+                    icon = rememberVectorPainter(Icons.Rounded.Edit),
+                    onClick = { showEditSheet = true },
+                    trailing = {
+                        YuyuStatusChip(
+                            text = "Autofill",
+                            status = YuyuStatus.Neutral,
+                            icon = rememberVectorPainter(Icons.Rounded.AutoAwesome)
+                        )
+                    }
+                )
+                YuyuActionRow(
+                    text = "Go to album",
+                    icon = rememberVectorPainter(Icons.Rounded.Album),
+                    onClick = onNavigateToAlbum
+                )
+                YuyuActionRow(
+                    text = "Go to artist",
+                    icon = rememberVectorPainter(Icons.Rounded.Person),
+                    onClick = onNavigateToArtist
+                )
+                if (!song.genre.isNullOrEmpty()) {
+                    YuyuActionRow(
+                        text = "Go to genre",
+                        subtitle = song.genre,
+                        icon = rememberVectorPainter(Icons.Rounded.MusicNote),
+                        onClick = onNavigateToGenre
+                    )
+                }
+                YuyuActionRow(
+                    text = "Share file",
+                    icon = rememberVectorPainter(Icons.Rounded.Share),
+                    onClick = shareSong
+                )
+
+                val shouldRenderWatchTransferRow =
+                    currentSongTransfer != null ||
+                            shouldOfferWatchTransfer ||
+                            shouldShowWatchTransferLoading
+                if (shouldRenderWatchTransferRow) {
+                    val watchText = when {
+                        shouldShowWatchTransferLoading -> stringResource(R.string.song_info_checking_watch)
+                        isSendingToWatch && currentSongTransfer != null && currentSongTransfer.totalBytes > 0L ->
+                            stringResource(R.string.song_info_transferring_percent, currentSongTransferPercent)
+                        isSendingToWatch && currentSongTransfer != null ->
+                            stringResource(R.string.song_info_transferring_to_watch)
+                        isSendingToWatch -> stringResource(R.string.song_info_transfer_in_progress)
+                        isLMusicWatchAvailable -> stringResource(R.string.song_info_send_to_watch)
+                        else -> stringResource(R.string.song_info_watch_unavailable)
+                    }
+                    YuyuActionRow(
+                        text = watchText,
+                        icon = painterResource(R.drawable.rounded_watch_arrow_down_24),
+                        enabled = shouldOfferWatchTransfer && !isSendingToWatch,
+                        onClick = {
+                            songInfoViewModel.sendSongToWatch(song) { message ->
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        trailing = if (shouldShowWatchTransferLoading || isSendingToWatch) {
+                            { LoadingIndicator(modifier = Modifier.size(20.dp)) }
+                        } else null
+                    )
+                }
+
+                YuyuDivider(Modifier.padding(vertical = 4.dp))
+                YuyuActionRow(
+                    text = "Delete from device…",
+                    icon = rememberVectorPainter(Icons.Rounded.Delete),
+                    danger = true,
+                    onClick = {
+                        (context as? Activity)?.let { activity ->
+                            onDeleteFromDevice(activity, song) { result ->
+                                if (result) {
+                                    removeFromListTrigger()
+                                    onDismiss()
+                                }
+                            }
+                        }
+                    }
+                )
+
+                // Details
+                Spacer(Modifier.height(12.dp))
+                YuyuOverline(stringResource(R.string.song_info_tab_details), modifier = Modifier.padding(start = 6.dp, bottom = 4.dp))
+                SongInfoSegmentedListItem(
+                    headline = stringResource(R.string.song_info_label_duration),
+                    supporting = formatDuration(song.duration),
+                    icon = Icons.Rounded.Schedule,
+                    iconDescription = stringResource(R.string.cd_duration_icon),
+                    shape = YuyuShapes.md,
+                )
+                if (!audioMetaLabel.isNullOrEmpty()) {
+                    SongInfoSegmentedListItem(
+                        headline = stringResource(R.string.song_info_label_song_metadata),
+                        supporting = audioMetaLabel,
+                        icon = Icons.Rounded.Info,
+                        iconDescription = stringResource(R.string.cd_audio_format_icon),
+                        shape = YuyuShapes.md,
+                    )
+                }
+                SongInfoSegmentedListItem(
+                    headline = songLocationInfo.label,
+                    supporting = songLocationInfo.value,
+                    icon = if (songLocationInfo.isCloud) Icons.Rounded.Cloud else Icons.Rounded.AudioFile,
+                    iconDescription = stringResource(
+                        if (songLocationInfo.isCloud) {
+                            R.string.cd_provider_icon
+                        } else {
+                            R.string.cd_file_icon
+                        }
+                    ),
+                    shape = YuyuShapes.md,
+                )
             }
         }
     }
@@ -857,21 +588,20 @@ private fun SongInfoSegmentedListItem(
             }
         }
 
-    Surface(
-        modifier = modifier,
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    Row(
+        modifier = modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        ListItem(
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            headlineContent = { Text(headline) },
-            supportingContent = { Text(supporting) },
-            leadingContent = {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = iconDescription,
-                )
-            }
+        Icon(
+            imageVector = icon,
+            contentDescription = iconDescription,
+            tint = Yuyu.textMuted,
+            modifier = Modifier.size(22.dp)
         )
+        Column(Modifier.weight(1f)) {
+            Text(headline, style = YuyuType.caption, color = Yuyu.textMuted)
+            Text(supporting, style = YuyuType.body, color = Yuyu.text)
+        }
     }
 }

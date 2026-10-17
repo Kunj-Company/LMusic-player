@@ -164,7 +164,8 @@ object AppModule {
             LMusicDatabase.MIGRATION_36_37,
             LMusicDatabase.MIGRATION_37_38,
             LMusicDatabase.MIGRATION_38_39,
-            LMusicDatabase.MIGRATION_39_40
+            LMusicDatabase.MIGRATION_39_40,
+            LMusicDatabase.MIGRATION_40_41
         )
             .addCallback(LMusicDatabase.createRuntimeArtifactsCallback())
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
@@ -254,6 +255,11 @@ object AppModule {
     @Provides
     fun provideAiUsageDao(database: LMusicDatabase): AiUsageDao {
         return database.aiUsageDao()
+    }
+
+    @Provides
+    fun provideSongFeaturesDao(database: LMusicDatabase): com.twilighty.lmusic.data.database.SongFeaturesDao {
+        return database.songFeaturesDao()
     }
 
     @Singleton

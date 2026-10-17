@@ -15,6 +15,7 @@ sealed class Screen(val route: String) {
     }
     object PaletteStyle : Screen("palette_style_settings")
     object Experimental : Screen("experimental_settings")
+    object SmartFeatures : Screen("smart_features_settings")
     object NavBarCrRad : Screen("nav_bar_corner_radius")
     object PlaylistDetail : Screen("playlist_detail/{playlistId}") {
         fun createRoute(playlistId: String) = "playlist_detail/$playlistId"
@@ -54,5 +55,9 @@ sealed class Screen(val route: String) {
     object QqMusicDashboard : Screen("qqmusic_dashboard")
     object NavidromeDashboard : Screen("navidrome_dashboard")
     object JellyfinDashboard : Screen("jellyfin_dashboard")
+    object LibraryHealth : Screen("library_health")
+    object Recap : Screen("recap/{period}") {
+        fun createRoute(period: String) = "recap/$period"
+    }
 
 }

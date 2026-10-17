@@ -254,6 +254,9 @@ dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
 
+    // Smart features (on-device YAMNet audio tagging)
+    implementation(libs.tensorflow.lite)
+
     // Identity & Background
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.play.services.wearable)

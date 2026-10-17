@@ -5,39 +5,28 @@ package com.twilighty.lmusic.presentation.screens
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 import com.twilighty.lmusic.presentation.navigation.navigateSafelyReplacing
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.LargeExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,40 +34,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp as lerpColor
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextGeometricTransform
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import com.twilighty.lmusic.ui.theme.LocalLMusicDarkTheme
-import com.twilighty.lmusic.ui.theme.GoogleSansRounded
-import com.twilighty.lmusic.ui.theme.LMusicStatusBarStyle
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.util.lerp
+import com.twilighty.lmusic.ui.theme.LocalLMusicDarkTheme
+import com.twilighty.lmusic.ui.theme.LocalUseYuyuColors
+import com.twilighty.lmusic.ui.theme.LMusicStatusBarStyle
+import com.twilighty.lmusic.ui.theme.yuyuPlayerScheme
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavController
@@ -86,7 +55,7 @@ import coil.compose.AsyncImagePainter
 import coil.size.Size
 import com.twilighty.lmusic.R
 import com.twilighty.lmusic.data.model.Album
-import com.twilighty.lmusic.presentation.components.CollapsibleCommonTopBar
+import com.twilighty.lmusic.data.model.Song
 import com.twilighty.lmusic.presentation.components.ExpressiveScrollBar
 import com.twilighty.lmusic.presentation.components.MiniPlayerHeight
 import com.twilighty.lmusic.presentation.components.PlaylistBottomSheet
@@ -98,13 +67,17 @@ import com.twilighty.lmusic.presentation.navigation.Screen
 import com.twilighty.lmusic.presentation.viewmodel.AlbumDetailViewModel
 import com.twilighty.lmusic.presentation.viewmodel.PlayerViewModel
 import com.twilighty.lmusic.presentation.viewmodel.PlaylistViewModel
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuArt
+import com.twilighty.lmusic.presentation.yuyu.YuyuCollectionHeader
+import com.twilighty.lmusic.presentation.yuyu.YuyuDetailAppBar
+import com.twilighty.lmusic.presentation.yuyu.YuyuOverline
+import com.twilighty.lmusic.presentation.yuyu.YuyuPlayShuffleRow
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
+import com.twilighty.lmusic.presentation.yuyu.YuyuYearBlock
 import com.twilighty.lmusic.utils.formatSongCount
-import com.twilighty.lmusic.utils.shapes.RoundedStarShape
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import androidx.compose.ui.res.stringResource
-
-private const val UseSharedCollapsibleTopBarProbe = true
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -127,15 +100,21 @@ fun AlbumDetailScreen(
     val bottomBarHeightDp = resolveNavBarOccupiedHeight(systemNavBarInset, navBarCompactMode)
     var showPlaylistBottomSheet by remember { mutableStateOf(false) }
     val isDarkTheme = LocalLMusicDarkTheme.current
+    val useYuyuColors = LocalUseYuyuColors.current
     val baseColorScheme = MaterialTheme.colorScheme
     val albumArtUri = uiState.album?.albumArtUriString?.takeIf { it.isNotBlank() }
     val albumColorSchemeFlow = remember(albumArtUri) {
         albumArtUri?.let { playerViewModel.themeStateHolder.getAlbumColorSchemeFlow(it, eager = false) }
     }
     val albumColorSchemePair = albumColorSchemeFlow?.collectAsStateWithLifecycle()?.value
-    val albumColorScheme = remember(albumColorSchemePair, isDarkTheme, baseColorScheme) {
-        albumColorSchemePair?.let { pair -> if (isDarkTheme) pair.dark else pair.light }
-            ?: baseColorScheme
+    // Yuyu: keep the neutral canvas and take only the accent from the artwork.
+    val albumColorScheme = remember(albumColorSchemePair, isDarkTheme, baseColorScheme, useYuyuColors) {
+        val generated = albumColorSchemePair?.let { pair -> if (isDarkTheme) pair.dark else pair.light }
+        if (useYuyuColors) {
+            yuyuPlayerScheme(generated ?: baseColorScheme, baseColorScheme, isDarkTheme)
+        } else {
+            generated ?: baseColorScheme
+        }
     }
     var headerArtworkLoaded by remember(albumArtUri) { mutableStateOf(albumArtUri == null) }
     var themeRequestIssued by remember(albumArtUri) { mutableStateOf(albumArtUri == null) }
@@ -145,9 +124,7 @@ fun AlbumDetailScreen(
             playerViewModel.themeStateHolder.ensureAlbumColorScheme(albumArtUri)
         }
     }
-    val configuration = LocalConfiguration.current
     val density = LocalDensity.current
-    val coroutineScope = rememberCoroutineScope()
 
     MaterialTheme(
         colorScheme = albumColorScheme,
@@ -156,14 +133,16 @@ fun AlbumDetailScreen(
     ) {
 
         val isMiniPlayerVisible = stablePlayerState.currentSong != null
-        val fabBottomPadding by animateDpAsState(
+        val listBottomPadding by animateDpAsState(
             targetValue = if (isMiniPlayerVisible) MiniPlayerHeight + 16.dp else 16.dp,
-            label = "fabPadding"
+            label = "listBottomPadding"
         )
+
+        LMusicStatusBarStyle(color = MaterialTheme.colorScheme.surface)
 
         when {
             uiState.isLoading && uiState.album == null -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize().background(Yuyu.canvas), contentAlignment = Alignment.Center) {
                     ContainedLoadingIndicator()
                 }
             }
@@ -172,13 +151,14 @@ fun AlbumDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .background(Yuyu.canvas)
                         .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = uiState.error!!,
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodyLarge
+                        color = Yuyu.danger,
+                        style = YuyuType.body
                     )
                 }
             }
@@ -190,210 +170,112 @@ fun AlbumDetailScreen(
                     songs.groupBy { it.discNumber ?: 1 }
                 }
                 val lazyListState = rememberLazyListState()
-
-                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                val minTopBarHeight = 64.dp + statusBarHeight
-                val maxTopBarHeight = 300.dp
-
-                val minTopBarHeightPx = with(density) { minTopBarHeight.toPx() }
-                val maxTopBarHeightPx = with(density) { maxTopBarHeight.toPx() }
-                val headerImageRequestSize = remember(
-                    configuration.screenWidthDp,
-                    density.density,
-                    maxTopBarHeightPx
-                ) {
-                    Size(
-                        width = with(density) { configuration.screenWidthDp.dp.roundToPx() },
-                        height = maxTopBarHeightPx.roundToInt()
-                    )
+                val headerScrolledAway by remember {
+                    derivedStateOf { lazyListState.firstVisibleItemIndex > 0 }
+                }
+                val artistIdForLink = remember(songs) { songs.firstOrNull()?.artistId }
+                val totalMinutes = remember(songs) { (songs.sumOf { it.duration } / 60_000L).toInt() }
+                val genres = remember(songs) {
+                    songs.mapNotNull { it.genre?.trim()?.takeIf { g -> g.isNotEmpty() } }.distinct().take(2)
+                }
+                val year = remember(album, songs) {
+                    album.year.takeIf { it > 0 } ?: songs.firstOrNull { it.year > 0 }?.year ?: 0
+                }
+                val artRequestSize = remember(density) {
+                    with(density) { 148.dp.roundToPx() }.let { Size(it * 2, it * 2) }
                 }
 
-                val topBarHeight = remember { Animatable(maxTopBarHeightPx) }
-                val collapseFraction by remember(minTopBarHeightPx, maxTopBarHeightPx) {
-                    derivedStateOf {
-                        1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(
-                            0f,
-                            1f
-                        )
-                    }
-                }
-
-                val nestedScrollConnection = remember {
-                    object : NestedScrollConnection {
-                        override fun onPreScroll(
-                            available: Offset,
-                            source: NestedScrollSource
-                        ): Offset {
-                            val delta = available.y
-                            val isScrollingDown = delta < 0
-
-                            if (!isScrollingDown && (lazyListState.firstVisibleItemIndex > 0 || lazyListState.firstVisibleItemScrollOffset > 0)) {
-                                return Offset.Zero
-                            }
-
-                            val previousHeight = topBarHeight.value
-                            val newHeight =
-                                (previousHeight + delta).coerceIn(minTopBarHeightPx, maxTopBarHeightPx)
-                            val consumed = newHeight - previousHeight
-
-                            if (consumed.roundToInt() != 0) {
-                                coroutineScope.launch {
-                                    topBarHeight.snapTo(newHeight)
-                                }
-                            }
-
-                            val canConsumeScroll = !(isScrollingDown && newHeight == minTopBarHeightPx)
-                            return if (canConsumeScroll) Offset(0f, consumed) else Offset.Zero
-                        }
-
-                        override suspend fun onPostFling(
-                            consumed: Velocity,
-                            available: Velocity
-                        ): Velocity {
-                            return super.onPostFling(consumed, available)
-                        }
-                    }
-                }
-
-                LaunchedEffect(lazyListState.isScrollInProgress) {
-                    if (!lazyListState.isScrollInProgress) {
-                        val shouldExpand =
-                            topBarHeight.value > (minTopBarHeightPx + maxTopBarHeightPx) / 2
-                        val canExpand =
-                            lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0
-
-                        val targetValue = if (shouldExpand && canExpand) {
-                            maxTopBarHeightPx
-                        } else {
-                            minTopBarHeightPx
-                        }
-
-                        if (topBarHeight.value != targetValue) {
-                            coroutineScope.launch {
-                                topBarHeight.animateTo(
-                                    targetValue,
-                                    spring(stiffness = Spring.StiffnessMedium)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            color = MaterialTheme.colorScheme.surface
-                        )
-                        .nestedScroll(nestedScrollConnection)
+                        .background(Yuyu.canvas)
                 ) {
-                    val currentTopBarHeightDp = with(density) { topBarHeight.value.toDp() }
-                    val showScrollBar =
-                        collapseFraction > 0.95f &&
-                            (lazyListState.canScrollForward || lazyListState.canScrollBackward)
-
-                    LazyColumn(
-                        state = lazyListState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .offset {
-                                val extraHeight =
-                                    (topBarHeight.value - minTopBarHeightPx).roundToInt()
-                                IntOffset(0, extraHeight)
-                            },
-                        contentPadding = PaddingValues(
-                            top = minTopBarHeight + 8.dp,
-                            start = 16.dp,
-                            end = if (showScrollBar) 24.dp else 16.dp,
-                            bottom = fabBottomPadding + 80.dp // To account for FAB
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        songsByDisc.forEach { (discNumber, discSongs) ->
-                            if (songsByDisc.size > 1) {
-                                item(key = "disc_header_$discNumber") {
-                                    Text(
-                                        text = stringResource(R.string.disc_number_header, discNumber),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier
-                                            .padding(top = 16.dp, bottom = 8.dp, start = 8.dp)
+                    YuyuDetailAppBar(
+                        onBack = { navController.popBackStack() },
+                        title = if (headerScrolledAway) album.title else null,
+                        backContentDescription = stringResource(R.string.auth_cd_back)
+                    )
+                    Box(Modifier.weight(1f)) {
+                        val showScrollBar = lazyListState.canScrollForward || lazyListState.canScrollBackward
+                        LazyColumn(
+                            state = lazyListState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                top = 4.dp,
+                                start = 16.dp,
+                                end = 16.dp,
+                                bottom = listBottomPadding + systemNavBarInset + 24.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            item(key = "album_header", contentType = "header") {
+                                AlbumHeader(
+                                    album = album,
+                                    songsCount = songs.size,
+                                    totalMinutes = totalMinutes,
+                                    genres = genres,
+                                    year = year,
+                                    artRequestSize = artRequestSize,
+                                    onHeaderArtworkState = { state ->
+                                        if (state is AsyncImagePainter.State.Success) {
+                                            headerArtworkLoaded = true
+                                        }
+                                    },
+                                    onArtistClick = artistIdForLink?.let { id ->
+                                        { navController.navigateSafely(Screen.ArtistDetail.createRoute(id)); Unit }
+                                    },
+                                    onPlay = {
+                                        songs.firstOrNull()?.let { playerViewModel.showAndPlaySong(it, songs) }
+                                    },
+                                    onShuffle = {
+                                        if (songs.isNotEmpty()) {
+                                            val randomSong = songs.random()
+                                            playerViewModel.showAndPlaySong(randomSong, songs)
+                                        }
+                                    },
+                                    enabled = songs.isNotEmpty()
+                                )
+                            }
+                            songsByDisc.forEach { (discNumber, discSongs) ->
+                                if (songsByDisc.size > 1) {
+                                    item(key = "disc_header_$discNumber") {
+                                        YuyuOverline(
+                                            text = stringResource(R.string.disc_number_header, discNumber),
+                                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp, start = 4.dp)
+                                        )
+                                    }
+                                }
+                                items(
+                                    items = discSongs,
+                                    key = { song -> "album_song_${song.id}" },
+                                    contentType = { "album_song" }
+                                ) { song ->
+                                    EnhancedSongListItem(
+                                        song = song,
+                                        isCurrentSong = stablePlayerState.currentSong?.id == song.id,
+                                        isPlaying = stablePlayerState.isPlaying,
+                                        showAlbumArt = false,
+                                        onMoreOptionsClick = {
+                                            playerViewModel.selectSongForInfo(song)
+                                            showSongInfoBottomSheet = true
+                                        },
+                                        onClick = { playerViewModel.showAndPlaySong(song, songs) }
                                     )
                                 }
                             }
-                            items(
-                                items = discSongs,
-                                key = { song -> "album_song_${song.id}" },
-                                contentType = { "album_song" }
-                            ) { song ->
-                                EnhancedSongListItem(
-                                    song = song,
-                                    isCurrentSong = stablePlayerState.currentSong?.id == song.id,
-                                    isPlaying = stablePlayerState.isPlaying,
-                                    showAlbumArt = false,
-                                    onMoreOptionsClick = {
-                                        playerViewModel.selectSongForInfo(song)
-                                        showSongInfoBottomSheet = true
-                                    },
-                                    onClick = { playerViewModel.showAndPlaySong(song, songs) }
-                                )
-                            }
                         }
-                    }
 
-                    if (showScrollBar) {
-                        ExpressiveScrollBar(
-                            listState = lazyListState,
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(
-                                    top = minTopBarHeight + 12.dp,
-                                    bottom = fabBottomPadding + 80.dp
-                                )
-                        )
-                    }
-
-                    if (UseSharedCollapsibleTopBarProbe) {
-                        SharedAlbumTopBarProbe(
-                            album = album,
-                            songsCount = songs.size,
-                            collapseFraction = collapseFraction,
-                            headerHeight = currentTopBarHeightDp,
-                            headerImageRequestSize = headerImageRequestSize,
-                            onHeaderArtworkState = { state ->
-                                if (state is AsyncImagePainter.State.Success) {
-                                    headerArtworkLoaded = true
-                                }
-                            },
-                            onBackPressed = { navController.popBackStack() },
-                            onPlayClick = {
-                                if (songs.isNotEmpty()) {
-                                    val randomSong = songs.random()
-                                    playerViewModel.showAndPlaySong(randomSong, songs)
-                                }
-                            }
-                        )
-                    } else {
-                        CollapsingAlbumTopBar(
-                            album = album,
-                            songsCount = songs.size,
-                            collapseFraction = collapseFraction,
-                            headerHeight = currentTopBarHeightDp,
-                            headerImageRequestSize = headerImageRequestSize,
-                            onHeaderArtworkState = { state ->
-                                if (state is AsyncImagePainter.State.Success) {
-                                    headerArtworkLoaded = true
-                                }
-                            },
-                            onBackPressed = { navController.popBackStack() },
-                            onPlayClick = {
-                                if (songs.isNotEmpty()) {
-                                    val randomSong = songs.random()
-                                    playerViewModel.showAndPlaySong(randomSong, songs)
-                                }
-                            }
-                        )
+                        if (showScrollBar && headerScrolledAway) {
+                            ExpressiveScrollBar(
+                                listState = lazyListState,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(
+                                        top = 12.dp,
+                                        bottom = listBottomPadding + systemNavBarInset + 24.dp
+                                    )
+                            )
+                        }
                     }
                 }
             }
@@ -492,298 +374,76 @@ fun AlbumDetailScreen(
     }
 }
 
+
 @Composable
-private fun SharedAlbumTopBarProbe(
+private fun AlbumHeader(
     album: Album,
     songsCount: Int,
-    collapseFraction: Float,
-    headerHeight: Dp,
-    headerImageRequestSize: Size,
-    onHeaderArtworkState: ((AsyncImagePainter.State) -> Unit)? = null,
-    onBackPressed: () -> Unit,
-    onPlayClick: () -> Unit
+    totalMinutes: Int,
+    genres: List<String>,
+    year: Int,
+    artRequestSize: Size,
+    onHeaderArtworkState: (AsyncImagePainter.State) -> Unit,
+    onArtistClick: (() -> Unit)?,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    enabled: Boolean,
 ) {
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val statusBarColor =
-        if (LocalLMusicDarkTheme.current) Color.Black.copy(alpha = 0.6f)
-        else Color.White.copy(alpha = 0.4f)
-    val solidAlpha = (collapseFraction * 2f).coerceIn(0f, 1f)
-    val expandedContentAlpha = 1f - solidAlpha
-    val headerOverlayBrush = remember(surfaceColor, expandedContentAlpha) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                surfaceColor.copy(alpha = 0.22f * expandedContentAlpha),
-                surfaceColor.copy(alpha = 0.82f * expandedContentAlpha),
-                surfaceColor
-            )
-        )
-    }
-    val statusBarBrush = remember(statusBarColor) {
-        Brush.verticalGradient(colors = listOf(statusBarColor, Color.Transparent))
-    }
-    val expandedStatusBarFallback = remember(statusBarColor, surfaceColor) {
-        statusBarColor.compositeOver(surfaceColor)
-    }
-    val fallbackStatusBarColor = remember(expandedStatusBarFallback, surfaceColor, solidAlpha) {
-        lerpColor(expandedStatusBarFallback, surfaceColor, solidAlpha)
-    }
-    val titleVerticalBias = lerp(1f, -1f, collapseFraction)
-    val shuffleAlignment = BiasAlignment(horizontalBias = 1f, verticalBias = titleVerticalBias)
-
-    LMusicStatusBarStyle(color = fallbackStatusBarColor)
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(headerHeight)
-            .clipToBounds()
+            .padding(bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        if (expandedContentAlpha > 0.01f) {
-            SmartImage(
-                model = album.albumArtUriString,
-                contentDescription = stringResource(R.string.album_cover_for, album.title),
-                contentScale = ContentScale.Crop,
-                targetSize = headerImageRequestSize,
-                allowHardware = true,
-                crossfadeDurationMillis = 0,
-                alpha = expandedContentAlpha,
-                onState = onHeaderArtworkState,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(headerOverlayBrush)
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(80.dp)
-                .background(statusBarBrush)
-                .align(Alignment.TopCenter)
-        )
-
-        CollapsibleCommonTopBar(
+        YuyuCollectionHeader(
+            overline = "Album",
             title = album.title,
-            subtitle = "${album.artist} • ${formatSongCount(songsCount)}",
-            collapseFraction = collapseFraction,
-            headerHeight = headerHeight,
-            onBackClick = onBackPressed,
-            containerColor = surfaceColor.copy(alpha = solidAlpha),
-            collapsedTitleStartPadding = 68.dp,
-            expandedTitleStartPadding = 24.dp,
-            collapsedTitleEndPadding = 24.dp,
-            expandedTitleEndPadding = 136.dp,
-            containerHeightRange = 112.dp to 56.dp,
-            titleStyle = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = GoogleSansRounded,
-                fontWeight = FontWeight.SemiBold,
-                textGeometricTransform = TextGeometricTransform(scaleX = 1.08f)
-            ),
-            titleScaleRange = 1f to 1f,
-            titleFontSizeRange = 30.sp to 18.sp,
-            maxLines = if (collapseFraction < 0.5f) 2 else 1,
-            collapsedSubtitleMaxLines = 1,
-            expandedSubtitleMaxLines = 2,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            fadeSubtitleOnCollapse = false,
-            syncStatusBarWithContainer = false
-        )
-
-        LargeExtendedFloatingActionButton(
-            onClick = onPlayClick,
-            shape = RoundedStarShape(sides = 8, curve = 0.05, rotation = 0f),
-            modifier = Modifier
-                .align(shuffleAlignment)
-                .statusBarsPadding()
-                .padding(end = 16.dp)
-                .graphicsLayer {
-                    scaleX = expandedContentAlpha
-                    scaleY = expandedContentAlpha
-                    alpha = expandedContentAlpha
-                }
+            titleColor = Yuyu.accentText,
+            subtitle = album.artist.takeIf { it.isNotBlank() },
+            onSubtitleClick = onArtistClick,
         ) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.cd_shuffle_play_album))
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CollapsingAlbumTopBar(
-    album: Album,
-    songsCount: Int,
-    collapseFraction: Float,
-    headerHeight: Dp,
-    headerImageRequestSize: Size,
-    onHeaderArtworkState: ((AsyncImagePainter.State) -> Unit)? = null,
-    onBackPressed: () -> Unit,
-    onPlayClick: () -> Unit
-) {
-    val surfaceColor = MaterialTheme.colorScheme.surface
-    val statusBarColor =
-        if (LocalLMusicDarkTheme.current) Color.Black.copy(alpha = 0.6f) else Color.White.copy(
-            alpha = 0.4f
-        )
-
-    // Animation Values
-    val fabScale = 1f - collapseFraction
-    val backgroundAlpha = collapseFraction
-    val headerContentAlpha = 1f - (collapseFraction * 2).coerceAtMost(1f)
-    val showExpandedArtwork = headerContentAlpha > 0.01f
-    val headerOverlayBrush = remember(surfaceColor, headerContentAlpha) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                surfaceColor.copy(alpha = 0.30f * headerContentAlpha),
-                surfaceColor.copy(alpha = 0.90f * headerContentAlpha),
-                surfaceColor.copy(alpha = headerContentAlpha)
-            )
-        )
-    }
-    val statusBarBrush = remember(statusBarColor) {
-        Brush.verticalGradient(
-            colors = listOf(
-                statusBarColor,
-                Color.Transparent
-            )
-        )
-    }
-    val solidAlpha = (collapseFraction * 2f).coerceIn(0f, 1f)
-    val expandedStatusBarFallback = remember(statusBarColor, surfaceColor) {
-        statusBarColor.compositeOver(surfaceColor)
-    }
-    val fallbackStatusBarColor = remember(expandedStatusBarFallback, surfaceColor, solidAlpha) {
-        lerpColor(expandedStatusBarFallback, surfaceColor, solidAlpha)
-    }
-
-    // Title animation
-    val titleScale = lerp(1f, 0.75f, collapseFraction)
-    val titlePaddingStart = lerp(24.dp, 58.dp, collapseFraction)
-    val titleMaxLines = if (collapseFraction < 0.5f) 2 else 1
-    val titleVerticalBias = lerp(1f, -1f, collapseFraction)
-    val animatedTitleAlignment =
-        BiasAlignment(horizontalBias = -1f, verticalBias = titleVerticalBias)
-    val titleContainerHeight = lerp(88.dp, 56.dp, collapseFraction)
-    val yOffsetCorrection = lerp((titleContainerHeight / 2) - 64.dp, 0.dp, collapseFraction)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(headerHeight)
-            .clipToBounds()
-    ) {
-        LMusicStatusBarStyle(color = fallbackStatusBarColor)
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(headerHeight)
-                .background(surfaceColor.copy(alpha = backgroundAlpha))
-        ) {
-            if (showExpandedArtwork) {
-                SmartImage(
-                    model = album.albumArtUriString,
-                    contentDescription = stringResource(R.string.album_cover_for, album.title),
-                    contentScale = ContentScale.Crop,
-                    targetSize = headerImageRequestSize,
-                    allowHardware = true,
-                    crossfadeDurationMillis = 0,
-                    alpha = headerContentAlpha,
-                    onState = onHeaderArtworkState,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(headerOverlayBrush)
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .background(statusBarBrush)
-                    .align(Alignment.TopCenter)
-            )
-
-            // Top bar content (buttons, title, etc.)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-            ) {
-                FilledIconButton(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 12.dp, top = 4.dp),
-                    onClick = onBackPressed,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.auth_cd_back))
-                }
-
-                Box(
-                    modifier = Modifier
-                        .align(animatedTitleAlignment)
-                        .height(titleContainerHeight)
-                        .fillMaxWidth()
-                        .offset(y = yOffsetCorrection)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = titlePaddingStart, end = 120.dp)
-                            .graphicsLayer {
-                                scaleX = titleScale
-                                scaleY = titleScale
-                            },
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = album.title,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontSize = 26.sp,
-                                textGeometricTransform = TextGeometricTransform(scaleX = 1.2f),
-                            ),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = titleMaxLines,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = stringResource(
-                                R.string.album_detail_meta_line,
-                                album.artist,
-                                formatSongCount(songsCount)
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                LargeExtendedFloatingActionButton(
-                    onClick = onPlayClick,
-                    shape = RoundedStarShape(sides = 8, curve = 0.05, rotation = 0f),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                        .graphicsLayer {
-                            scaleX = fabScale
-                            scaleY = fabScale
-                            alpha = fabScale
-                        }
-                ) {
-                    Icon(Icons.Rounded.Shuffle, contentDescription = stringResource(R.string.cd_shuffle_play_album))
+            Box(Modifier.size(148.dp).clip(YuyuShapes.lg)) {
+                YuyuArt(model = null, title = album.title, size = 148.dp, shape = YuyuShapes.lg)
+                if (!album.albumArtUriString.isNullOrBlank()) {
+                    SmartImage(
+                        model = album.albumArtUriString,
+                        contentDescription = stringResource(R.string.album_cover_for, album.title),
+                        shape = YuyuShapes.lg,
+                        targetSize = artRequestSize,
+                        allowHardware = true,
+                        placeHolderBackgroundColor = Yuyu.muted,
+                        onState = onHeaderArtworkState,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (year > 0) YuyuYearBlock(top = "Year", number = year.toString())
+            Column(Modifier.weight(1f)) {
+                val minutesText = when {
+                    totalMinutes <= 0 -> null
+                    totalMinutes < 60 -> "$totalMinutes min"
+                    else -> "${totalMinutes / 60} h ${totalMinutes % 60} min"
+                }
+                Text(
+                    text = listOfNotNull(formatSongCount(songsCount), minutesText).joinToString(" · "),
+                    style = YuyuType.label.copy(fontSize = 15.sp),
+                    color = Yuyu.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (genres.isNotEmpty()) {
+                    Text(
+                        text = genres.joinToString(", "),
+                        style = YuyuType.caption,
+                        color = Yuyu.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        YuyuPlayShuffleRow(onPlay = onPlay, onShuffle = onShuffle, enabled = enabled)
     }
 }

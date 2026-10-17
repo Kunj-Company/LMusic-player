@@ -2,6 +2,19 @@
 
 package com.twilighty.lmusic.presentation.screens
 
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
+import com.twilighty.lmusic.presentation.yuyu.YuyuArt
+import com.twilighty.lmusic.presentation.yuyu.YuyuAvatar
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuArtSquare
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 import com.twilighty.lmusic.presentation.navigation.navigateSafelyReplacing
 
@@ -832,16 +845,33 @@ fun LibraryScreen(
     val currentTab = tabTitles.getOrNull(currentTabIndex)?.toLibraryTabIdOrNull() ?: currentTabId
     val currentTabTitle = currentTab.displayTitle()
 
-    val headerContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+    // Yuyu: flat canvas header, no tinted band or gradient.
+    val headerContainerColor = MaterialTheme.colorScheme.surface
+    val tabRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(currentTabIndex, isCompactNavigation) {
+        if (!isCompactNavigation && currentTabIndex >= 0) {
+            runCatching { tabRowState.animateScrollToItem((currentTabIndex - 1).coerceAtLeast(0)) }
+        }
+    }
 
     Scaffold(
-        modifier = Modifier.background(brush = gradientBrush),
+        modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             Column(
-                modifier = Modifier.background(headerContainerColor)
+                modifier = Modifier
+                    .background(headerContainerColor)
+                    .statusBarsPadding()
             ) {
-                TopAppBar(
-                    title = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
+                        .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(Modifier.weight(1f)) {
                         if (isCompactNavigation) {
                             LibraryNavigationPill(
                                 modifier = Modifier,
@@ -858,96 +888,76 @@ fun LibraryScreen(
                             )
                         } else {
                             Text(
-                                modifier = Modifier.padding(start = 8.dp),
                                 text = stringResource(R.string.presentation_batch_d_library_title),
-                                fontFamily = GoogleSansRounded,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 40.sp,
-                                letterSpacing = 1.sp
+                                style = YuyuType.h1,
+                                color = Yuyu.text,
+                                maxLines = 1
                             )
                         }
-                    },
-                    actions = {
-                        if (isSendingToWatch) {
-                            val watchTransferProgress = activeWatchTransfer?.progress ?: 0f
-                            val watchTransferPercent = (watchTransferProgress * 100f).toInt().coerceIn(0, 100)
-                            Surface(
-                                modifier = Modifier
-                                    .padding(end = 8.dp)
-                                    .wrapContentWidth()
-                                    .height(40.dp)
-                                    .clip(CircleShape)
-                                    .clickable(enabled = activeWatchTransfer != null) {
-                                        showWatchTransferDialog = true
-                                    },
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .padding(horizontal = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.rounded_watch_arrow_down_24),
-                                        contentDescription = stringResource(R.string.presentation_batch_d_watch_transfer_cd),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.presentation_batch_g_sync_percent, watchTransferPercent),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                    }
+                    if (isSendingToWatch) {
+                        val watchTransferProgress = activeWatchTransfer?.progress ?: 0f
+                        val watchTransferPercent = (watchTransferProgress * 100f).toInt().coerceIn(0, 100)
+                        Row(
+                            modifier = Modifier
+                                .height(36.dp)
+                                .clip(CircleShape)
+                                .background(Yuyu.muted)
+                                .clickable(enabled = activeWatchTransfer != null) {
+                                    showWatchTransferDialog = true
                                 }
-                            }
-                        }
-                        FilledIconButton(
-                            modifier = Modifier.padding(end = 14.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ),
-                            onClick = {
-                                navController.navigateSafely(Screen.Settings.route)
-                            }
+                                .padding(horizontal = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.rounded_settings_24),
-                                contentDescription = stringResource(R.string.presentation_batch_d_open_settings_cd)
+                                painter = painterResource(R.drawable.rounded_watch_arrow_down_24),
+                                contentDescription = stringResource(R.string.presentation_batch_d_watch_transfer_cd),
+                                tint = Yuyu.text,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.presentation_batch_g_sync_percent, watchTransferPercent),
+                                style = YuyuType.label,
+                                color = Yuyu.text
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent
+                    }
+                    YuyuIconButton(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        onClick = { navController.navigateSafely(Screen.Search.route) },
+                        style = YuyuIconButtonStyle.Tonal
                     )
-                )
+                    YuyuIconButton(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = "New playlist",
+                        onClick = { showPlaylistCreationTypeDialog = true },
+                        style = YuyuIconButtonStyle.Tonal
+                    )
+                    YuyuIconButton(
+                        painter = painterResource(R.drawable.rounded_settings_24),
+                        contentDescription = stringResource(R.string.presentation_batch_d_open_settings_cd),
+                        onClick = { navController.navigateSafely(Screen.Settings.route) },
+                        style = YuyuIconButtonStyle.Tonal
+                    )
+                }
                 if (!isCompactNavigation) {
-                    val showTabIndicator = false
-                    PrimaryScrollableTabRow(
-                        selectedTabIndex = currentTabIndex,
-                        containerColor = Color.Transparent,
-                        edgePadding = 12.dp,
-                        indicator = {
-                            if (showTabIndicator) {
-                                TabRowDefaults.PrimaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(selectedTabIndex = currentTabIndex),
-                                    height = 3.dp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        },
-                        divider = {}
+                    // Yuyu pill tabs (chips): ink when selected, outlined otherwise.
+                    androidx.compose.foundation.lazy.LazyRow(
+                        state = tabRowState,
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp, bottom = 6.dp)
                     ) {
-                        tabTitles.forEachIndexed { index, rawId ->
-                            val tabId = rawId.toLibraryTabIdOrNull() ?: LibraryTabId.SONGS
-                            TabAnimation(
-                                index = index,
-                                title = tabId.storageKey,
-                                selectedIndex = currentTabIndex,
+                        items(tabTitles.size, key = { "lib_tab_${tabTitles[it]}" }) { index ->
+                            val tabId = tabTitles[index].toLibraryTabIdOrNull() ?: LibraryTabId.SONGS
+                            YuyuChip(
+                                text = tabId.title,
+                                selected = currentTabIndex == index,
                                 onClick = {
                                     scope.launch {
                                         pagerState.animateScrollToPage(
@@ -960,24 +970,17 @@ fun LibraryScreen(
                                         )
                                     }
                                 }
-                            ) {
-                                Text(
-                                    text = tabId.title,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = if (currentTabIndex == index) FontWeight.Bold else FontWeight.Medium
-                                )
-                            }
+                            )
                         }
-                        TabAnimation(
-                            index = -1,
-                            title = stringResource(R.string.presentation_batch_d_edit_library_tabs_cd),
-                            selectedIndex = currentTabIndex,
-                            onClick = { showReorderTabsSheet = true }
-                        ) {
-                            Icon(
-                                Icons.Default.Edit,
+                        item(key = "lib_tab_edit") {
+                            YuyuIconButton(
+                                imageVector = Icons.Default.Edit,
                                 contentDescription = stringResource(R.string.presentation_batch_d_reorder_tabs_cd),
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+                                onClick = { showReorderTabsSheet = true },
+                                style = YuyuIconButtonStyle.Plain,
+                                size = 36.dp,
+                                iconSize = 18.dp,
+                                tint = Yuyu.textMuted
                             )
                         }
                     }
@@ -1021,16 +1024,7 @@ fun LibraryScreen(
                         .fillMaxSize()
                         .padding(horizontal = 0.dp, vertical = 0.dp), // Removed horizontal padding for more space
                     color = MaterialTheme.colorScheme.surface,
-                    shape = AbsoluteSmoothCornerShape(
-                        cornerRadiusTL = 34.dp,
-                        smoothnessAsPercentBL = 60,
-                        cornerRadiusBL = 0.dp,
-                        smoothnessAsPercentBR = 60,
-                        cornerRadiusBR = 0.dp,
-                        smoothnessAsPercentTR = 60,
-                        cornerRadiusTR = 34.dp,
-                        smoothnessAsPercentTL = 60
-                    )
+                    shape = androidx.compose.ui.graphics.RectangleShape
                     // shape = AbsoluteSmoothCornerShape(cornerRadiusTL = 24.dp, smoothnessAsPercentTR = 60, /*...*/) // Your custom shape
                 ) {
                     Column(Modifier.fillMaxSize()) {
@@ -1176,11 +1170,11 @@ fun LibraryScreen(
                             },
                             modifier = Modifier
                                 .padding(
-                                    top = 6.dp,
-                                    start = 10.dp,
-                                    end = 10.dp
+                                    top = 4.dp,
+                                    start = 12.dp,
+                                    end = 16.dp
                                 )
-                                .heightIn(min = 56.dp)
+                                .heightIn(min = 52.dp)
                         ) { inSelectionMode ->
                             if (inSelectionMode) {
                                 // Playlist selection row
@@ -1281,7 +1275,8 @@ fun LibraryScreen(
                                             currentTabId == LibraryTabId.LIKED ||
                                             (ENABLE_FOLDERS_STORAGE_FILTER && currentTabId == LibraryTabId.FOLDERS),
                                     currentStorageFilter = playerUiState.currentStorageFilter,
-                                    onStorageFilterClick = { playerViewModel.toggleStorageFilter() }
+                                    onStorageFilterClick = { playerViewModel.toggleStorageFilter() },
+                                    sortLabel = currentSelectedSortOption?.displayName
                                 )
                             }
                         }
@@ -3038,67 +3033,53 @@ fun LibraryFoldersTab(
 @Composable
 fun FolderPlaylistItem(folder: MusicFolder, onClick: () -> Unit) {
     val previewSongs = remember(folder) { folder.collectAllSongs().take(9) }
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(YuyuShapes.lg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            PlaylistArtCollage(
-                songs = previewSongs,
-                modifier = Modifier.size(48.dp)
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    folder.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontFamily = GoogleSansRounded),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    formatSongCount(folder.totalSongCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        PlaylistArtCollage(
+            songs = previewSongs,
+            modifier = Modifier.size(48.dp).clip(YuyuShapes.md)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(folder.name, style = YuyuType.title, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(formatSongCount(folder.totalSongCount), style = YuyuType.meta, color = Yuyu.textMuted)
         }
     }
 }
 
 @Composable
 fun FolderListItem(folder: MusicFolder, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(YuyuShapes.lg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.size(48.dp).clip(YuyuShapes.md).background(Yuyu.muted),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_folder),
                 contentDescription = stringResource(R.string.presentation_batch_d_cd_folder),
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
-                    .padding(8.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                modifier = Modifier.size(24.dp),
+                tint = Yuyu.text
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(folder.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(formatSongCount(folder.totalSongCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(folder.name, style = YuyuType.title, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(formatSongCount(folder.totalSongCount), style = YuyuType.meta, color = Yuyu.textMuted)
         }
     }
 }
@@ -3179,98 +3160,42 @@ fun AlbumGridItemRedesigned(
     onLongPress: () -> Unit = {},
     onSelectionToggle: () -> Unit = {}
 ) {
-    val albumColorSchemePair by albumColorSchemePairFlow.collectAsStateWithLifecycle()
-    val systemIsDark = LocalLMusicDarkTheme.current
-
-    // 1. Obtén el colorScheme del tema actual aquí, en el scope Composable.
-    val currentMaterialColorScheme = MaterialTheme.colorScheme
-
-    val itemDesignColorScheme = remember(albumColorSchemePair, systemIsDark, currentMaterialColorScheme) {
-        // 2. Ahora, currentMaterialColorScheme es una variable estable que puedes usar.
-        albumColorSchemePair?.let { pair ->
-            if (systemIsDark) pair.dark else pair.light
-        } ?: currentMaterialColorScheme // Usa la variable capturada
-    }
-
-    val gradientBaseColor = itemDesignColorScheme.primaryContainer
-    val onGradientColor = itemDesignColorScheme.onPrimaryContainer
-    val cardCornerRadius = 20.dp
-    val cardShape = RoundedCornerShape(cardCornerRadius)
+    // Yuyu flat album card: square art (r16), title 15/600, muted meta. No tinted background.
+    val artShape = YuyuShapes.lg
     val selectionScale by animateFloatAsState(
-        targetValue = if (isSelected) 0.985f else 1f,
+        targetValue = if (isSelected) 0.97f else 1f,
         animationSpec = tween(durationMillis = 220),
         label = "albumGridSelectionScale"
     )
-    val selectionBorderWidth by animateDpAsState(
-        targetValue = if (isSelected) 2.dp else 0.dp,
-        animationSpec = tween(durationMillis = 220),
-        label = "albumGridSelectionBorder"
-    )
 
     if (isLoading) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = cardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-        ) {
-            Column(
-                modifier = Modifier.background(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = cardShape
-                )
-            ) {
-                ShimmerBox(
-                    modifier = Modifier
-                        .aspectRatio(3f / 2f)
-                        .fillMaxSize()
-                )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(84.dp)
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .height(20.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.4f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                }
-            }
+        Column(modifier = Modifier.fillMaxWidth()) {
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(artShape)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            ShimmerBox(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+            )
         }
     } else {
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .scale(selectionScale)
-                .then(
-                    if (isSelected) {
-                        Modifier.border(
-                            width = selectionBorderWidth,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = cardShape
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
-                .clip(cardShape)
+                .clip(YuyuShapes.lg)
                 .combinedClickable(
                     onClick = {
                         if (isSelectionMode) {
@@ -3280,96 +3205,56 @@ fun AlbumGridItemRedesigned(
                         }
                     },
                     onLongClick = onLongPress
-                ),
-            shape = cardShape,
-            //elevation = CardDefaults.cardElevation(defaultElevation = 4.dp, pressedElevation = 8.dp),
-            colors = CardDefaults.cardColors(containerColor = itemDesignColorScheme.surfaceVariant.copy(alpha = 0.3f))
+                )
+                .padding(bottom = 4.dp)
         ) {
-            Box {
-                Column(
-                    modifier = Modifier.background(
-                        color = gradientBaseColor,
-                        shape = cardShape
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .scale(selectionScale)
+                    .then(
+                        if (isSelected) Modifier.border(2.dp, Yuyu.ink, artShape) else Modifier
                     )
-                ) {
-                    Box(contentAlignment = Alignment.BottomStart) {
-                        var isLoadingImage by remember { mutableStateOf(true) }
-                        SmartImage(
-                            model = album.albumArtUriString,
-                            contentDescription = stringResource(R.string.cd_album_art_for_title, album.title),
-                            contentScale = ContentScale.Crop,
-                            // Reducido el tamaño para mejorar el rendimiento del scroll, como se sugiere en el informe.
-                            // ContentScale.Crop se encargará de ajustar la imagen al aspect ratio.
-                            targetSize = Size(256, 256),
-                            modifier = Modifier
-                                .aspectRatio(3f / 2f)
-                                .fillMaxSize(),
-                            onState = { state ->
-                                isLoadingImage = state is AsyncImagePainter.State.Loading
-                            }
-                        )
-                        if (isLoadingImage) {
-                            ShimmerBox(
-                                modifier = Modifier
-                                    .aspectRatio(3f / 2f)
-                                    .fillMaxSize()
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .aspectRatio(3f / 2f)
-                                .background(
-                                    remember(gradientBaseColor) { // Recordar el Brush
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent, gradientBaseColor
-                                            )
-                                        )
-                                    })
-                        )
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(84.dp)
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            album.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = onGradientColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(album.artist, style = MaterialTheme.typography.bodySmall, color = onGradientColor.copy(alpha = 0.85f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(formatSongCount(album.songCount), style = MaterialTheme.typography.bodySmall, color = onGradientColor.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-
+            ) {
+                YuyuArtSquare(
+                    model = album.albumArtUriString,
+                    title = album.title,
+                    shape = artShape,
+                    contentDescription = stringResource(R.string.cd_album_art_for_title, album.title),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 if (isSelectionMode && isSelected) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(10.dp)
+                            .padding(8.dp)
                             .size(28.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = CircleShape
-                            ),
+                            .background(color = Yuyu.ink, shape = CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = selectionIndex?.toString() ?: "✓",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                            color = Yuyu.onInk,
+                            style = YuyuType.label.copy(fontWeight = FontWeight.Bold)
                         )
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                album.title,
+                style = YuyuType.title.copy(fontSize = 15.sp),
+                color = Yuyu.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                listOf(album.artist, formatSongCount(album.songCount)).filter { it.isNotBlank() }.joinToString(" · "),
+                style = YuyuType.caption,
+                color = Yuyu.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -3377,70 +3262,50 @@ fun AlbumGridItemRedesigned(
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun ArtistListItem(artist: Artist, onClick: () -> Unit, isLoading: Boolean = false) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    // Yuyu artist row: round avatar (image or initials), name, muted song count.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(YuyuShapes.lg)
+            .clickable(enabled = !isLoading, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (isLoading) {
-                // Skeleton loading state
+        if (isLoading) {
+            ShimmerBox(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+            )
+            Column {
                 ShimmerBox(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
+                        .fillMaxWidth(0.6f)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(4.dp))
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(20.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth(0.3f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                }
-            } else {
-                Box(
+                Spacer(modifier = Modifier.height(4.dp))
+                ShimmerBox(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!artist.effectiveImageUrl.isNullOrEmpty()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(artist.effectiveImageUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = artist.name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            painter = painterResource(R.drawable.rounded_artist_24),
-                            contentDescription = stringResource(R.string.presentation_batch_d_cd_artist),
-                            modifier = Modifier.padding(8.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text(artist.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(formatSongCount(artist.songCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                        .fillMaxWidth(0.3f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                )
             }
+        } else {
+            YuyuAvatar(model = artist.effectiveImageUrl, name = artist.name, size = 52.dp)
+            Column(Modifier.weight(1f)) {
+                Text(artist.name, style = YuyuType.title, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(formatSongCount(artist.songCount), style = YuyuType.meta, color = Yuyu.textMuted, maxLines = 1)
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = Yuyu.textMuted,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -3520,23 +3385,12 @@ fun AlbumListItem(
             }
         }
     } else {
-        Card(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp)
-                .scale(selectionScale)
-                .then(
-                    if (isSelected) {
-                        Modifier.border(
-                            width = selectionBorderWidth,
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = cardShape
-                        )
-                    } else {
-                        Modifier
-                    }
-                )
-                .clip(cardShape)
+                .heightIn(min = 72.dp)
+                .clip(YuyuShapes.lg)
+                .then(if (isSelected) Modifier.background(Yuyu.muted) else Modifier)
                 .combinedClickable(
                     onClick = {
                         if (isSelectionMode) {
@@ -3546,115 +3400,40 @@ fun AlbumListItem(
                         }
                     },
                     onLongClick = onLongPress
-                ),
-            shape = cardShape,
-            colors = CardDefaults.cardColors(containerColor = itemDesignColorScheme.surfaceVariant.copy(alpha = 0.3f))
+                )
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxSize()
+            YuyuArt(
+                model = album.albumArtUriString,
+                title = album.title,
+                size = 56.dp,
+                shape = YuyuShapes.md,
+                contentDescription = stringResource(R.string.cd_album_art_for_title, album.title)
+            )
+            Column(Modifier.weight(1f)) {
+                Text(album.title, style = YuyuType.title, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    listOf(album.artist, formatSongCount(album.songCount)).filter { it.isNotBlank() }.joinToString(" · "),
+                    style = YuyuType.meta,
+                    color = Yuyu.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (isSelectionMode && isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .background(color = Yuyu.ink, shape = CircleShape),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // LEFT: Album Art
-                    Box(
-                        modifier = Modifier
-                            .aspectRatio(1f)
-                            .fillMaxHeight()
-                    ) {
-                        var isLoadingImage by remember { mutableStateOf(true) }
-                        SmartImage(
-                            model = album.albumArtUriString,
-                            contentDescription = stringResource(R.string.cd_album_art_for_title, album.title),
-                            contentScale = ContentScale.Crop,
-                            targetSize = Size(256, 256),
-                            modifier = Modifier.fillMaxSize(),
-                            onState = { state ->
-                                isLoadingImage = state is AsyncImagePainter.State.Loading
-                            }
-                        )
-                        if (isLoadingImage) {
-                            ShimmerBox(modifier = Modifier.fillMaxSize())
-                        }
-
-                        // Gradient Overlay
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            gradientBaseColor
-                                        )
-                                    )
-                                )
-                        )
-                    }
-
-                    // MIDDLE: Solid Background
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(gradientBaseColor)
-                    ) {
-                        // Text on top of the gradient/solid background
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            val variableTextStyle = remember(album.id, album.title) {
-                                GenreTypography.getGenreStyle(album.id.toString(), album.title)
-                            }
-
-                            Text(
-                                album.title,
-                                style = variableTextStyle.copy(fontSize = 22.sp),
-                                color = onGradientColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(
-                                modifier = Modifier.height(4.dp)
-                            )
-                            Text(
-                                album.artist,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = onGradientColor.copy(alpha = 0.85f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                formatSongCount(album.songCount),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = onGradientColor.copy(alpha = 0.7f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                if (isSelectionMode && isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
-                            .size(24.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = selectionIndex?.toString() ?: "✓",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = selectionIndex?.toString() ?: "✓",
+                        style = YuyuType.caption.copy(fontWeight = FontWeight.Bold),
+                        color = Yuyu.onInk
+                    )
                 }
             }
         }

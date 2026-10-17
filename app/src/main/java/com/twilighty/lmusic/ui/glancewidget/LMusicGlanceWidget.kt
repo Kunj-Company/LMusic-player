@@ -82,7 +82,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
             Timber.tag("LMusicGlanceWidget")
                 .d("Providing Glance. PlayerInfo: title='${playerInfo.songTitle}', artist='${playerInfo.artistName}', isPlaying=${playerInfo.isPlaying}, hasBitmap=${playerInfo.albumArtBitmapData != null}, progress=${playerInfo.currentPositionMs}/${playerInfo.totalDurationMs}")
 
-            GlanceTheme {
+            GlanceTheme(colors = YuyuGlanceColors) {
                 WidgetUi(playerInfo = playerInfo, size = currentSize, context = context)
             }
         }
@@ -122,13 +122,13 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     size.height <= ONE_BY_ONE_LAYOUT_SIZE.height -> OneByOneWidgetLayout(
                         modifier = baseModifier,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 60.dp,
+                        bgCornerRadius = 24.dp,
                         isPlaying = isPlaying
                     )
                     size.height <= GABE_TWO_HEIGHT_LAYOUT_SIZE.height -> GabeTwoHeightWidgetLayout(
                         modifier = baseModifier,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 60.dp,
+                        bgCornerRadius = 24.dp,
                         albumArtBitmapData = albumArtBitmapData,
                         albumArtUri = albumArtUri,
                         isPlaying = isPlaying,
@@ -137,7 +137,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     else -> GabeWidgetLayout(
                         modifier = baseModifier,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 360.dp,
+                        bgCornerRadius = 24.dp,
                         albumArtBitmapData = albumArtBitmapData,
                         albumArtUri = albumArtUri,
                         isPlaying = isPlaying,
@@ -149,7 +149,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     size.width < VERY_THIN_LAYOUT_SIZE.width -> SmallHorizontalWidgetLayout(
                         modifier = baseModifier,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 60.dp,
+                        bgCornerRadius = 24.dp,
                         albumArtBitmapData = albumArtBitmapData,
                         albumArtUri = albumArtUri,
                         isPlaying = isPlaying,
@@ -165,12 +165,12 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         textColor = onBackgroundColor,
                         context = context,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 60.dp
+                        bgCornerRadius = 24.dp
                     )
                     else -> ThinWidgetLayout(
                         modifier = baseModifier,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 60.dp,
+                        bgCornerRadius = 24.dp,
                         title = title,
                         artist = artist,
                         albumArtBitmapData = albumArtBitmapData,
@@ -185,7 +185,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     size.width < MEDIUM_LAYOUT_SIZE.width || size.height < MEDIUM_LAYOUT_SIZE.height -> SmallWidgetLayout(
                         modifier = baseModifier,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 28.dp,
+                        bgCornerRadius = 24.dp,
                         albumArtBitmapData = albumArtBitmapData,
                         albumArtUri = albumArtUri,
                         isPlaying = isPlaying,
@@ -201,7 +201,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         textColor = onBackgroundColor,
                         context = context,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 28.dp
+                        bgCornerRadius = 24.dp
                     )
                     size.width < EXTRA_LARGE_LAYOUT_SIZE.width || size.height < EXTRA_LARGE_LAYOUT_SIZE.height -> LargeWidgetLayout(
                         modifier = baseModifier,
@@ -210,7 +210,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         albumArtBitmapData = albumArtBitmapData,
                         albumArtUri = albumArtUri,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 28.dp,
+                        bgCornerRadius = 24.dp,
                         isPlaying = isPlaying,
                         isFavorite = isFavorite,
                         textColor = onBackgroundColor,
@@ -224,7 +224,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         albumArtUri = albumArtUri,
                         isPlaying = isPlaying,
                         backgroundColor = actualBackgroundColor,
-                        bgCornerRadius = 28.dp,
+                        bgCornerRadius = 24.dp,
                         textColor = onBackgroundColor,
                         context = context,
                         queue = playerInfo.queue
@@ -274,13 +274,13 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     bitmapData = albumArtBitmapData,
                     albumArtUri = albumArtUri,
                     context = context,
-                    cornerRadius = bgCornerRadius
+                    cornerRadius = 12.dp
                 )
                 Spacer(GlanceModifier.width(10.dp))
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     Text(text = title, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textColor), maxLines = 1)
                     if (artist.isNotEmpty() && artist != context.getString(R.string.widget_tap_to_open)) {
-                        Text(text = artist, style = TextStyle(fontSize = 14.sp, color = textColor), maxLines = 1)
+                        Text(text = artist, style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
                     }
                 }
                 Spacer(GlanceModifier.width(8.dp))
@@ -293,7 +293,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     iconColor = onPrimaryContainerColor,
                     isPlaying = isPlaying,
                     iconSize = 26.dp,
-                    cornerRadius = 10.dp
+                    cornerRadius = 60.dp
                 )
                 Spacer(GlanceModifier.width(10.dp))
                 NextButtonGlance(
@@ -304,7 +304,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     iconColor = onSecondaryColor,
                     iconSize = 26.dp,
                     backgroundColor = secondaryColor,
-                    cornerRadius = 10.dp
+                    cornerRadius = 60.dp
                 )
             }
         }
@@ -352,13 +352,13 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     bitmapData = albumArtBitmapData,
                     albumArtUri = albumArtUri,
                     context = context,
-                    cornerRadius = bgCornerRadius
+                    cornerRadius = 12.dp
                 )
                 Spacer(GlanceModifier.width(14.dp))
                 Column(modifier = GlanceModifier.defaultWeight()) {
                     Text(text = title, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textColor), maxLines = 1)
                     if (artist.isNotEmpty() && artist != context.getString(R.string.widget_tap_to_open)) {
-                        Text(text = artist, style = TextStyle(fontSize = 14.sp, color = textColor), maxLines = 1)
+                        Text(text = artist, style = TextStyle(fontSize = 14.sp, color = GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
                     }
                 }
                 Spacer(GlanceModifier.width(8.dp))
@@ -371,7 +371,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     iconColor = onPrimaryContainerColor,
                     isPlaying = isPlaying,
                     iconSize = 26.dp,
-                    cornerRadius = 10.dp
+                    cornerRadius = 60.dp
                 )
                 Spacer(GlanceModifier.width(10.dp))
                 NextButtonGlance(
@@ -382,7 +382,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     iconColor = onSecondaryColor,
                     iconSize = 26.dp,
                     backgroundColor = secondaryColor,
-                    cornerRadius = 10.dp
+                    cornerRadius = 60.dp
                 )
             }
         }
@@ -425,7 +425,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     albumArtUri = albumArtUri,
                     //size = 48.dp,
                     context = context,
-                    cornerRadius = 64.dp
+                    cornerRadius = 12.dp
                 )
                 Spacer(GlanceModifier.height(14.dp))
                 Column(
@@ -441,7 +441,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         iconColor = onPrimaryContainerColor,
                         isPlaying = isPlaying,
                         iconSize = 26.dp,
-                        cornerRadius = 10.dp
+                        cornerRadius = 60.dp
                     )
                     Spacer(GlanceModifier.height(10.dp))
                     NextButtonGlance(
@@ -451,7 +451,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         iconColor = onSecondaryColor,
                         iconSize = 26.dp,
                         backgroundColor = secondaryColor,
-                        cornerRadius = 10.dp
+                        cornerRadius = 60.dp
                     )
                 }
             }
@@ -492,7 +492,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     bitmapData = albumArtBitmapData,
                     albumArtUri = albumArtUri,
                     context = context,
-                    cornerRadius = 64.dp
+                    cornerRadius = 12.dp
                 )
                 Spacer(GlanceModifier.height(14.dp))
                 Column(
@@ -507,7 +507,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         iconColor = onSecondaryColor,
                         iconSize = 26.dp,
                         backgroundColor = secondaryColor,
-                        cornerRadius = 10.dp
+                        cornerRadius = 60.dp
                     )
                     Spacer(GlanceModifier.height(10.dp))
                     PlayPauseButtonGlance(
@@ -518,7 +518,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         iconColor = onPrimaryContainerColor,
                         isPlaying = isPlaying,
                         iconSize = 26.dp,
-                        cornerRadius = 10.dp
+                        cornerRadius = 60.dp
                     )
                     Spacer(GlanceModifier.height(10.dp))
                     NextButtonGlance(
@@ -528,7 +528,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         iconColor = onSecondaryColor,
                         iconSize = 26.dp,
                         backgroundColor = secondaryColor,
-                        cornerRadius = 10.dp
+                        cornerRadius = 60.dp
                     )
                 }
             }
@@ -558,7 +558,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                 iconColor = onPrimaryContainerColor,
                 isPlaying = isPlaying,
                 iconSize = 36.dp,
-                cornerRadius = 30.dp
+                cornerRadius = 60.dp
             )
         }
     }
@@ -595,7 +595,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     albumArtUri = albumArtUri,
                     size = 58.dp,
                     context = context,
-                    cornerRadius = 64.dp
+                    cornerRadius = 12.dp
                 )
                 Spacer(GlanceModifier.width(14.dp))
                 PlayPauseButtonGlance(
@@ -606,7 +606,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     iconColor = onPrimaryContainerColor,
                     isPlaying = isPlaying,
                     iconSize = 26.dp,
-                    cornerRadius = 10.dp
+                    cornerRadius = 60.dp
                 )
             }
         }
@@ -626,8 +626,8 @@ class LMusicGlanceWidget : GlanceAppWidget() {
         val onSecondaryColor = GlanceTheme.colors.onSecondaryContainer
         val primaryContainerColor = GlanceTheme.colors.primaryContainer
         val onPrimaryContainerColor = GlanceTheme.colors.onPrimaryContainer
-        val buttonCornerRadius = 16.dp
-        val playButtonCornerRadius = if (isPlaying) 12.dp else 60.dp
+        val buttonCornerRadius = 60.dp
+        val playButtonCornerRadius = 60.dp
 
         Box(
             modifier = modifier
@@ -652,7 +652,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         bitmapData = albumArtBitmapData,
                         albumArtUri = albumArtUri,
                         context = context,
-                        cornerRadius = 64.dp
+                        cornerRadius = 12.dp
                     )
                     //Spacer(GlanceModifier.width(10.dp))
                 }
@@ -718,7 +718,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
         val primaryContainerColor = GlanceTheme.colors.primaryContainer
         val onPrimaryContainerColor = GlanceTheme.colors.onPrimaryContainer
         val buttonCornerRadius = 60.dp
-        val playButtonCornerRadius = if (isPlaying) 14.dp else 60.dp
+        val playButtonCornerRadius = 60.dp
 
         // *** FIX: Apply padding to the outer Box for consistency ***
         Box(
@@ -742,7 +742,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         albumArtUri = albumArtUri,
                         size = 80.dp,
                         context = context,
-                        cornerRadius = 16.dp
+                        cornerRadius = 12.dp
                     )
                     Spacer(GlanceModifier.width(12.dp))
                     Column(modifier = GlanceModifier.defaultWeight()) {
@@ -758,7 +758,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         Spacer(GlanceModifier.height(4.dp))
                         Text(
                             text = artist,
-                            style = TextStyle(fontSize = 13.sp, color = textColor),
+                            style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurfaceVariant),
                             maxLines = 2
                         )
                     }
@@ -835,12 +835,12 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         albumArtUri = albumArtUri,
                         size = 64.dp,
                         context = context,
-                        cornerRadius = 18.dp
+                        cornerRadius = 12.dp
                     )
                     Spacer(GlanceModifier.width(12.dp))
                     Column(modifier = GlanceModifier.defaultWeight()) {
                         Text(text = title, style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Bold, color = textColor), maxLines = 1)
-                        Text(text = artist, style = TextStyle(fontSize = 13.sp, color = textColor), maxLines = 1)
+                        Text(text = artist, style = TextStyle(fontSize = 13.sp, color = GlanceTheme.colors.onSurfaceVariant), maxLines = 1)
                     }
                     Spacer(GlanceModifier.width(4.dp))
                     Image(
@@ -870,7 +870,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     val primaryContainerColor = GlanceTheme.colors.primaryContainer
                     val onPrimaryContainerColor = GlanceTheme.colors.onPrimaryContainer
                     val buttonCornerRadius = 60.dp
-                    val playButtonCornerRadius = if (isPlaying) 14.dp else 60.dp
+                    val playButtonCornerRadius = 60.dp
 
                     PreviousButtonGlance(
                         modifier = GlanceModifier
@@ -882,9 +882,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     )
                     Spacer(GlanceModifier.width(8.dp))
                     PlayPauseButtonGlance(
-                        modifier = GlanceModifier
-                            .defaultWeight()
-                            .fillMaxHeight(),
+                        modifier = GlanceModifier.size(56.dp),
                         isPlaying = isPlaying,
                         iconColor = onPrimaryContainerColor,
                         backgroundColor = primaryContainerColor,
@@ -913,7 +911,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
         context: Context,
         queue: List<QueueItem>
     ) {
-        val playButtonCornerRadius = if (isPlaying) 16.dp else 60.dp
+        val playButtonCornerRadius = 60.dp
 
         // *** FIX: Apply padding to the outer Box for consistency ***
         Box(
@@ -934,7 +932,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         albumArtUri = albumArtUri,
                         size = 68.dp,
                         context = context,
-                        cornerRadius = 16.dp
+                        cornerRadius = 12.dp
                     )
                     Spacer(GlanceModifier.width(16.dp))
                     Column(modifier = GlanceModifier.defaultWeight()) {
@@ -945,7 +943,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         )
                         Text(
                             text = artist,
-                            style = TextStyle(fontSize = 16.sp, color = textColor),
+                            style = TextStyle(fontSize = 16.sp, color = GlanceTheme.colors.onSurfaceVariant),
                             maxLines = 1
                         )
                     }
@@ -979,9 +977,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                     )
                     Spacer(GlanceModifier.width(10.dp))
                     PlayPauseButtonGlance(
-                        modifier = GlanceModifier
-                            .defaultWeight()
-                            .fillMaxHeight(),
+                        modifier = GlanceModifier.size(56.dp),
                         isPlaying = isPlaying,
                         iconColor = onPrimaryContainerColor,
                         backgroundColor = primaryContainerColor,
@@ -1033,7 +1029,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                 ) {
                     val items = queue.take(4)
                     val itemSize = 58.dp
-                    val cornerRadius = 14.dp
+                    val cornerRadius = 12.dp
 
                     for (i in 0 until 4) {
                         Box(

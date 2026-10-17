@@ -16,6 +16,17 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.ui.semantics.Role
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -104,7 +115,11 @@ fun LibraryActionRow(
     // Storage Filter
     showStorageFilterButton: Boolean = false,
     currentStorageFilter: com.twilighty.lmusic.data.model.StorageFilter = com.twilighty.lmusic.data.model.StorageFilter.ALL,
-    onStorageFilterClick: () -> Unit = {}
+    onStorageFilterClick: () -> Unit = {},
+    /** Optional: the current sort's name, shown as a Yuyu chip ("Recently added ⌄"). */
+    sortLabel: String? = null,
+    /** Optional: a count line shown at the start ("1,284 songs"). */
+    countLabel: String? = null,
 ) {
     val shouldShowImport = isPlaylistTab && showImportButton
 
@@ -112,17 +127,17 @@ fun LibraryActionRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 4.dp),
-        horizontalArrangement = Arrangement.Absolute.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedContent(
             targetState = isFoldersTab,
             label = "ActionRowContent",
             transitionSpec = {
-                if (targetState) { // Transition to Folders (Breadcrumbs)
+                if (targetState) {
                     slideInVertically { height -> height } + fadeIn() togetherWith
                             slideOutVertically { height -> -height } + fadeOut()
-                } else { // Transition to other tabs (Buttons)
+                } else {
                     slideInVertically { height -> -height } + fadeIn() togetherWith
                             slideOutVertically { height -> height } + fadeOut()
                 }
@@ -138,263 +153,166 @@ fun LibraryActionRow(
                     onNavigateBack = onNavigateBack
                 )
             } else {
-                val outerCorner = 26.dp
-                val innerCorner = 8.dp
-
-                val newButtonEndCorner by animateDpAsState(
-                    targetValue = if (shouldShowImport) innerCorner else outerCorner,
-                    label = "NewButtonEndCorner"
-                )
-
-                val importButtonStartCorner by animateDpAsState(
-                    targetValue = innerCorner,
-                    label = "ImportButtonStartCorner"
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Determine button colors based on shuffle state (not for playlist tab)
-                    val buttonContainerColor = MaterialTheme.colorScheme.tertiaryContainer
-                    val buttonContentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    
-                    FilledTonalButton(
-                        onClick = onMainActionClick,
-                        shape = RoundedCornerShape(
-                            topStart = 26.dp, bottomStart = 26.dp,
-                            topEnd =  newButtonEndCorner, bottomEnd = newButtonEndCorner
-                        ),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = buttonContainerColor,
-                            contentColor = buttonContentColor
-                        ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 6.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                        modifier = Modifier.height(genHeight)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val icon = if (isPlaylistTab) Icons.AutoMirrored.Rounded.PlaylistAdd else Icons.Rounded.Shuffle
+                    val text = if (isPlaylistTab) {
+                        stringResource(R.string.library_action_new)
+                    } else {
+                        stringResource(R.string.shortcut_shuffle_short)
+                    }
+                    val contentDesc = if (isPlaylistTab) {
+                        stringResource(R.string.cd_create_new_playlist)
+                    } else {
+                        stringResource(R.string.cd_shuffle_play)
+                    }
+                    // Yuyu primary pill (ink), small.
+                    Row(
+                        modifier = Modifier
+                            .height(36.dp)
+                            .clip(YuyuShapes.pill)
+                            .background(Yuyu.ink)
+                            .clickable(role = Role.Button, onClick = onMainActionClick)
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        val icon = if (isPlaylistTab) Icons.AutoMirrored.Rounded.PlaylistAdd else Icons.Rounded.Shuffle
-                        val text = if (isPlaylistTab) {
-                            stringResource(R.string.library_action_new)
-                        } else {
-                            stringResource(R.string.shortcut_shuffle_short)
-                        }
-                        val contentDesc = if (isPlaylistTab) {
-                            stringResource(R.string.cd_create_new_playlist)
-                        } else {
-                            stringResource(R.string.cd_shuffle_play)
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = contentDesc,
-                                modifier = Modifier.size(20.dp).rotate(iconRotation)
-                            )
-                            Text(
-                                modifier = Modifier.animateContentSize(),
-                                text = text,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = contentDesc,
+                            tint = Yuyu.onInk,
+                            modifier = Modifier.size(16.dp).rotate(iconRotation)
+                        )
+                        Text(
+                            modifier = Modifier.animateContentSize(),
+                            text = text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = YuyuType.label.copy(fontWeight = FontWeight.Bold),
+                            color = Yuyu.onInk
+                        )
                     }
 
                     AnimatedVisibility(
                         visible = shouldShowImport,
-                        enter = fadeIn() + expandHorizontally(
-                            expandFrom = Alignment.Start,
-                            clip = false, // <— evita el “corte” durante la expansión
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            )
-                        ),
-                        exit = fadeOut() + shrinkHorizontally(
-                            shrinkTowards = Alignment.Start,
-                            clip = false, // <— evita el “corte” durante la expansión
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        )
+                        enter = fadeIn() + expandHorizontally(expandFrom = Alignment.Start, clip = false),
+                        exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.Start, clip = false)
                     ) {
-                        Row(modifier = Modifier.height(genHeight), verticalAlignment = Alignment.CenterVertically) {
-                            Spacer(modifier = Modifier.width(8.dp))
+                        YuyuChip(
+                            text = stringResource(R.string.import_file),
+                            selected = false,
+                            onClick = onImportM3uClick,
+                            icon = painterResource(R.drawable.rounded_upload_file_24)
+                        )
+                    }
 
-                            FilledTonalButton(
-                                onClick = onImportM3uClick,
-                                shape = RoundedCornerShape(
-                                    topStart = importButtonStartCorner,
-                                    bottomStart = importButtonStartCorner,
-                                    topEnd = 26.dp,
-                                    bottomEnd = 26.dp
-                                ),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                ),
-                                elevation = ButtonDefaults.buttonElevation(
-                                    defaultElevation = 4.dp,
-                                    pressedElevation = 6.dp
-                                ),
-                                contentPadding = PaddingValues(
-                                    horizontal = 14.dp,
-                                    vertical = 10.dp
-                                ),
-                                modifier = Modifier.height(genHeight)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.rounded_upload_file_24),
-                                        contentDescription = stringResource(R.string.cd_import_m3u_playlist),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.import_file),
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
-                        }
+                    if (countLabel != null) {
+                        Text(
+                            text = countLabel,
+                            style = YuyuType.caption,
+                            color = Yuyu.textMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
         }
 
-
-        Spacer(modifier = Modifier.width(8.dp))
-
         if (showSortButton) {
-            val outerCorner = 26.dp
-            
-            // Logic for Sort Button (Rightmost)
-            val sortStartCorner by animateDpAsState(
-                targetValue = if (showLocateButton || showStorageFilterButton) 8.dp else outerCorner,
-                label = "SortStartCorner"
-            )
-
-            // Logic for Filter Button (Middle or Left if Locate hidden)
-            // Filter is visible if showStorageFilterButton is true
-            val filterEndCorner = 8.dp // Connected to Sort
-            val filterStartCorner by animateDpAsState(
-                targetValue = if (showLocateButton) 8.dp else outerCorner,
-                label = "FilterStartCorner"
-            )
-            
-            // Logic for Locate Button (Leftmost)
-            val locateEndCorner = 8.dp // Connected to Filer or Sort
-
-            // Gaps
-            // If Filter is shown, gap is between Filter and Sort? OR if we use connected buttons, gap is 4dp between groups or 0dp between connected?
-            // Existing code used 4dp gap and 8dp corner. 
-            // "SortButtonsGap" was 4dp if showLocateButton else 0dp.
-            // If we want "connected" look (segmented), gap should be small (1dp or 2dp) or 0.
-            // But existing code uses `4.dp`.
-            
-            val gapBetweenLocateAndNext by animateDpAsState(
-                targetValue = if (showLocateButton) 4.dp else 0.dp,
-                label = "GapLocate"
-            )
-            val gapBetweenFilterAndSort by animateDpAsState(
-                targetValue = if (showStorageFilterButton) 4.dp else 0.dp,
-                label = "GapFilter"
-            )
-
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Locate Button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 AnimatedVisibility(
                     visible = showLocateButton,
                     enter = slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
                     exit = slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut()
                 ) {
-                    FilledTonalIconButton(
+                    YuyuIconButton(
+                        imageVector = Icons.Rounded.MyLocation,
+                        contentDescription = stringResource(R.string.cd_locate_current_song),
                         onClick = onLocateClick,
-                        shape = RoundedCornerShape(
-                            topStart = outerCorner,
-                            bottomStart = outerCorner,
-                            topEnd = locateEndCorner,
-                            bottomEnd = locateEndCorner
-                        ),
-                        modifier = Modifier.size(genHeight)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MyLocation,
-                            contentDescription = stringResource(R.string.cd_locate_current_song)
-                        )
-                    }
+                        style = YuyuIconButtonStyle.Outline,
+                        size = 36.dp,
+                        iconSize = 18.dp
+                    )
                 }
-                
-                Spacer(modifier = Modifier.width(gapBetweenLocateAndNext))
 
-                // Storage Filter Button
                 AnimatedVisibility(
                     visible = showStorageFilterButton,
                     enter = slideInHorizontally(initialOffsetX = { it / 2 }) + fadeIn(),
                     exit = slideOutHorizontally(targetOffsetX = { it / 2 }) + fadeOut()
                 ) {
-                     val finalIcon = when(currentStorageFilter) {
-                         com.twilighty.lmusic.data.model.StorageFilter.ALL -> Icons.Rounded.Dataset
-                         com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> Icons.Rounded.Cloud
-                         com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> Icons.Rounded.PhoneAndroid
-                     }
-                     val tooltipText = when(currentStorageFilter) {
-                         com.twilighty.lmusic.data.model.StorageFilter.ALL -> stringResource(R.string.library_storage_filter_all_songs)
-                         com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> stringResource(R.string.library_storage_filter_online)
-                         com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> stringResource(R.string.library_storage_filter_offline)
-                     }
-                     val tooltipState = rememberTooltipState()
+                    val finalIcon = when (currentStorageFilter) {
+                        com.twilighty.lmusic.data.model.StorageFilter.ALL -> Icons.Rounded.Dataset
+                        com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> Icons.Rounded.Cloud
+                        com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> Icons.Rounded.PhoneAndroid
+                    }
+                    val tooltipText = when (currentStorageFilter) {
+                        com.twilighty.lmusic.data.model.StorageFilter.ALL -> stringResource(R.string.library_storage_filter_all_songs)
+                        com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> stringResource(R.string.library_storage_filter_online)
+                        com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> stringResource(R.string.library_storage_filter_offline)
+                    }
+                    val tooltipState = rememberTooltipState()
 
                     @OptIn(ExperimentalMaterial3Api::class)
                     TooltipBox(
                         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-                        tooltip = {
-                            PlainTooltip {
-                                Text(tooltipText)
-                            }
-                        },
+                        tooltip = { PlainTooltip { Text(tooltipText) } },
                         state = tooltipState
                     ) {
-                        FilledTonalIconButton(
+                        YuyuIconButton(
+                            imageVector = finalIcon,
+                            contentDescription = tooltipText,
                             onClick = onStorageFilterClick,
-                            shape = RoundedCornerShape(
-                                topStart = filterStartCorner,
-                                bottomStart = filterStartCorner,
-                                topEnd = filterEndCorner,
-                                bottomEnd = filterEndCorner
-                            ),
-                            modifier = Modifier.size(genHeight)
-                        ) {
-                             Icon(
-                                imageVector = finalIcon,
-                                contentDescription = tooltipText
-                            )
-                        }
+                            style = if (currentStorageFilter == com.twilighty.lmusic.data.model.StorageFilter.ALL)
+                                YuyuIconButtonStyle.Outline else YuyuIconButtonStyle.Filled,
+                            size = 36.dp,
+                            iconSize = 18.dp
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(gapBetweenFilterAndSort))
-
-                // Sort Button
-                FilledTonalIconButton(
-                    onClick = onSortClick,
-                    shape = RoundedCornerShape(
-                        topStart = sortStartCorner,
-                        bottomStart = sortStartCorner,
-                        topEnd = outerCorner,
-                        bottomEnd = outerCorner
-                    ),
-                    modifier = Modifier.size(genHeight)
-                ) {
-                    Icon(
+                if (sortLabel != null) {
+                    // Yuyu sort chip: "<sort> ⌄"
+                    Row(
+                        modifier = Modifier
+                            .height(36.dp)
+                            .widthIn(max = 168.dp)
+                            .clip(YuyuShapes.pill)
+                            .background(Yuyu.canvas)
+                            .border(1.dp, Yuyu.borderStrong, YuyuShapes.pill)
+                            .clickable(role = Role.Button, onClick = onSortClick)
+                            .padding(start = 12.dp, end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = sortLabel,
+                            style = YuyuType.caption.copy(fontWeight = FontWeight.SemiBold),
+                            color = Yuyu.text,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = stringResource(R.string.cd_sort_options),
+                            tint = Yuyu.text,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                } else {
+                    YuyuIconButton(
                         imageVector = Icons.AutoMirrored.Rounded.Sort,
                         contentDescription = stringResource(R.string.cd_sort_options),
+                        onClick = onSortClick,
+                        style = YuyuIconButtonStyle.Outline,
+                        size = 36.dp,
+                        iconSize = 18.dp
                     )
                 }
             }
@@ -446,13 +364,15 @@ fun Breadcrumbs(
             .padding(start = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        FilledTonalIconButton(
+        YuyuIconButton(
+            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+            contentDescription = stringResource(R.string.auth_cd_back),
             onClick = onNavigateBack,
-            modifier = Modifier.size(36.dp),
+            style = YuyuIconButtonStyle.Tonal,
+            size = 36.dp,
+            iconSize = 18.dp,
             enabled = currentFolder != null
-        ) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.auth_cd_back))
-        }
+        )
         Spacer(Modifier.width(8.dp))
 
         LazyRow(
@@ -502,10 +422,8 @@ fun Breadcrumbs(
                 val isLast = index == pathSegments.lastIndex
                 Text(
                     text = name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal,
-                    fontFamily = GoogleSansRounded,
-                    color = if (isLast) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = YuyuType.label.copy(fontWeight = if (isLast) FontWeight.Bold else FontWeight.Normal),
+                    color = if (isLast) Yuyu.text else Yuyu.textMuted,
                     modifier = Modifier
                         .clip(CircleShape)
                         .clickable(enabled = !isLast) { onFolderClick(path) }

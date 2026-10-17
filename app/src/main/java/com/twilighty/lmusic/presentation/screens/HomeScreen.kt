@@ -98,6 +98,12 @@ import com.twilighty.lmusic.presentation.yuyu.YuyuHomeHeader
 import com.twilighty.lmusic.presentation.yuyu.YuyuMixTile
 import com.twilighty.lmusic.presentation.yuyu.YuyuRecentlyPlayedRow
 import com.twilighty.lmusic.presentation.yuyu.YuyuWeekStats
+import com.twilighty.lmusic.presentation.yuyu.MadeForYouMix
+import com.twilighty.lmusic.presentation.yuyu.YuyuContinueListeningCard
+import com.twilighty.lmusic.presentation.yuyu.YuyuHomeViewModel
+import com.twilighty.lmusic.presentation.yuyu.YuyuMadeForYouRow
+import com.twilighty.lmusic.presentation.yuyu.YuyuSongCoverRow
+import com.twilighty.lmusic.presentation.yuyu.YuyuTopArtistsRow
 import com.twilighty.lmusic.presentation.components.HomeOptionsBottomSheet
 import com.twilighty.lmusic.presentation.components.MiniPlayerHeight
 import com.twilighty.lmusic.presentation.components.NavBarContentHeight
@@ -139,6 +145,7 @@ fun HomeScreen(
     qqMusicViewModel: QqMusicDashboardViewModel = hiltViewModel(),
     navidromeViewModel: NavidromeDashboardViewModel = hiltViewModel(),
     jellyfinViewModel: JellyfinDashboardViewModel = hiltViewModel(),
+    yuyuHomeViewModel: YuyuHomeViewModel = hiltViewModel(),
     onOpenSidebar: () -> Unit
 ) {
     val context = LocalContext.current
@@ -246,6 +253,44 @@ fun HomeScreen(
             .distinctUntilChanged()
     }.collectAsStateWithLifecycle(initialValue = false)
 
+    val isPlaying by remember(playerViewModel.stablePlayerState) {
+        playerViewModel.stablePlayerState.map { it.isPlaying }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = false)
+    val totalDuration by remember(playerViewModel.stablePlayerState) {
+        playerViewModel.stablePlayerState.map { it.totalDuration }.distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = 0L)
+
+    // Yuyu Home data: "Made for you" rule-based mixes, recently added, top artists.
+    val showClassicSections by yuyuHomeViewModel.showClassicSections.collectAsStateWithLifecycle()
+    val recentlyAddedSongs by yuyuHomeViewModel.recentlyAdded.collectAsStateWithLifecycle()
+    val favouriteSongs by yuyuHomeViewModel.favourites.collectAsStateWithLifecycle()
+    val forgottenFavourites by yuyuHomeViewModel.forgottenFavourites.collectAsStateWithLifecycle()
+    val topArtists by yuyuHomeViewModel.topArtists.collectAsStateWithLifecycle()
+    DisposableEffect(lifecycleOwner, yuyuHomeViewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) yuyuHomeViewModel.refreshIfStale()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val madeForYouMixes = remember(dailyMixSongs, favouriteSongs, recentlyAddedSongs, forgottenFavourites) {
+        buildList {
+            if (dailyMixSongs.isNotEmpty()) add(
+                MadeForYouMix("daily", "Daily mix", "${dailyMixSongs.size} songs picked for today", dailyMixSongs)
+            )
+            if (favouriteSongs.isNotEmpty()) add(
+                MadeForYouMix("favourites", "Favourites", "Your liked songs", favouriteSongs)
+            )
+            if (recentlyAddedSongs.isNotEmpty()) add(
+                MadeForYouMix("recently_added", "Recently added", "New in your library", recentlyAddedSongs)
+            )
+            if (forgottenFavourites.isNotEmpty()) add(
+                MadeForYouMix("forgotten", "Forgotten favourites", "Not played in a month", forgottenFavourites)
+            )
+            // TODO: AI mixes appended here.
+        }
+    }
+
     // Padding inferior si hay canción en reproducción
     val bottomPadding = if (currentSong != null) MiniPlayerHeight else 0.dp
 
@@ -260,6 +305,11 @@ fun HomeScreen(
     LocalContext.current
 
     val homeStatsOverview by statsViewModel.homeOverview.collectAsStateWithLifecycle()
+    LaunchedEffect(homeStatsOverview) {
+        homeStatsOverview?.let { overview ->
+            yuyuHomeViewModel.setTopArtistNames(overview.topArtists.map { it.artist })
+        }
+    }
 
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -281,6 +331,7 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
             containerColor = MaterialTheme.colorScheme.surface
         ) { innerPadding ->
+            val showUpdateBanner = com.twilighty.lmusic.presentation.update.rememberUpdateBannerVisible()
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -291,7 +342,7 @@ fun HomeScreen(
                     bottom = paddingValuesParent.calculateBottomPadding()
                             + 38.dp + bottomPadding
                 ),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(28.dp)
             ) {
                 item(key = "yuyu_home_header", contentType = "yuyu_home_header") {
                     YuyuHomeHeader(
@@ -300,6 +351,49 @@ fun HomeScreen(
                         onSourcesClick = { showStreamingProviderSheet = true }
                     )
                 }
+                if (showUpdateBanner) item(key = "update_banner") { com.twilighty.lmusic.presentation.update.UpdateBanner() }
+
+                // Continue listening — the current song, or the last one played.
+                val continueSong = currentSong?.takeIf { it != Song.emptySong() && it.id.isNotBlank() }
+                    ?: recentlyPlayedQueue.firstOrNull()
+                if (continueSong != null) {
+                    item(key = "continue_listening", contentType = "continue_listening") {
+                        val hasLiveSong = currentSong?.let { it != Song.emptySong() && it.id.isNotBlank() } == true
+                        val positionState = playerViewModel.currentPlaybackPosition.collectAsStateWithLifecycle()
+                        YuyuContinueListeningCard(
+                            song = continueSong,
+                            isPlaying = hasLiveSong && isPlaying,
+                            progress = {
+                                val total = if (hasLiveSong) totalDuration.takeIf { it > 0 } ?: continueSong.duration else 0L
+                                if (total > 0L && hasLiveSong) positionState.value.toFloat() / total else 0f
+                            },
+                            onPlayPause = {
+                                if (hasLiveSong) {
+                                    playerViewModel.playPause()
+                                } else {
+                                    playerViewModel.playSongs(
+                                        songsToPlay = recentlyPlayedQueue,
+                                        startSong = continueSong,
+                                        queueName = "Recently Played"
+                                    )
+                                }
+                            },
+                            onOpen = {
+                                if (hasLiveSong) {
+                                    playerViewModel.expandPlayerSheet()
+                                } else {
+                                    playerViewModel.playSongs(
+                                        songsToPlay = recentlyPlayedQueue,
+                                        startSong = continueSong,
+                                        queueName = "Recently Played"
+                                    )
+                                }
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
+
                 if (yourMixSongs.isEmpty()) {
                     item(
                         key = "your_mix_placeholder",
@@ -313,6 +407,7 @@ fun HomeScreen(
                                     homePlaceholderRefreshGeneration++
                                     settingsViewModel.refreshLibrary()
                                     playerViewModel.forceUpdateDailyMix()
+                                    yuyuHomeViewModel.refreshIfStale(force = true)
                                 }
                             )
                         }
@@ -341,8 +436,9 @@ fun HomeScreen(
                     }
                 }
 
-                // Collage
-                if (yourMixSongs.isNotEmpty()) {
+                // Classic sections (album collage + Daily Mix), behind
+                // Settings › Appearance › "Show classic Home sections".
+                if (showClassicSections && yourMixSongs.isNotEmpty()) {
                     item(
                         key = "album_art_collage",
                         contentType = "album_art_collage"
@@ -378,8 +474,7 @@ fun HomeScreen(
                     }
                 }
 
-                // Daily Mix
-                if (dailyMixSongs.isNotEmpty()) {
+                if (showClassicSections && dailyMixSongs.isNotEmpty()) {
                     item(
                         key = "daily_mix_section",
                         contentType = "daily_mix_section"
@@ -411,6 +506,25 @@ fun HomeScreen(
                     }
                 }
 
+                if (madeForYouMixes.isNotEmpty()) {
+                    item(key = "made_for_you", contentType = "made_for_you") {
+                        YuyuMadeForYouRow(
+                            mixes = madeForYouMixes,
+                            // TODO: AI mixes appended here (e.g. extraMixes = aiMixes).
+                            extraMixes = emptyList(),
+                            onMixClick = { mix ->
+                                mix.songs.firstOrNull()?.let { first ->
+                                    playerViewModel.playSongs(
+                                        songsToPlay = mix.songs,
+                                        startSong = first,
+                                        queueName = mix.title
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+
                 if (recentlyPlayedSongs.size >= RecentlyPlayedSectionMinSongsToShow) {
                     item(
                         key = "recently_played_section",
@@ -435,6 +549,24 @@ fun HomeScreen(
                     }
                 }
 
+                if (recentlyAddedSongs.isNotEmpty()) {
+                    item(key = "recently_added_section", contentType = "recently_added_section") {
+                        YuyuSongCoverRow(
+                            title = "Recently added",
+                            songs = recentlyAddedSongs.take(20),
+                            currentSongId = currentSong?.id,
+                            keyPrefix = "added",
+                            onSongClick = { song ->
+                                playerViewModel.playSongs(
+                                    songsToPlay = recentlyAddedSongs,
+                                    startSong = song,
+                                    queueName = "Recently added"
+                                )
+                            }
+                        )
+                    }
+                }
+
                 if (homeStatsOverview != null) {
                     item(
                         key = "listening_stats_preview",
@@ -446,6 +578,17 @@ fun HomeScreen(
                                 onOpenStats = { navController.navigateToTopLevelSafely(Screen.Stats.route) }
                             )
                         }
+                    }
+                }
+
+                if (topArtists.isNotEmpty()) {
+                    item(key = "top_artists", contentType = "top_artists") {
+                        YuyuTopArtistsRow(
+                            artists = topArtists,
+                            onArtistClick = { artist ->
+                                navController.navigateSafely(Screen.ArtistDetail.createRoute(artist.id))
+                            }
+                        )
                     }
                 }
             }

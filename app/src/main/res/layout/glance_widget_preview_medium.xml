@@ -4,7 +4,7 @@
     android:layout_width="200dp"
     android:layout_height="120dp"
     android:orientation="horizontal"
-    android:background="#FF2C1D4D"
+    android:background="@drawable/widget_preview_background"
     android:gravity="center_vertical"
     android:padding="12dp"
     android:id="@+id/widget_preview_root"
@@ -29,7 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/widget_preview_song_title"
-            android:textColor="@android:color/white"
+            android:textColor="@color/yuyu_widget_text"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -37,7 +37,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/widget_preview_artist"
-            android:textColor="#E0E0E0"
+            android:textColor="@color/yuyu_widget_text_muted"
             android:textSize="12sp" />
     </LinearLayout>
 
@@ -47,5 +47,5 @@
         android:layout_height="36dp"
         android:src="@drawable/rounded_play_arrow_24"
         android:layout_marginStart="8dp"
-        app:tint="@android:color/white" />
+        app:tint="@color/yuyu_widget_accent" />
 </LinearLayout>

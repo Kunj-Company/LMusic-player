@@ -525,6 +525,11 @@ class PlaybackStatsRepository @Inject constructor(
         readEvents().map { event -> sanitizeEvent(event) }
     }
 
+    /** LMusic smart features: read-only access to recorded skips (taste profile). */
+    suspend fun loadSkipEvents(): List<SkipEvent> = withContext(Dispatchers.IO) {
+        synchronized(skipLock) { readSkipsLocked() }.toList()
+    }
+
     suspend fun loadPlaybackHistory(limit: Int = DEFAULT_PLAYBACK_HISTORY_LIMIT): List<PlaybackHistoryEntry> = withContext(Dispatchers.IO) {
         if (limit <= 0) return@withContext emptyList()
         val safeLimit = limit.coerceAtMost(MAX_PLAYBACK_HISTORY_LIMIT)

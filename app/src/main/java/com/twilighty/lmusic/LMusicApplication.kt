@@ -68,6 +68,18 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
     @Inject
     lateinit var userPreferencesRepository: dagger.Lazy<UserPreferencesRepository>
 
+    @Inject
+    lateinit var updatePreferences: dagger.Lazy<com.twilighty.lmusic.data.update.UpdatePreferences>
+
+    @Inject
+    lateinit var updateScheduler: dagger.Lazy<com.twilighty.lmusic.data.update.UpdateScheduler>
+
+    @Inject
+    lateinit var musicFoldersRepository: dagger.Lazy<com.twilighty.lmusic.data.library.MusicFoldersRepository>
+
+    @Inject
+    lateinit var smartShuffleController: dagger.Lazy<com.twilighty.lmusic.data.playback.SmartShuffleController>
+
     private val startupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
@@ -123,6 +135,22 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
             }.getOrNull()
             if (savedLimit != null) {
                 AlbumArtCacheManager.configuredCacheLimitMb = savedLimit.toLong()
+            }
+        }
+
+        startupScope.launch {
+            // One-time move from "excluded folders" to the "music folders" include list.
+            musicFoldersRepository.get().migrateIfNeeded()
+        }
+
+        // Smart shuffle setting -> shuffle order used by every shuffle path (QueueUtils).
+        smartShuffleController.get().start(startupScope)
+
+        if (BuildConfig.BUILD_TYPE != "benchmark") {
+            startupScope.launch {
+                // Weekly update check (KEEP keeps the existing schedule); cancelled when switched off.
+                val enabled = runCatching { updatePreferences.get().checksEnabled.first() }.getOrDefault(true)
+                runCatching { updateScheduler.get().apply(enabled) }
             }
         }
     }

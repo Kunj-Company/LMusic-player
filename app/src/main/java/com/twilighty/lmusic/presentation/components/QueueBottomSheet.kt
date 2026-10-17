@@ -191,6 +191,21 @@ import kotlinx.coroutines.flow.map
 import java.util.RandomAccess
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.twilighty.lmusic.presentation.yuyu.YuyuArt
+import com.twilighty.lmusic.presentation.yuyu.YuyuButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonSize
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuCheckbox
+import com.twilighty.lmusic.presentation.yuyu.YuyuChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuDialog
+import com.twilighty.lmusic.presentation.yuyu.YuyuDivider
+import com.twilighty.lmusic.presentation.yuyu.YuyuSheetHandle
+import com.twilighty.lmusic.presentation.yuyu.YuyuTextField
+import com.twilighty.lmusic.presentation.yuyu.YuyuToast
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
 
 private data class QueueUndoBarProjection(
     val isVisible: Boolean = false,
@@ -252,11 +267,6 @@ fun QueueBottomSheet(
     val context = LocalContext.current
     var showTimerOptions by rememberSaveable { mutableStateOf(false) }
     var showClearQueueDialog by remember { mutableStateOf(false) }
-    var isFabExpanded by rememberSaveable { mutableStateOf(false) }
-
-    BackHandler(enabled = isFabExpanded) {
-        isFabExpanded = false
-    }
 
     val infrequentPlayerState by viewModel.stablePlayerState.collectAsStateWithLifecycle()
 
@@ -685,11 +695,38 @@ fun QueueBottomSheet(
             }
         }
 
+    fun requestSaveAsPlaylist() {
+        val res = context.resources
+        val defaultName = if (currentQueueSourceName.isNotBlank()) {
+            res.getString(
+                R.string.presentation_batch_e_queue_named_suffix,
+                currentQueueSourceName
+            )
+        } else {
+            res.getString(R.string.presentation_batch_e_queue_current)
+        }
+        onRequestSaveAsPlaylist(
+            queue,
+            defaultName
+        ) { name, selectedIds ->
+            val orderedSelection = queue
+                .filter { selectedIds.contains(it.id) }
+                .map { it.id }
+            if (orderedSelection.isNotEmpty()) {
+                playlistViewModel.createPlaylist(
+                    name = name,
+                    songIds = orderedSelection,
+                    isQueueGenerated = true
+                )
+            }
+        }
+    }
+
     Surface(
         modifier = modifier,
         shape = shape,
-        tonalElevation = tonalElevation,
-        color = colors.surfaceContainer,
+        tonalElevation = 0.dp,
+        color = colors.surface,
     ) {
         Box(
             modifier = Modifier.fillMaxSize()
@@ -707,6 +744,8 @@ fun QueueBottomSheet(
                     onPrevious = { viewModel.previousSong() },
                     onPlayPause = { viewModel.playPause() },
                     onNext = { viewModel.nextSong() },
+                    onClearClick = { showClearQueueDialog = true },
+                    onSaveClick = { requestSaveAsPlaylist() },
                     colorScheme = albumColorScheme,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -722,7 +761,8 @@ fun QueueBottomSheet(
                     ) {
                         Text(
                             stringResource(R.string.presentation_batch_e_queue_empty),
-                            color = colors.onSurface
+                            style = YuyuType.body,
+                            color = colors.onSurfaceVariant
                         )
                     }
                 } else {
@@ -735,11 +775,6 @@ fun QueueBottomSheet(
                             state = listState,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(shape = queueListShape)
-                                .background(
-                                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    shape = queueListShape
-                                )
                                 .then(
                                     if (isReordering || reorderHandleInUse) {
                                         Modifier
@@ -748,15 +783,15 @@ fun QueueBottomSheet(
                                     }
                                 ),
                             userScrollEnabled = !(isReordering || reorderHandleInUse),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(0.dp),
                             contentPadding = PaddingValues(
                                 start = 0.dp,
-                                end = if (listState.canScrollForward || listState.canScrollBackward) 26.dp else 0.dp,
-                                bottom = MiniPlayerHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 32.dp
+                                end = 0.dp,
+                                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 88.dp
                             )
                         ) {
                             item("queue_top_spacer") {
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(2.dp))
                             }
 
                             items(
@@ -847,7 +882,8 @@ fun QueueBottomSheet(
                                                 Icon(
                                                     imageVector = Icons.Rounded.DragIndicator,
                                                     contentDescription = stringResource(R.string.presentation_batch_b_reorder_song),
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(20.dp)
                                                 )
                                             }
                                         }
@@ -870,162 +906,22 @@ fun QueueBottomSheet(
                 }
             }
 
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                val fabSpacing = 16.dp
-                val menuSpacing = 20.dp
-                val fabRotation by animateFloatAsState(
-                    targetValue = if (isFabExpanded) 45f else 0f,
-                    label = "fabRotation"
-                )
-
-                val navigationBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = fabSpacing + navigationBarHeight)
-                        .height(70.dp)
-                        .then(directSheetDragModifier),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val isTimerActiveDerived = remember {
-                        derivedStateOf { activeTimerValueDisplay.value != null }
-                    }
-                    QueueControlsToolbar(
-                        isShuffleOn = isShuffleOn,
-                        repeatMode = repeatMode,
-                        isTimerActive = isTimerActiveDerived,
-                        onToggleShuffle = onToggleShuffle,
-                        onToggleRepeat = onToggleRepeat,
-                        onTimerClick = { showTimerOptions = true }
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    MediumFloatingActionButton(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(1f),
-                        onClick = { isFabExpanded = !isFabExpanded },
-                        shape = AbsoluteSmoothCornerShape(
-                            cornerRadiusTR = 50.dp,
-                            smoothnessAsPercentTR = 60,
-                            cornerRadiusTL = 8.dp,
-                            smoothnessAsPercentTL = 60,
-                            cornerRadiusBR = 50.dp,
-                            smoothnessAsPercentBR = 60,
-                            cornerRadiusBL = 8.dp,
-                            smoothnessAsPercentBL = 60
-                        ),
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        elevation = FloatingActionButtonDefaults.elevation(0.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreHoriz,
-                            contentDescription = stringResource(R.string.presentation_batch_e_cd_queue_actions),
-                        )
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = isFabExpanded,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .zIndex(20f)
-                            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.55f))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) {
-                                isFabExpanded = false
-                            }
-                    )
-                }
-
-                AnimatedVisibility(
-                    visible = isFabExpanded,
-                    enter = fadeIn() + slideInVertically(initialOffsetY = { it / 3 }),
-                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 3 }),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.surfaceContainerLowest
-                                    )
-                                )
-                            )
-                            .clickable {
-                                isFabExpanded = !isFabExpanded
-                            }
-                            .zIndex(30f),
-                        contentAlignment = Alignment.BottomCenter
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .wrapContentWidth(Alignment.CenterHorizontally)
-                                .padding(bottom = fabSpacing + menuSpacing),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            QueueToolbarMenuButton(
-                                text = stringResource(R.string.presentation_batch_e_action_clear_queue),
-                                icon = Icons.Filled.ClearAll,
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                onClick = {
-                                    isFabExpanded = false
-                                    showClearQueueDialog = true
-                                }
-                            )
-                            QueueToolbarMenuButton(
-                                text = stringResource(R.string.presentation_batch_e_action_save_as_playlist),
-                                icon = Icons.Filled.LibraryAdd,
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                onClick = {
-                                    isFabExpanded = false
-                                    val res = context.resources
-                                    val defaultName = if (currentQueueSourceName.isNotBlank()) {
-                                        res.getString(
-                                            R.string.presentation_batch_e_queue_named_suffix,
-                                            currentQueueSourceName
-                                        )
-                                    } else {
-                                        res.getString(R.string.presentation_batch_e_queue_current)
-                                    }
-                                    onRequestSaveAsPlaylist(
-                                        queue,
-                                        defaultName
-                                    ) { name, selectedIds ->
-                                        val orderedSelection = queue
-                                            .filter { selectedIds.contains(it.id) }
-                                            .map { it.id }
-                                        if (orderedSelection.isNotEmpty()) {
-                                            playlistViewModel.createPlaylist(
-                                                name = name,
-                                                songIds = orderedSelection,
-                                                isQueueGenerated = true
-                                            )
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
+            val isTimerActiveDerived = remember {
+                derivedStateOf { activeTimerValueDisplay.value != null }
             }
+            QueueControlsToolbar(
+                isShuffleOn = isShuffleOn,
+                repeatMode = repeatMode,
+                isTimerActive = isTimerActiveDerived,
+                timerLabel = activeTimerValueDisplay.value,
+                onToggleShuffle = onToggleShuffle,
+                onToggleRepeat = onToggleRepeat,
+                onTimerClick = { showTimerOptions = true },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .then(directSheetDragModifier)
+            )
 
             val queueUndoBarState by remember(viewModel) {
                 viewModel.playerUiState
@@ -1043,41 +939,12 @@ fun QueueBottomSheet(
                 enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
                 exit = fadeOut() + slideOutVertically(targetOffsetY = { it })
             ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = colors.inverseSurface,
-                    tonalElevation = 6.dp,
-                    shadowElevation = 6.dp
-                ) {
-                    Row(
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = queueUndoBarState.removedSongTitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.inverseOnSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.presentation_batch_e_removed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.inverseOnSurface.copy(alpha = 0.7f),
-                        )
-                        TextButton(
-                            onClick = { viewModel.undoRemoveSongFromQueue() }
-                        ) {
-                            Text(
-                                text = stringResource(R.string.action_undo),
-                                color = colors.inversePrimary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
+                YuyuToast(
+                    text = "${queueUndoBarState.removedSongTitle} ${stringResource(R.string.presentation_batch_e_removed)}",
+                    actionLabel = stringResource(R.string.action_undo),
+                    onAction = { viewModel.undoRemoveSongFromQueue() },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
         }
 
@@ -1098,26 +965,24 @@ fun QueueBottomSheet(
         }
 
         if (showClearQueueDialog) {
-            AlertDialog(
+            YuyuDialog(
                 onDismissRequest = { showClearQueueDialog = false },
-                title = { Text(stringResource(R.string.presentation_batch_e_clear_queue_dialog_title)) },
-                text = { Text(stringResource(R.string.presentation_batch_e_clear_queue_dialog_message)) },
-                confirmButton = {
-                    TextButton(
+                title = stringResource(R.string.presentation_batch_e_clear_queue_dialog_title),
+                body = stringResource(R.string.presentation_batch_e_clear_queue_dialog_message),
+                actions = {
+                    YuyuButton(
+                        text = stringResource(R.string.cancel),
+                        onClick = { showClearQueueDialog = false },
+                        style = YuyuButtonStyle.Secondary
+                    )
+                    YuyuButton(
+                        text = stringResource(R.string.presentation_batch_b_clear),
                         onClick = {
                             onClearQueue()
                             showClearQueueDialog = false
-                        }
-                    ) {
-                        Text(stringResource(R.string.presentation_batch_b_clear))
-                    }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { showClearQueueDialog = false }
-                    ) {
-                        Text(stringResource(R.string.cancel))
-                    }
+                        },
+                        style = YuyuButtonStyle.Danger
+                    )
                 }
             )
         }
@@ -1182,38 +1047,26 @@ private fun QueueHeaderSection(
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
+    onClearClick: () -> Unit,
+    onSaveClick: () -> Unit,
     colorScheme: ColorScheme? = null,
     modifier: Modifier = Modifier
 ) {
-    val colors = MaterialTheme.colorScheme
-
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = topPadding, bottom = 12.dp)
+            .padding(top = topPadding - 6.dp, bottom = 8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 2.dp, bottom = 14.dp)
-                .width(42.dp)
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(colors.onSurface.copy(alpha = 0.14f))
-        )
-
-        Column(
+        YuyuSheetHandle(Modifier.align(Alignment.CenterHorizontally))
+        QueueHeader(
+            queueSourceName = queueSourceName,
+            queueCount = queueCount,
+            onClearClick = onClearClick,
+            onSaveClick = onSaveClick,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            QueueHeader(
-                queueSourceName = queueSourceName,
-                queueCount = queueCount,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+                .padding(start = 16.dp, end = 8.dp, top = 8.dp)
+        )
     }
 }
 
@@ -1221,75 +1074,53 @@ private fun QueueHeaderSection(
 private fun QueueHeader(
     queueSourceName: String,
     queueCount: Int,
+    onClearClick: () -> Unit,
+    onSaveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.Top
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = stringResource(R.string.presentation_batch_e_next_up),
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontFamily = GoogleSansRounded,
-                    fontWeight = FontWeight.SemiBold
-                ),
+                text = "Up next",
+                style = YuyuType.h2,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            val countText = when {
+                queueCount <= 0 -> stringResource(R.string.presentation_batch_e_queue_subtitle_empty)
+                else -> pluralStringResource(
+                    R.plurals.presentation_batch_e_queue_tracks_lined_up,
+                    queueCount,
+                    queueCount
+                )
+            }
+            val source = queueSourceName.ifBlank { stringResource(R.string.presentation_batch_e_queue_source_fallback) }
             Text(
-                text = when {
-                    queueCount <= 0 -> stringResource(R.string.presentation_batch_e_queue_subtitle_empty)
-                    else -> pluralStringResource(
-                        R.plurals.presentation_batch_e_queue_tracks_lined_up,
-                        queueCount,
-                        queueCount
-                    )
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "$countText · $source",
+                style = YuyuType.meta,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        QueueSourceBadge(
-            queueSourceName = queueSourceName,
-            modifier = Modifier.padding(top = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun QueueSourceBadge(
-    queueSourceName: String,
-    modifier: Modifier = Modifier
-) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        modifier = modifier.widthIn(max = 190.dp),
-        shape = CircleShape,
-        color = colors.surfaceContainerHighest.copy(alpha = 0.88f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = colors.onSurfaceVariant
+        if (queueCount > 0) {
+            YuyuButton(
+                text = "Save",
+                onClick = onSaveClick,
+                style = YuyuButtonStyle.Quiet,
+                size = YuyuButtonSize.Small
             )
-            Text(
-                text = queueSourceName.ifBlank { stringResource(R.string.presentation_batch_e_queue_source_fallback) },
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
-                color = colors.onSurfaceVariant,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 1
+            YuyuButton(
+                text = stringResource(R.string.presentation_batch_b_clear),
+                onClick = onClearClick,
+                style = YuyuButtonStyle.Quiet,
+                size = YuyuButtonSize.Small
             )
         }
     }
@@ -1300,76 +1131,45 @@ private fun QueueControlsToolbar(
     isShuffleOn: Boolean,
     repeatMode: Int,
     isTimerActive: androidx.compose.runtime.State<Boolean>,
+    timerLabel: String?,
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
     onTimerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeColors = IconButtonDefaults.filledIconButtonColors(
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary
-    )
-    val inactiveColors = IconButtonDefaults.filledTonalIconButtonColors(
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-    )
-
-    Surface(
-        modifier = modifier.fillMaxHeight(),
-        shape = AbsoluteSmoothCornerShape(
-            cornerRadiusTR = 8.dp,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTL = 50.dp,
-            smoothnessAsPercentTL = 60,
-            cornerRadiusBR = 8.dp,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBL = 50.dp,
-            smoothnessAsPercentBL = 60
-        ),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shadowElevation = 0.dp
+    Column(
+        modifier = modifier.background(MaterialTheme.colorScheme.surface)
     ) {
+        YuyuDivider()
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom))
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilledTonalIconButton(
+            YuyuChip(
+                text = stringResource(R.string.shortcut_shuffle_short),
+                selected = isShuffleOn,
                 onClick = onToggleShuffle,
-                colors = if (isShuffleOn) activeColors else inactiveColors,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Shuffle,
-                    contentDescription = stringResource(R.string.presentation_batch_e_cd_toggle_shuffle),
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            FilledTonalIconButton(
+                icon = rememberVectorPainter(Icons.Rounded.Shuffle)
+            )
+            YuyuChip(
+                text = if (repeatMode == Player.REPEAT_MODE_ONE) "Repeat one" else "Repeat",
+                selected = repeatMode != Player.REPEAT_MODE_OFF,
                 onClick = onToggleRepeat,
-                colors = if (repeatMode != Player.REPEAT_MODE_OFF) activeColors else inactiveColors,
-                modifier = Modifier.size(48.dp)
-            ) {
-                val repeatIcon = when (repeatMode) {
-                    Player.REPEAT_MODE_ONE -> Icons.Rounded.RepeatOne
-                    else -> Icons.Rounded.Repeat
-                }
-                Icon(
-                    imageVector = repeatIcon,
-                    contentDescription = stringResource(R.string.presentation_batch_e_cd_toggle_repeat),
+                icon = rememberVectorPainter(
+                    if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
                 )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            FilledTonalIconButton(
+            )
+            Spacer(Modifier.weight(1f))
+            YuyuChip(
+                text = if (isTimerActive.value) timerLabel ?: "Timer" else "Timer",
+                selected = isTimerActive.value,
                 onClick = onTimerClick,
-                colors = if (isTimerActive.value) activeColors else inactiveColors,
-                modifier = Modifier.size(48.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Timer,
-                    contentDescription = stringResource(R.string.presentation_batch_e_cd_sleep_timer),
-                )
-            }
+                icon = rememberVectorPainter(Icons.Rounded.Timer)
+            )
         }
     }
 }
@@ -1441,237 +1241,147 @@ fun SaveQueueAsPlaylistSheet(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentWindowInsets = WindowInsets.safeDrawing,
                 topBar = {
-                    Column {
-                        MediumTopAppBar(
-                            title = {
-                                Text(
-                                    modifier = Modifier.padding(start = 4.dp),
-                                    text = stringResource(R.string.presentation_batch_e_save_as_playlist_sheet_title),
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    fontFamily = GoogleSansRounded,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            },
-                            navigationIcon = {
-                                FilledTonalIconButton(
-                                    modifier = Modifier.padding(start = 8.dp),
-                                    onClick = { onDismiss() },
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                    )
-                                ) {
-                                    Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cd_close))
-                                }
-                            },
-                            actions = {
-                                val animatedContainerColor by animateColorAsState(
-                                    targetValue = if (allSelected) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    label = "selectBtnContainer"
-                                )
-                                val animatedContentColor by animateColorAsState(
-                                    targetValue = if (allSelected) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurface,
-                                    label = "selectBtnContent"
-                                )
-                                val animatedCornerPercent by animateIntAsState(
-                                    targetValue = if (allSelected) 50 else 15,
-                                    label = "selectBtnShape"
-                                )
-
-                                Surface(
-                                    modifier = Modifier
-                                        .padding(end = 12.dp)
-                                        .height(40.dp)
-                                        .clickable {
-                                            if (allSelected) {
-                                                selectedSongIds.keys.forEach {
-                                                    selectedSongIds[it] = false
-                                                }
-                                            } else {
-                                                selectedSongIds.keys.forEach {
-                                                    selectedSongIds[it] = true
-                                                }
-                                            }
-                                        },
-                                    shape = RoundedCornerShape(animatedCornerPercent),
-                                    color = animatedContainerColor,
-                                    contentColor = animatedContentColor
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 16.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (allSelected) Icons.Rounded.RemoveDone else Icons.Rounded.DoneAll,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            text = if (allSelected) {
-                                                stringResource(R.string.presentation_batch_e_deselect_all)
-                                            } else {
-                                                stringResource(R.string.presentation_batch_b_select_all)
-                                            },
-                                            style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                scrolledContainerColor = MaterialTheme.colorScheme.surface
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 60.dp)
+                                .padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            IconButton(onClick = { onDismiss() }) {
+                                Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cd_close), tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                            Text(
+                                text = stringResource(R.string.presentation_batch_e_save_as_playlist_sheet_title),
+                                style = YuyuType.h2,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                        )
+                            YuyuButton(
+                                text = if (allSelected) {
+                                    stringResource(R.string.presentation_batch_e_deselect_all)
+                                } else {
+                                    stringResource(R.string.presentation_batch_b_select_all)
+                                },
+                                onClick = {
+                                    val target = !allSelected
+                                    selectedSongIds.keys.forEach { selectedSongIds[it] = target }
+                                },
+                                style = YuyuButtonStyle.Secondary,
+                                size = YuyuButtonSize.Small,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            OutlinedTextField(
+                            YuyuTextField(
                                 value = playlistName,
                                 onValueChange = { playlistName = it },
-                                label = { Text(stringResource(R.string.presentation_batch_e_playlist_name_label)) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(focusRequester),
-                                shape = RoundedCornerShape(16.dp),
+                                label = stringResource(R.string.presentation_batch_e_playlist_name_label),
                                 singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                )
+                                fieldModifier = Modifier.focusRequester(focusRequester)
                             )
-
-                            OutlinedTextField(
+                            YuyuTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                placeholder = { Text(stringResource(R.string.presentation_batch_e_search_songs_to_include_placeholder)) },
-                                leadingIcon = {
+                                placeholder = stringResource(R.string.presentation_batch_e_search_songs_to_include_placeholder),
+                                singleLine = true,
+                                leading = {
                                     Icon(
                                         Icons.Rounded.Search,
-                                        contentDescription = null
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 },
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }) {
+                                trailing = if (searchQuery.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(36.dp)) {
                                             Icon(
                                                 Icons.Filled.Clear,
-                                                contentDescription = stringResource(R.string.cd_clear_search)
+                                                contentDescription = stringResource(R.string.cd_clear_search),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                     }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = CircleShape,
-                                singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent,
-                                )
+                                } else null
                             )
                         }
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                        )
+                        YuyuDivider()
                     }
                 },
                 bottomBar = {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
                             .windowInsetsPadding(WindowInsets.ime)
                             .windowInsetsPadding(WindowInsets.navigationBars)
-                            .padding(16.dp)
                     ) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            tonalElevation = 6.dp,
-                            shadowElevation = 4.dp,
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.secondaryContainer
+                        YuyuDivider()
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(12.dp)
-                                    .fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(start = 12.dp)
-                                ) {
-                                    Text(
-                                        text = pluralStringResource(
-                                            R.plurals.presentation_batch_e_n_songs_selected,
-                                            selectedSongIds.count { it.value },
-                                            selectedSongIds.count { it.value }
-                                        ),
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Text(
-                                        text = if (playlistName.text.isNotBlank()) {
-                                            stringResource(
-                                                R.string.presentation_batch_e_save_as_format,
-                                                playlistName.text
-                                            )
-                                        } else {
-                                            stringResource(R.string.presentation_batch_e_enter_playlist_name)
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(
-                                            alpha = 0.8f
-                                        )
-                                    )
-                                }
-
-                                Button(
-                                    onClick = {
-                                        if (hasSelection) {
-                                            val finalName =
-                                                playlistName.text.ifBlank { defaultName }
-                                            val chosenIds = selectedSongIds
-                                                .filterValues { it }
-                                                .keys
-                                            onConfirm(finalName, chosenIds)
-                                            onDismiss()
-                                        }
-                                    },
-                                    enabled = hasSelection,
-                                    modifier = Modifier.height(48.dp),
-                                    shape = CircleShape,
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = pluralStringResource(
+                                        R.plurals.presentation_batch_e_n_songs_selected,
+                                        selectedSongIds.count { it.value },
+                                        selectedSongIds.count { it.value }
                                     ),
-                                    contentPadding = PaddingValues(horizontal = 20.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.action_save))
-                                }
+                                    style = YuyuType.label,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (playlistName.text.isNotBlank()) {
+                                        stringResource(
+                                            R.string.presentation_batch_e_save_as_format,
+                                            playlistName.text
+                                        )
+                                    } else {
+                                        stringResource(R.string.presentation_batch_e_enter_playlist_name)
+                                    },
+                                    style = YuyuType.caption,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
+
+                            YuyuButton(
+                                text = stringResource(R.string.action_save),
+                                onClick = {
+                                    if (hasSelection) {
+                                        val finalName =
+                                            playlistName.text.ifBlank { defaultName }
+                                        val chosenIds = selectedSongIds
+                                            .filterValues { it }
+                                            .keys
+                                        onConfirm(finalName, chosenIds)
+                                        onDismiss()
+                                    }
+                                },
+                                enabled = hasSelection,
+                                size = YuyuButtonSize.Large,
+                                icon = rememberVectorPainter(Icons.Rounded.Check)
+                            )
                         }
                     }
                 }
@@ -1685,8 +1395,8 @@ fun SaveQueueAsPlaylistSheet(
                         )
                         .consumeWindowInsets(innerPadding)
                         .imePadding(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     if (filteredSongs.isEmpty()) {
                         item {
@@ -1700,64 +1410,52 @@ fun SaveQueueAsPlaylistSheet(
                                 Icon(
                                     imageVector = Icons.Rounded.Search,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(48.dp)
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(40.dp)
                                 )
                                 Text(
                                     text = stringResource(
                                         R.string.presentation_batch_e_no_songs_match_query,
                                         searchQuery
                                     ),
-                                    style = MaterialTheme.typography.bodyLarge,
+                                    style = YuyuType.body,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     } else {
                         items(filteredSongs, key = { it.id }) { song ->
+                            val checked = selectedSongIds[song.id] ?: false
                             Row(
                                 Modifier
                                     .fillMaxWidth()
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(16.dp))
                                     .clickable {
-                                        val currentSelection = selectedSongIds[song.id] ?: false
-                                        selectedSongIds[song.id] = !currentSelection
+                                        selectedSongIds[song.id] = !checked
                                     }
-                                    .background(
-                                        color = MaterialTheme.colorScheme.surfaceContainerLowest,
-                                        shape = CircleShape
-                                    )
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .heightIn(min = 64.dp)
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Checkbox(
-                                    checked = selectedSongIds[song.id] ?: false,
+                                YuyuCheckbox(
+                                    checked = checked,
                                     onCheckedChange = { isChecked ->
                                         selectedSongIds[song.id] = isChecked
                                     }
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .background(
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                            CircleShape
-                                        )
-                                ) {
-                                    SmartImage(
-                                        model = song.albumArtUriString,
-                                        contentDescription = song.title,
-                                        shape = albumShape,
-                                        targetSize = Size(168, 168),
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                                Spacer(Modifier.width(16.dp))
-                                Column {
-                                    Text(song.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                YuyuArt(
+                                    model = song.albumArtUriString,
+                                    title = song.album.ifBlank { song.title },
+                                    size = 44.dp,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text(song.title, style = YuyuType.title, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(
                                         song.displayArtist,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = YuyuType.meta,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
@@ -1791,28 +1489,6 @@ fun QueuePlaylistSongItem(
 ) {
     val colors = MaterialTheme.colorScheme
 
-    val cornerRadius by animateDpAsState(
-        targetValue = if (isCurrentSong) 60.dp else 22.dp,
-        label = "cornerRadiusAnimation"
-    )
-
-    val itemShape = RoundedCornerShape(cornerRadius)
-
-    val albumCornerRadius by animateDpAsState(
-        targetValue = if (isCurrentSong) 60.dp else 8.dp,
-        label = "cornerRadiusAnimation"
-    )
-
-    val albumShape = RoundedCornerShape(albumCornerRadius)
-
-    val elevation by animateDpAsState(
-        targetValue = if (isDragging) 4.dp else 1.dp,
-        label = "elevationAnimation"
-    )
-
-    val backgroundColor = colors.surfaceContainerLowest
-    val mvContainerColor = if (isCurrentSong) colors.tertiaryContainer else colors.surfaceContainerHigh
-    val mvContentColor = if (isCurrentSong) colors.onTertiaryContainer else colors.onSurface
     val hapticView = LocalView.current
     val appHapticsConfig = LocalAppHapticsConfig.current
     val dismissScope = rememberCoroutineScope()
@@ -1897,146 +1573,112 @@ fun QueuePlaylistSongItem(
             }
         }
 
-        Surface(
+        Row(
             modifier = Modifier
                 .graphicsLayer { translationX = currentOffsetPx }
                 .onGloballyPositioned { coordinates ->
                     val h = coordinates.size.height.toFloat()
                     if (h != surfaceHeightPx) surfaceHeightPx = h
                 }
-                .padding(horizontal = 12.dp)
-                .clip(itemShape)
+                .fillMaxWidth()
+                .background(if (isDragging) colors.surfaceContainerLow else colors.surface)
+                .then(
+                    if (isDragging) Modifier.border(1.dp, colors.outlineVariant, RoundedCornerShape(16.dp))
+                    else Modifier
+                )
                 .clickable(
                     enabled = currentOffsetPx == 0f
                 ) {
                     onClick()
-                },
-            shape = itemShape,
-            color = backgroundColor,
-            tonalElevation = elevation,
-            shadowElevation = elevation
+                }
+                .heightIn(min = 64.dp)
+                .padding(start = 16.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            val dismissGestureModifier = if (dismissEnabled && dismissHandler != null) {
+                Modifier.pointerInput(swipeStateIdentity, dismissHandler) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { dismissHandler.onDragStart() },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dismissHandler.onHorizontalDrag(dragAmount)
+                        },
+                        onDragEnd = { dismissHandler.onDragEnd() },
+                        onDragCancel = { dismissHandler.onDragCancel() }
+                    )
+                }
+            } else Modifier
+
             Row(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .weight(1f)
+                    .then(dismissGestureModifier),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                AnimatedVisibility(visible = isDragHandleVisible) {
-                    dragHandle()
+                YuyuArt(
+                    model = song.albumArtUriString,
+                    title = song.album.ifBlank { song.title },
+                    size = 48.dp,
+                    shape = RoundedCornerShape(10.dp),
+                    contentDescription = stringResource(R.string.cd_album_art_for_title, song.title)
+                )
+
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        song.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = if (isCurrentSong) colors.tertiary else colors.onSurface,
+                        style = YuyuType.title
+                    )
+                    Text(
+                        song.displayArtist, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = YuyuType.meta,
+                        color = colors.onSurfaceVariant
+                    )
                 }
 
-                val dismissGestureModifier = if (dismissEnabled && dismissHandler != null) {
-                    Modifier.pointerInput(swipeStateIdentity, dismissHandler) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { dismissHandler.onDragStart() },
-                            onHorizontalDrag = { change, dragAmount ->
-                                change.consume()
-                                dismissHandler.onHorizontalDrag(dragAmount)
-                            },
-                            onDragEnd = { dismissHandler.onDragEnd() },
-                            onDragCancel = { dismissHandler.onDragCancel() }
-                        )
-                    }
-                } else Modifier
+                if (isCurrentSong && isPlaying != null) {
+                    PlayingEqIcon(
+                        modifier = Modifier.size(width = 16.dp, height = 14.dp),
+                        color = colors.tertiary,
+                        isPlaying = isPlaying
+                    )
+                }
+            }
 
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(dismissGestureModifier),
-                    verticalAlignment = Alignment.CenterVertically
+            if (isFromPlaylist) {
+                IconButton(
+                    onClick = { onMoreOptionsClick(song) },
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    val albumArtPadding by animateDpAsState(
-                        targetValue = if (isDragHandleVisible) 6.dp else 12.dp,
-                        label = "albumArtPadding"
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(
+                            R.string.presentation_batch_e_more_options_for_song,
+                            song.title
+                        ),
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(Modifier.width(albumArtPadding))
-
-                    SmartImage(
-                        model = song.albumArtUriString,
-                        shape = albumShape,
-                        contentDescription = stringResource(R.string.cd_album_art_for_title, song.title),
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(albumShape),
-                        contentScale = ContentScale.Crop,
-                        targetSize = SmartImageCompactListTargetSize
-                    )
-
-                    Spacer(Modifier.width(16.dp))
-
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            song.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = if (isCurrentSong) colors.primary else colors.onSurface,
-                            fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Normal,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            song.displayArtist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isCurrentSong) colors.primary.copy(alpha = 0.8f) else colors.onSurfaceVariant
-                        )
-                    }
-
-                    if (isCurrentSong) {
-                        if (isPlaying != null) {
-                            PlayingEqIcon(
-                                modifier = Modifier
-                                    .padding(start = 8.dp)
-                                    .size(width = 18.dp, height = 16.dp),
-                                color = colors.secondary,
-                                isPlaying = isPlaying
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            if (!isRemoveButtonVisible) {
-                                Spacer(Modifier.width(8.dp))
-                            }
-                        }
-                    } else {
-                        Spacer(Modifier.width(8.dp))
-                    }
-
-                    if (isFromPlaylist) {
-                        FilledIconButton(
-                            onClick = { onMoreOptionsClick(song) },
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = mvContainerColor,
-                                contentColor = mvContentColor
-                            ),
-                            modifier = Modifier
-                                .size(36.dp)
-                                .padding(end = 14.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.MoreVert,
-                                contentDescription = stringResource(
-                                    R.string.presentation_batch_e_more_options_for_song,
-                                    song.title
-                                ),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-
-                    AnimatedVisibility(visible = isRemoveButtonVisible && !enableSwipeToDismiss) {
-                        FilledIconButton(
-                            onClick = onRemoveClick,
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = colors.surfaceContainer,
-                                contentColor = colors.onSurface
-                            ),
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(40.dp)
-                                .padding(start = 4.dp, end = 8.dp)
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(18.dp),
-                                painter = painterResource(R.drawable.rounded_close_24),
-                                contentDescription = stringResource(R.string.presentation_batch_e_cd_remove_from_playlist),
-                            )
-                        }
-                    }
                 }
+            }
+
+            AnimatedVisibility(visible = isRemoveButtonVisible && !enableSwipeToDismiss) {
+                IconButton(
+                    onClick = onRemoveClick,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        modifier = Modifier.size(20.dp),
+                        painter = painterResource(R.drawable.rounded_close_24),
+                        contentDescription = stringResource(R.string.presentation_batch_e_cd_remove_from_playlist),
+                        tint = colors.error
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = isDragHandleVisible) {
+                dragHandle()
             }
         }
     }

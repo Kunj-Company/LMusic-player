@@ -40,50 +40,19 @@ data class WidgetColors(
     val prevNextIcon: ColorProvider
 )
 
+/**
+ * Widget colours, Yuyu style: flat canvas (white / #111113), ink title, muted artist,
+ * Ember play button with a white icon, muted circles for the other controls.
+ * Album colours are no longer used so every widget matches the app.
+ */
+@Suppress("UnusedReceiverParameter")
 @Composable
-fun PlayerInfo.getWidgetColors(): WidgetColors {
-    val theme = this.themeColors
-    
-    return if (theme != null) {
-        WidgetColors(
-            surface = ColorProvider(
-                day = Color(theme.lightSurfaceContainer),
-                night = Color(theme.darkSurfaceContainer)
-            ),
-            onSurface = ColorProvider(
-                day = Color(theme.lightTitle),
-                night = Color(theme.darkTitle)
-            ),
-            artist = ColorProvider(
-                day = Color(theme.lightArtist),
-                night = Color(theme.darkArtist)
-            ),
-            playPauseBackground = ColorProvider(
-                day = Color(theme.lightPlayPauseBackground),
-                night = Color(theme.darkPlayPauseBackground)
-            ),
-            playPauseIcon = ColorProvider(
-                day = Color(theme.lightPlayPauseIcon),
-                night = Color(theme.darkPlayPauseIcon)
-            ),
-            prevNextBackground = ColorProvider(
-                day = Color(theme.lightPrevNextBackground),
-                night = Color(theme.darkPrevNextBackground)
-            ),
-            prevNextIcon = ColorProvider(
-                day = Color(theme.lightPrevNextIcon),
-                night = Color(theme.darkPrevNextIcon)
-            )
-        )
-    } else {
-        WidgetColors(
-            surface = GlanceTheme.colors.surface,
-            onSurface = GlanceTheme.colors.onSurface,
-            artist = GlanceTheme.colors.onSurface,
-            playPauseBackground = GlanceTheme.colors.primaryContainer,
-            playPauseIcon = GlanceTheme.colors.onPrimaryContainer,
-            prevNextBackground = GlanceTheme.colors.secondaryContainer,
-            prevNextIcon = GlanceTheme.colors.onSecondaryContainer
-        )
-    }
-}
+fun PlayerInfo.getWidgetColors(): WidgetColors = WidgetColors(
+    surface = ColorProvider(day = YuyuWidgetPalette.LightCanvas, night = YuyuWidgetPalette.DarkCanvas),
+    onSurface = ColorProvider(day = YuyuWidgetPalette.LightText, night = YuyuWidgetPalette.DarkText),
+    artist = ColorProvider(day = YuyuWidgetPalette.LightTextMuted, night = YuyuWidgetPalette.DarkTextMuted),
+    playPauseBackground = ColorProvider(day = YuyuWidgetPalette.Ember, night = YuyuWidgetPalette.Ember),
+    playPauseIcon = ColorProvider(day = YuyuWidgetPalette.OnEmber, night = YuyuWidgetPalette.OnEmber),
+    prevNextBackground = ColorProvider(day = YuyuWidgetPalette.LightMuted, night = YuyuWidgetPalette.DarkMuted),
+    prevNextIcon = ColorProvider(day = YuyuWidgetPalette.LightText, night = YuyuWidgetPalette.DarkText),
+)

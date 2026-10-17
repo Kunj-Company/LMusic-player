@@ -43,7 +43,7 @@ class ControlWidget4x2 : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val playerInfo = currentState<PlayerInfo>()
-            GlanceTheme {
+            GlanceTheme(colors = YuyuGlanceColors) {
                 ControlWidget4x2Content(playerInfo = playerInfo, context = context)
             }
         }
@@ -64,10 +64,10 @@ class ControlWidget4x2 : GlanceAppWidget() {
 
         val colors = playerInfo.getWidgetColors()
 
-        val widgetCornerRadius = 28.dp
-        val albumArtCornerRadius = 16.dp
-        val playButtonCornerRadius = if (isPlaying) 16.dp else 20.dp
-        val controlButtonCornerRadius = 16.dp
+        val widgetCornerRadius = 24.dp
+        val albumArtCornerRadius = 12.dp
+        val playButtonCornerRadius = 60.dp
+        val controlButtonCornerRadius = 60.dp
 
         Box(
             modifier = GlanceModifier
@@ -157,7 +157,7 @@ class ControlWidget4x2 : GlanceAppWidget() {
 
                     // Play/Pause Button
                     PlayPauseButton(
-                        modifier = buttonModifier,
+                        modifier = GlanceModifier.size(48.dp),
                         isPlaying = isPlaying,
                         backgroundColor = colors.playPauseBackground,
                         iconColor = colors.playPauseIcon,

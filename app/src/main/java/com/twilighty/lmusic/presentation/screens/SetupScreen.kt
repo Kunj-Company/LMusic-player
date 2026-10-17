@@ -209,7 +209,11 @@ fun SetupScreen(
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     val currentPage = pages[pagerState.currentPage]
-    val isNextButtonEnabled = isPermissionGateSatisfied(context, currentPage, uiState)
+    val musicFoldersViewModel: com.twilighty.lmusic.presentation.folders.MusicFoldersViewModel = hiltViewModel()
+    val includedMusicFolders by musicFoldersViewModel.includedFolders.collectAsStateWithLifecycle()
+    // Continue stays disabled on the folders page until at least one folder is chosen.
+    val folderGateSatisfied = currentPage != SetupPage.DirectorySelection || includedMusicFolders.isNotEmpty()
+    val isNextButtonEnabled = isPermissionGateSatisfied(context, currentPage, uiState) && folderGateSatisfied
     var previousPageIndex by remember { mutableStateOf(0) }
     val navigateToPage: (Int) -> Unit = { targetPage ->
         scope.launch {
@@ -286,7 +290,9 @@ fun SetupScreen(
                 isFinishButtonEnabled = uiState.allPermissionsGranted,
                 onNextClicked = {
                     val page = pages[pagerState.currentPage]
-                    if (isPermissionGateSatisfied(context, page, uiState)) {
+                    if (page == SetupPage.DirectorySelection && includedMusicFolders.isEmpty()) {
+                        Toast.makeText(context, "Add at least one music folder", Toast.LENGTH_SHORT).show()
+                    } else if (isPermissionGateSatisfied(context, page, uiState)) {
                         navigateToPage(pagerState.currentPage + 1)
                     } else {
                         setupViewModel.checkPermissions(context)
@@ -341,28 +347,9 @@ fun SetupScreen(
                             navigateToPage(pagerState.currentPage + 1)
                         }
                     )
-                    SetupPage.DirectorySelection -> DirectorySelectionPage(
-                        uiState = uiState,
-                        currentPath = currentPath,
-                        directoryChildren = directoryChildren,
-                        availableStorages = availableStorages,
-                        selectedStorageIndex = selectedStorageIndex,
-                        isExplorerPriming = isExplorerPriming,
-                        isExplorerReady = isExplorerReady,
-                        isCurrentDirectoryResolved = isCurrentDirectoryResolved,
-                        isAtRoot = setupViewModel.isAtRoot(),
-                        explorerRoot = setupViewModel.explorerRoot(),
-                        onOpenExplorer = setupViewModel::openExplorer,
-                        onNavigateTo = setupViewModel::loadDirectory,
-                        onNavigateUp = setupViewModel::navigateUp,
-                        onRefresh = setupViewModel::refreshCurrentDirectory,
-                        onPrimeExplorer = setupViewModel::primeExplorer,
-                        onSkip = {
-                            navigateToPage(pagerState.currentPage + 1)
-                        },
-                        onToggleAllowed = setupViewModel::toggleDirectoryAllowed,
-                        onSelectionFinished = setupViewModel::applyPendingDirectoryRuleChanges,
-                        onStorageSelected = setupViewModel::selectStorage
+                    SetupPage.DirectorySelection -> com.twilighty.lmusic.presentation.folders.MusicFoldersSetupPage(
+                        viewModel = musicFoldersViewModel,
+                        hasMediaPermission = uiState.mediaPermissionGranted
                     )
                     SetupPage.NotificationsPermission -> NotificationsPermissionPage(
                         uiState = uiState,

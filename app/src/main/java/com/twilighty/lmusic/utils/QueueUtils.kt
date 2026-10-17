@@ -115,6 +115,11 @@ object QueueUtils {
         random: Random = Random.Default
     ): List<Song> {
         if (currentQueue.size <= 1) return currentQueue.toList()
+        if (SmartShuffleRuntime.enabled) {
+            return SmartShuffle.anchored(
+                currentQueue, anchorIndex, SmartShuffleRuntime.recentlyPlayedIds, startAtZero = false, random = random
+            )
+        }
         val order = generateShuffleOrder(currentQueue.size, anchorIndex, random)
         return List(order.size) { idx -> currentQueue[order[idx]] }
     }
@@ -130,7 +135,19 @@ object QueueUtils {
         random: Random = Random.Default
     ): List<Song> {
         if (currentQueue.size <= 1) return currentQueue.toList()
-        
+        if (SmartShuffleRuntime.enabled) {
+            try {
+                SmartShuffleRuntime.refreshRecent?.invoke()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Fall back to the last known history.
+            }
+            return SmartShuffle.anchored(
+                currentQueue, anchorIndex, SmartShuffleRuntime.recentlyPlayedIds, startAtZero, random
+            )
+        }
+
         val order = if (startAtZero) {
              generateShuffleOrderStartAtZero(currentQueue.size, anchorIndex, random)
         } else {

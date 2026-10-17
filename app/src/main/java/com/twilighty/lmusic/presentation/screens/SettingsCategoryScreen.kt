@@ -66,6 +66,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ClearAll
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.HealthAndSafety
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.LightMode
@@ -82,6 +83,7 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Science
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
@@ -399,9 +401,10 @@ fun SettingsCategoryScreen(
                     when (category) {
                         SettingsCategory.LIBRARY -> {
                             SettingsSubsection(title = stringResource(R.string.setcat_library_structure)) {
+                                com.twilighty.lmusic.presentation.folders.MusicFoldersSettingsItem()
                                 SettingsItem(
-                                    title = stringResource(R.string.setcat_excluded_directories_title),
-                                    subtitle = stringResource(R.string.setcat_excluded_directories_subtitle),
+                                    title = "Excluded subfolders",
+                                    subtitle = "Skip folders inside your music folders",
                                     leadingIcon = { Icon(Icons.Outlined.Folder, null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, stringResource(R.string.cd_open), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     onClick = {
@@ -415,6 +418,13 @@ fun SettingsCategoryScreen(
                                     leadingIcon = { Icon(Icons.Outlined.Person, null, tint = MaterialTheme.colorScheme.secondary) },
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, stringResource(R.string.cd_open), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     onClick = { navController.navigateSafely(Screen.ArtistSettings.route) }
+                                )
+                                SettingsItem(
+                                    title = stringResource(R.string.health_title),
+                                    subtitle = stringResource(R.string.health_settings_subtitle),
+                                    leadingIcon = { Icon(Icons.Outlined.HealthAndSafety, null, tint = MaterialTheme.colorScheme.secondary) },
+                                    trailingIcon = { Icon(Icons.Rounded.ChevronRight, stringResource(R.string.cd_open), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                    onClick = { navController.navigateSafely(Screen.LibraryHealth.route) }
                                 )
                             }
 
@@ -521,6 +531,8 @@ fun SettingsCategoryScreen(
                         SettingsCategory.APPEARANCE -> {
                             val useSmoothCorners by settingsViewModel.useSmoothCorners.collectAsStateWithLifecycle()
                             val appColorStyle by settingsViewModel.appColorStyle.collectAsStateWithLifecycle()
+                            val yuyuHomeSettings: com.twilighty.lmusic.presentation.yuyu.YuyuHomeSettingsViewModel = hiltViewModel()
+                            val showClassicHomeSections by yuyuHomeSettings.showClassicSections.collectAsStateWithLifecycle()
 
                             SettingsSubsection(title = stringResource(R.string.setcat_global_theme)) {
                                 ThemeSelectorItem(
@@ -606,6 +618,13 @@ fun SettingsCategoryScreen(
                             }
 
                             SettingsSubsection(title = stringResource(R.string.setcat_home_collage)) {
+                                SwitchSettingItem(
+                                    title = "Show classic Home sections",
+                                    subtitle = "Album collage and Daily Mix below Your mix",
+                                    checked = showClassicHomeSections,
+                                    onCheckedChange = { yuyuHomeSettings.setShowClassicSections(it) },
+                                    leadingIcon = { Icon(painterResource(R.drawable.rounded_view_column_24), null, tint = MaterialTheme.colorScheme.secondary) }
+                                )
                                 ThemeSelectorItem(
                                     label = stringResource(R.string.setcat_collage_pattern_label),
                                     description = stringResource(R.string.setcat_collage_pattern_desc),
@@ -833,6 +852,7 @@ fun SettingsCategoryScreen(
                                     onCheckedChange = { settingsViewModel.setPersistentShuffleEnabled(it) },
                                     leadingIcon = { Icon(painterResource(R.drawable.rounded_shuffle_24), null, tint = MaterialTheme.colorScheme.secondary) }
                                 )
+                                com.twilighty.lmusic.presentation.playback.SmartShuffleSetting()
                                 SwitchSettingItem(
                                     title = stringResource(R.string.setcat_show_queue_history_title),
                                     subtitle = stringResource(R.string.setcat_show_queue_history_subtitle),
@@ -1164,6 +1184,13 @@ fun SettingsCategoryScreen(
                                     onClick = { navController.navigateSafely(Screen.Experimental.route) }
                                 )
                                 SettingsItem(
+                                    title = "Smart features (experimental)",
+                                    subtitle = "On-device song radio, mood mixes and insights",
+                                    leadingIcon = { Icon(Icons.Rounded.AutoAwesome, null, tint = MaterialTheme.colorScheme.secondary) },
+                                    trailingIcon = { Icon(Icons.Rounded.ChevronRight, stringResource(R.string.cd_open), tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                                    onClick = { navController.navigateSafely(Screen.SmartFeatures.route) }
+                                )
+                                SettingsItem(
                                     title = stringResource(R.string.setcat_test_setup_title),
                                     subtitle = stringResource(R.string.setcat_test_setup_subtitle),
                                     leadingIcon = { Icon(Icons.Rounded.Science, null, tint = MaterialTheme.colorScheme.tertiary) },
@@ -1217,6 +1244,9 @@ fun SettingsCategoryScreen(
                             }
                         }
                         SettingsCategory.ABOUT -> {
+                            SettingsSubsection(title = "Updates") {
+                                com.twilighty.lmusic.presentation.update.UpdateSettings()
+                            }
                             SettingsSubsection(
                                 title = stringResource(R.string.setcat_application),
                                 addBottomSpace = false
@@ -1305,7 +1335,9 @@ fun SettingsCategoryScreen(
         onDismiss = {
             settingsViewModel.applyPendingDirectoryRuleChanges()
             showExplorerSheet = false
-        }
+        },
+        title = "Excluded subfolders",
+        hint = "Mark folders inside your music folders that LMusic should skip."
     )
 
     if (showPaletteRegenerateSheet) {

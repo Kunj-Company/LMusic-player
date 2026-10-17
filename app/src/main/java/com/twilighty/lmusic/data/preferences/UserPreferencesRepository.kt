@@ -92,6 +92,9 @@ constructor(
             booleanPreferencesKey("beta_05_clean_install_disclaimer_dismissed")
         val ALLOWED_DIRECTORIES = stringSetPreferencesKey("allowed_directories")
         val BLOCKED_DIRECTORIES = stringSetPreferencesKey("blocked_directories")
+        // Include-list model: only songs inside these folders are scanned.
+        val INCLUDED_DIRECTORIES = stringSetPreferencesKey("included_directories")
+        val INCLUDED_DIRECTORIES_MIGRATED = booleanPreferencesKey("included_directories_migrated")
         val INITIAL_SETUP_DONE = booleanPreferencesKey("initial_setup_done")
         // val GLOBAL_THEME_PREFERENCE = stringPreferencesKey("global_theme_preference_v2") //
         // Removed
@@ -799,15 +802,73 @@ constructor(
 
     // ===== End ReplayGain =====
 
+    /**
+     * Effective "allowed" rules used by scanning and library queries.
+     * When an include list exists, the included folders are added as allow rules so they
+     * override the catch-all storage block below (see [blockedDirectoriesFlow]).
+     */
     val allowedDirectoriesFlow: Flow<Set<String>> =
+            dataStore.data.map { preferences ->
+                val raw = preferences[PreferencesKeys.ALLOWED_DIRECTORIES] ?: emptySet()
+                val included = preferences[PreferencesKeys.INCLUDED_DIRECTORIES] ?: emptySet()
+                if (included.isEmpty()) raw else raw + included
+            }.distinctUntilChanged()
+
+    /**
+     * Effective "blocked" rules used by scanning and library queries.
+     * With an include list, every storage root is blocked and only the included folders
+     * (deeper, so they win in [com.twilighty.lmusic.utils.DirectoryRuleResolver]) are allowed.
+     * Raw blocked folders inside included folders keep working as "excluded subfolders".
+     */
+    val blockedDirectoriesFlow: Flow<Set<String>> =
+            dataStore.data.map { preferences ->
+                val raw = preferences[PreferencesKeys.BLOCKED_DIRECTORIES] ?: emptySet()
+                val included = preferences[PreferencesKeys.INCLUDED_DIRECTORIES] ?: emptySet()
+                if (included.isEmpty()) raw else raw + INCLUDE_MODE_BLOCKED_ROOTS
+            }.distinctUntilChanged()
+
+    /** Raw allow rules as edited by the folder explorer (nested exceptions inside excluded subfolders). */
+    val rawAllowedDirectoriesFlow: Flow<Set<String>> =
             dataStore.data.map { preferences ->
                 preferences[PreferencesKeys.ALLOWED_DIRECTORIES] ?: emptySet()
             }.distinctUntilChanged()
 
-    val blockedDirectoriesFlow: Flow<Set<String>> =
+    /** Raw blocked rules as edited by the folder explorer ("Excluded subfolders"). */
+    val rawBlockedDirectoriesFlow: Flow<Set<String>> =
             dataStore.data.map { preferences ->
                 preferences[PreferencesKeys.BLOCKED_DIRECTORIES] ?: emptySet()
             }.distinctUntilChanged()
+
+    /** Folders the user chose as music folders. Empty = legacy "scan everything" behaviour. */
+    val includedDirectoriesFlow: Flow<Set<String>> =
+            dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.INCLUDED_DIRECTORIES] ?: emptySet()
+            }.distinctUntilChanged()
+
+    val includedDirectoriesMigratedFlow: Flow<Boolean> =
+            dataStore.data.map { preferences ->
+                preferences[PreferencesKeys.INCLUDED_DIRECTORIES_MIGRATED] ?: false
+            }.distinctUntilChanged()
+
+    suspend fun setIncludedDirectoriesMigrated(done: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.INCLUDED_DIRECTORIES_MIGRATED] = done
+        }
+    }
+
+    suspend fun updateIncludedDirectories(includedPaths: Set<String>) {
+        dataStore.edit { preferences ->
+            val current = preferences[PreferencesKeys.INCLUDED_DIRECTORIES] ?: emptySet()
+            if (current == includedPaths) return@edit
+            preferences[PreferencesKeys.INCLUDED_DIRECTORIES] = includedPaths
+            preferences[PreferencesKeys.INCLUDED_DIRECTORIES_MIGRATED] = true
+            // Directory rules changed: force next sync to fetch full library again.
+            preferences[PreferencesKeys.LAST_SYNC_TIMESTAMP] = 0L
+            val currentVersion = preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] ?: 0
+            preferences[PreferencesKeys.DIRECTORY_RULES_VERSION] =
+                if (currentVersion == Int.MAX_VALUE) 0 else currentVersion + 1
+        }
+    }
 
     val initialSetupDoneFlow: Flow<Boolean> =
             dataStore.data.map { preferences ->
@@ -1231,6 +1292,8 @@ constructor(
         /** Default word-based delimiters (matched case-insensitively with whitespace boundaries) */
         val DEFAULT_ARTIST_WORD_DELIMITERS = listOf("featuring", "feat.", "feat", "ft.", "ft", "vs.", "vs", "versus", "with", "prod.", "prod")
         const val DEFAULT_ALBUM_ART_CACHE_LIMIT_MB = 200
+        /** Catch-all roots blocked while an include list is active. */
+        val INCLUDE_MODE_BLOCKED_ROOTS: Set<String> = setOf("/storage", "/sdcard", "/mnt")
     }
 
     val navBarCornerRadiusFlow: Flow<Int> =

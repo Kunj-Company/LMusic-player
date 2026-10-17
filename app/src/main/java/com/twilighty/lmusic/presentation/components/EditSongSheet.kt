@@ -1,5 +1,28 @@
 package com.twilighty.lmusic.presentation.components
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.text.style.TextOverflow
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuArt
+import com.twilighty.lmusic.presentation.yuyu.YuyuButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonSize
+import com.twilighty.lmusic.presentation.yuyu.YuyuButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuCallout
+import com.twilighty.lmusic.presentation.yuyu.YuyuDialog
+import com.twilighty.lmusic.presentation.yuyu.YuyuDivider
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuStatus
+import com.twilighty.lmusic.presentation.yuyu.YuyuStatusChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuTextField
+import com.twilighty.lmusic.presentation.yuyu.YuyuToast
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -184,6 +207,8 @@ private fun EditSongContent(
     var initialExtended by remember { mutableStateOf(com.twilighty.lmusic.data.media.ExtendedTagSnapshot(albumArtist, year, "")) }
     var showAutofill by remember { mutableStateOf(false) }
     var autofillIds by remember { mutableStateOf<com.twilighty.lmusic.data.autofill.AutofillCandidate?>(null) }
+    val autofilledFields = remember { androidx.compose.runtime.mutableStateListOf<com.twilighty.lmusic.data.autofill.AutofillField>() }
+    var coverFromAutofill by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val autofillAppliedMessage = stringResource(R.string.lmusic_autofill_applied)
     val sheetScope = rememberCoroutineScope()
@@ -210,6 +235,8 @@ private fun EditSongContent(
         composer = ""
         initialExtended = com.twilighty.lmusic.data.media.ExtendedTagSnapshot(albumArtist, year, "")
         autofillIds = null
+        autofilledFields.clear()
+        coverFromAutofill = false
         coverArtPreview = null
         editedCoverArt = null
         isCoverArtDeleted = false
@@ -267,6 +294,8 @@ private fun EditSongContent(
             onDismiss = { showAutofill = false },
             onApply = { result ->
                 val f = result.fields
+                autofilledFields.clear()
+                autofilledFields.addAll(result.selected)
                 result.selected.forEach { field ->
                     when (field) {
                         com.twilighty.lmusic.data.autofill.AutofillField.TITLE -> title = f.title
@@ -283,6 +312,7 @@ private fun EditSongContent(
                 result.coverArt?.let { art ->
                     editedCoverArt = CoverArtUpdate(art.bytes, art.mimeType)
                     isCoverArtDeleted = false
+                    coverFromAutofill = true
                     coverArtPreview = runCatching {
                         android.graphics.BitmapFactory.decodeByteArray(art.bytes, 0, art.bytes.size)?.asImageBitmap()
                     }.getOrNull()
@@ -314,6 +344,7 @@ private fun EditSongContent(
                 coverArtPreview = result.preview
                 editedCoverArt = result.update
                 isCoverArtDeleted = false
+                coverFromAutofill = false
                 showCoverArtCropper = false
                 pendingCoverArtUri = null
             }
@@ -346,17 +377,17 @@ private fun EditSongContent(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
 
-    // --- Diálogo de Información ---
+    // --- Info dialog ---
     if (showInfoDialog) {
-        AlertDialog(
+        YuyuDialog(
             onDismissRequest = { showInfoDialog = false },
-            icon = { Icon(Icons.Rounded.Info, contentDescription = stringResource(R.string.cd_info_icon)) },
-            title = { Text(stringResource(R.string.edit_song_info_dialog_title)) },
-            text = { Text(stringResource(R.string.edit_song_info_dialog_body)) },
-            confirmButton = {
-                TextButton(onClick = { showInfoDialog = false }) {
-                    Text(stringResource(R.string.edit_song_got_it))
-                }
+            title = stringResource(R.string.edit_song_info_dialog_title),
+            body = stringResource(R.string.edit_song_info_dialog_body),
+            actions = {
+                YuyuButton(
+                    text = stringResource(R.string.edit_song_got_it),
+                    onClick = { showInfoDialog = false }
+                )
             }
         )
     }
@@ -364,43 +395,69 @@ private fun EditSongContent(
     val density = LocalDensity.current
     val imeInsets = WindowInsets.ime
     val isKeyboardVisible by remember { derivedStateOf { imeInsets.getBottom(density) > 0 } }
+    val tagsMostlyMissing = remember(song.id) {
+        song.artist.isBlank() || song.artist.equals("<unknown>", ignoreCase = true) ||
+            song.album.isBlank() || song.album.equals("<unknown>", ignoreCase = true)
+    }
+    val fileName = remember(song.path) { song.path.substringAfterLast('/').takeIf { it.isNotBlank() } }
+    val formatLine = remember(song.id) {
+        listOfNotNull(
+            song.mimeType?.substringAfter('/')?.uppercase(Locale.getDefault())?.takeIf { it.isNotBlank() },
+            song.bitrate?.takeIf { it > 0 }?.let { "${it / 1000} kbps" },
+            song.duration.takeIf { it > 0 }?.let { ms -> "%d:%02d".format(ms / 60000, (ms / 1000) % 60) }
+        ).joinToString(" · ")
+    }
+    fun hl(field: com.twilighty.lmusic.data.autofill.AutofillField) = field in autofilledFields
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        modifier = Modifier.padding(start = 10.dp),
-                        text = stringResource(R.string.edit_song_toolbar_title),
-                        fontFamily = GoogleSansRounded,
-                        style = MaterialTheme.typography.displaySmall
-                    )
-                },
-                actions = {
-                    FilledTonalButton(
-                        onClick = { showAutofill = true },
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.lmusic_autofill))
-                    }
-                    FilledTonalIconButton(
-                        modifier = Modifier.padding(end = 10.dp),
-                        onClick = { showInfoDialog = true },
-                        shape = CircleShape
-                    ) {
-                        Icon(Icons.Rounded.Info, contentDescription = stringResource(R.string.cd_show_metadata_info))
-                    }
-                }
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Yuyu.canvas)
+                    .statusBarsPadding()
+                    .heightIn(min = 60.dp)
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                YuyuIconButton(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = stringResource(R.string.cancel),
+                    onClick = onDismiss
+                )
+                Text(
+                    text = stringResource(R.string.edit_song_toolbar_title),
+                    style = YuyuType.h2,
+                    color = Yuyu.text,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1
+                )
+                YuyuButton(
+                    text = stringResource(R.string.lmusic_autofill),
+                    onClick = { showAutofill = true },
+                    style = YuyuButtonStyle.Secondary,
+                    size = YuyuButtonSize.Small,
+                    icon = rememberVectorPainter(Icons.Rounded.AutoAwesome)
+                )
+                YuyuIconButton(
+                    imageVector = Icons.Rounded.Info,
+                    contentDescription = stringResource(R.string.cd_show_metadata_info),
+                    onClick = { showInfoDialog = true },
+                    iconSize = 20.dp
+                )
+            }
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                YuyuToast(
+                    text = data.visuals.message,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    icon = { Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp)) }
+                )
+            }
+        },
+        containerColor = Yuyu.canvas,
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.statusBars
     ) { innerPadding ->
@@ -411,382 +468,220 @@ private fun EditSongContent(
                     .fillMaxSize()
                     .imePadding(),
                 contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding() + 8.dp,
-                    bottom = if (isKeyboardVisible) 8.dp else (navBarBottom + 100.dp),
+                    top = innerPadding.calculateTopPadding() + 6.dp,
+                    bottom = if (isKeyboardVisible) 8.dp else (navBarBottom + 112.dp),
                     start = 16.dp,
                     end = 16.dp
                 ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                CoverArtEditorCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    albumArtUri = song.albumArtUriString,
-                    preview = coverArtPreview,
-                    isDeleted = isCoverArtDeleted,
-                    onPickNewArt = {
-                        pickCoverArtLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    },
-                    onDelete = {
-                        coverArtPreview = null
-                        isCoverArtDeleted = true
-                        editedCoverArt = CoverArtUpdate(isDeletion = true)
-                    },
-                    onReset = {
-                        coverArtPreview = null
-                        editedCoverArt = null
-                        isCoverArtDeleted = false
-                    }
-                )
-            }
-
-            // --- Campo de Título ---
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_title),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        style = MaterialTheme.typography.labelLarge
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item {
+                    CoverArtEditorCard(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        albumArtUri = song.albumArtUriString,
+                        artKey = song.album.ifBlank { song.title },
+                        preview = coverArtPreview,
+                        isDeleted = isCoverArtDeleted,
+                        isAutofilled = coverFromAutofill && coverArtPreview != null,
+                        fileName = fileName,
+                        formatLine = formatLine,
+                        onPickNewArt = {
+                            pickCoverArtLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        onDelete = {
+                            coverArtPreview = null
+                            isCoverArtDeleted = true
+                            coverFromAutofill = false
+                            editedCoverArt = CoverArtUpdate(isDeletion = true)
+                        },
+                        onReset = {
+                            coverArtPreview = null
+                            editedCoverArt = null
+                            isCoverArtDeleted = false
+                            coverFromAutofill = false
+                        }
                     )
-                    OutlinedTextField(
+                }
+
+                if (tagsMostlyMissing && autofilledFields.isEmpty()) {
+                    item {
+                        YuyuCallout(
+                            boldText = "Most tags are missing.",
+                            text = "Autofill can suggest them.",
+                            icon = rememberVectorPainter(Icons.Rounded.Info),
+                            actionLabel = stringResource(R.string.lmusic_autofill),
+                            onAction = { showAutofill = true }
+                        )
+                    }
+                }
+
+                item {
+                    YuyuTextField(
                         value = title,
-                        shape = textFieldShape,
-                        colors = textFieldColors,
                         onValueChange = { title = it },
-                        placeholder = { Text(stringResource(R.string.song_field_title)) },
-                        leadingIcon = { Icon(Icons.Rounded.MusicNote, tint = MaterialTheme.colorScheme.tertiary,contentDescription = stringResource(R.string.cd_song_title_icon)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        label = stringResource(R.string.song_field_title),
+                        highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.TITLE),
+                        trailing = autofillBadge(hl(com.twilighty.lmusic.data.autofill.AutofillField.TITLE))
                     )
                 }
-            }
-
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_track_number),
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
-                        value = trackNumber,
-                        shape = textFieldShape,
-                        colors = textFieldColors,
-                        onValueChange = { trackNumber = it },
-                        placeholder = { Text(stringResource(R.string.song_field_track_number)) },
-                        leadingIcon = { Icon(Icons.Rounded.FormatListNumbered, tint = MaterialTheme.colorScheme.secondary, contentDescription = stringResource(R.string.cd_track_number_icon)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                }
-            }
-
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_disc_number),
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
-                        value = discNumber,
-                        shape = textFieldShape,
-                        colors = textFieldColors,
-                        onValueChange = { discNumber = it },
-                        placeholder = { Text(stringResource(R.string.song_field_disc_number)) },
-                        leadingIcon = { Icon(Icons.Rounded.FormatListNumbered, tint = MaterialTheme.colorScheme.secondary, contentDescription = stringResource(R.string.cd_disc_number_icon)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                }
-            }
-
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_replaygain_track_db),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
-                        value = replayGainTrackGainDb,
-                        shape = textFieldShape,
-                        colors = textFieldColors,
-                        onValueChange = { replayGainTrackGainDb = it },
-                        placeholder = { Text(stringResource(R.string.placeholder_replaygain_track_example)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Rounded.RepeatOne,
-                                tint = MaterialTheme.colorScheme.primary,
-                                contentDescription = stringResource(R.string.cd_replaygain_track)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                }
-            }
-
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_replaygain_album_db),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
-                        value = replayGainAlbumGainDb,
-                        shape = textFieldShape,
-                        colors = textFieldColors,
-                        onValueChange = { replayGainAlbumGainDb = it },
-                        placeholder = { Text(stringResource(R.string.placeholder_replaygain_album_example)) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Rounded.Repeat,
-                                tint = MaterialTheme.colorScheme.tertiary,
-                                contentDescription = stringResource(R.string.cd_replaygain_album)
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                    )
-                }
-            }
-
-            // --- Campo de Artista ---
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_artist),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
+                item {
+                    YuyuTextField(
                         value = artist,
-                        colors = textFieldColors,
-                        shape = textFieldShape,
                         onValueChange = { artist = it },
-                        placeholder = { Text(stringResource(R.string.song_field_artist)) },
-                        leadingIcon = { Icon(Icons.Rounded.Person, tint = MaterialTheme.colorScheme.primary, contentDescription = stringResource(R.string.song_field_artist)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        label = stringResource(R.string.song_field_artist),
+                        placeholder = "Unknown artist",
+                        highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.ARTIST),
+                        trailing = autofillBadge(hl(com.twilighty.lmusic.data.autofill.AutofillField.ARTIST))
                     )
                 }
-            }
-
-            // --- Campo de Álbum ---
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_album),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
+                item {
+                    YuyuTextField(
                         value = album,
-                        colors = textFieldColors,
-                        shape = textFieldShape,
                         onValueChange = { album = it },
-                        placeholder = { Text(stringResource(R.string.song_field_album)) },
-                        leadingIcon = { Icon(Icons.Rounded.Album, tint = MaterialTheme.colorScheme.tertiary, contentDescription = stringResource(R.string.song_field_album)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        label = stringResource(R.string.song_field_album),
+                        placeholder = "Unknown album",
+                        highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.ALBUM),
+                        trailing = autofillBadge(hl(com.twilighty.lmusic.data.autofill.AutofillField.ALBUM))
                     )
                 }
-            }
-
-            // --- LMusic: Album artist / Year / Composer ---
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.lmusic_field_album_artist),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
+                item {
+                    YuyuTextField(
                         value = albumArtist,
-                        colors = textFieldColors,
-                        shape = textFieldShape,
                         onValueChange = { albumArtist = it },
-                        placeholder = { Text(stringResource(R.string.lmusic_field_album_artist)) },
-                        leadingIcon = { Icon(Icons.Rounded.Groups, tint = MaterialTheme.colorScheme.primary, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                        label = stringResource(R.string.lmusic_field_album_artist),
+                        optional = true,
+                        highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.ALBUM_ARTIST),
+                        helper = "Leave empty to use the song's artist."
                     )
                 }
-            }
-
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(modifier = Modifier.weight(0.4f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            modifier = Modifier.padding(start = 4.dp),
-                            text = stringResource(R.string.lmusic_field_year),
-                            color = MaterialTheme.colorScheme.secondary,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        OutlinedTextField(
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        YuyuTextField(
                             value = year,
-                            colors = textFieldColors,
-                            shape = textFieldShape,
                             onValueChange = { input -> year = input.filter { it.isDigit() || it == '-' }.take(10) },
-                            placeholder = { Text("2024") },
-                            leadingIcon = { Icon(Icons.Rounded.CalendarMonth, tint = MaterialTheme.colorScheme.secondary, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            label = stringResource(R.string.lmusic_field_year),
+                            placeholder = "2024",
+                            highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.YEAR),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-                    Column(modifier = Modifier.weight(0.6f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            modifier = Modifier.padding(start = 4.dp),
-                            text = stringResource(R.string.lmusic_field_composer),
-                            color = MaterialTheme.colorScheme.tertiary,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                        OutlinedTextField(
-                            value = composer,
-                            colors = textFieldColors,
-                            shape = textFieldShape,
-                            onValueChange = { composer = it },
-                            placeholder = { Text(stringResource(R.string.lmusic_field_composer)) },
-                            leadingIcon = { Icon(Icons.Rounded.Piano, tint = MaterialTheme.colorScheme.tertiary, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
+                        YuyuTextField(
+                            value = trackNumber,
+                            onValueChange = { trackNumber = it },
+                            label = stringResource(R.string.song_field_track_number),
+                            highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.TRACK),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
-            }
-
-            // --- Campo de Género ---
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.song_field_genre),
-                        color = MaterialTheme.colorScheme.secondary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    OutlinedTextField(
-                        value = genre,
-                        colors = textFieldColors,
-                        shape = textFieldShape,
-                        onValueChange = { genre = it },
-                        placeholder = { Text(stringResource(R.string.song_field_genre)) },
-                        leadingIcon = { Icon(Icons.Rounded.Category, tint = MaterialTheme.colorScheme.secondary, contentDescription = stringResource(R.string.song_field_genre)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        YuyuTextField(
+                            value = genre,
+                            onValueChange = { genre = it },
+                            label = stringResource(R.string.song_field_genre),
+                            highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.GENRE),
+                            modifier = Modifier.weight(1f)
+                        )
+                        YuyuTextField(
+                            value = discNumber,
+                            onValueChange = { discNumber = it },
+                            label = stringResource(R.string.song_field_disc_number),
+                            highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.DISC),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                item {
+                    YuyuTextField(
+                        value = composer,
+                        onValueChange = { composer = it },
+                        label = stringResource(R.string.lmusic_field_composer),
+                        optional = true,
+                        highlighted = hl(com.twilighty.lmusic.data.autofill.AutofillField.COMPOSER),
+                        helper = if (autofilledFields.isNotEmpty()) "Autofilled fields are outlined. Edit any of them before saving." else null
                     )
                 }
-            }
-
-            // --- Campo de Letra ---
-            item {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp),
-                        text = stringResource(R.string.lyrics),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = lyrics,
-                            colors = textFieldColors,
-                            shape = textFieldShape,
-                            onValueChange = { lyrics = it },
-                            placeholder = { Text(stringResource(R.string.lyrics)) },
-                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Notes, tint = MaterialTheme.colorScheme.primary, contentDescription = stringResource(R.string.lyrics)) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(150.dp)
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        YuyuTextField(
+                            value = replayGainTrackGainDb,
+                            onValueChange = { replayGainTrackGainDb = it },
+                            label = stringResource(R.string.song_field_replaygain_track_db),
+                            placeholder = stringResource(R.string.placeholder_replaygain_track_example),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        FilledTonalIconButton(
-                            onClick = {
-                                val encodedTitle = URLEncoder.encode(title, "UTF-8")
-                                val encodedArtist = URLEncoder.encode(artist, "UTF-8")
-                                val url = "https://lrclib.net/search/$encodedTitle%20$encodedArtist"
-                                val intent = Intent(Intent.ACTION_VIEW).setData(Uri.parse(url))
-                                context.startActivity(intent)
-                            },
-                        ) {
-                            Icon(
+                        YuyuTextField(
+                            value = replayGainAlbumGainDb,
+                            onValueChange = { replayGainAlbumGainDb = it },
+                            label = stringResource(R.string.song_field_replaygain_album_db),
+                            placeholder = stringResource(R.string.placeholder_replaygain_album_example),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                item {
+                    YuyuTextField(
+                        value = lyrics,
+                        onValueChange = { lyrics = it },
+                        label = stringResource(R.string.lyrics),
+                        optional = true,
+                        singleLine = false,
+                        minLines = 5,
+                        maxLines = 10,
+                        trailing = {
+                            YuyuIconButton(
                                 painter = painterResource(id = R.drawable.rounded_search_24),
-                                contentDescription = stringResource(R.string.cd_search_lyrics_lrclib)
+                                contentDescription = stringResource(R.string.cd_search_lyrics_lrclib),
+                                onClick = {
+                                    val encodedTitle = URLEncoder.encode(title, "UTF-8")
+                                    val encodedArtist = URLEncoder.encode(artist, "UTF-8")
+                                    val url = "https://lrclib.net/search/$encodedTitle%20$encodedArtist"
+                                    val intent = Intent(Intent.ACTION_VIEW).setData(Uri.parse(url))
+                                    context.startActivity(intent)
+                                },
+                                size = 40.dp,
+                                iconSize = 20.dp
                             )
                         }
-                    }
+                    )
                 }
             }
-        }
 
             AnimatedVisibility(
                 visible = !isKeyboardVisible,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = innerPadding.calculateBottomPadding() + 24.dp)
+                modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                HorizontalFloatingToolbar(
-                    expandedShadowElevation = 0.dp,
-                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
-                        toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    expanded = true,
-                    scrollBehavior = scrollBehavior,
-                    content = {
-                        FilledTonalButton(
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Yuyu.canvas)
+                        .navigationBarsPadding()
+                ) {
+                    YuyuDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        YuyuButton(
+                            text = stringResource(R.string.cancel),
                             onClick = onDismiss,
-                            modifier = Modifier.height(48.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Text(stringResource(R.string.cancel))
-                        }
-                        Spacer(
-                            modifier = Modifier.width(8.dp)
+                            style = YuyuButtonStyle.Secondary,
+                            size = YuyuButtonSize.Large,
+                            modifier = Modifier.weight(1f)
                         )
-                        Button(
+                        YuyuButton(
+                            text = "Save to file",
                             onClick = {
                                 val resolvedTrackNumber = trackNumber.toIntOrNull() ?: song.trackNumber
                                 val resolvedDiscNumber = discNumber.toIntOrNull()
@@ -825,159 +720,143 @@ private fun EditSongContent(
                                     editedCoverArt
                                 )
                             },
-                            modifier = Modifier.height(48.dp)
-                        ) {
-                            Text(stringResource(R.string.action_save))
-                        }
+                            style = YuyuButtonStyle.Primary,
+                            size = YuyuButtonSize.Large,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Lock, contentDescription = null, tint = Yuyu.textMuted, modifier = Modifier.size(14.dp))
+                        Text(
+                            "Android asks once to let LMusic change this file.",
+                            style = YuyuType.caption,
+                            color = Yuyu.textMuted
+                        )
+                    }
+                }
             }
-
         }
     }
 }
+
+/** Sparkle badge shown inside a field that autofill changed. */
+@Composable
+private fun autofillBadge(show: Boolean): (@Composable () -> Unit)? = if (show) {
+    {
+        Icon(
+            Icons.Rounded.AutoAwesome,
+            contentDescription = "Autofilled",
+            tint = Yuyu.accentText,
+            modifier = Modifier.padding(end = 6.dp).size(18.dp)
+        )
+    }
+} else null
 
 @Composable
 private fun CoverArtEditorCard(
     modifier: Modifier = Modifier,
     albumArtUri: String?,
+    artKey: String,
     preview: ImageBitmap?,
     isDeleted: Boolean,
+    isAutofilled: Boolean,
+    fileName: String?,
+    formatLine: String,
     onPickNewArt: () -> Unit,
     onDelete: () -> Unit,
     onReset: () -> Unit,
 ) {
-    Surface(
+    Row(
         modifier = modifier,
-        shape = AbsoluteSmoothCornerShape(
-            cornerRadiusTL = 12.dp,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusTR = 12.dp,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBL = 12.dp,
-            smoothnessAsPercentTL = 60,
-            cornerRadiusBR = 12.dp,
-            smoothnessAsPercentTR = 60,
-        ),
-        tonalElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .size(92.dp)
+                .clip(YuyuShapes.lg)
+                .background(Yuyu.muted),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = stringResource(R.string.edit_song_cover_art_heading),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                val cropSize = minOf(maxWidth, 220.dp)
-                Box(
-                    modifier = Modifier
-                        .size(cropSize)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                    contentAlignment = Alignment.Center
-                ) {
-                    when {
-                        isDeleted -> {
-                            Icon(
-                                painter = painterResource(id = R.drawable.rounded_music_note_24),
-                                contentDescription = null,
-                                modifier = Modifier.size(72.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        preview != null -> {
-                            Image(
-                                bitmap = preview,
-                                contentDescription = stringResource(R.string.cd_cover_art_preview),
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-
-                        albumArtUri != null -> {
-                            SmartImage(
-                                model = albumArtUri,
-                                contentDescription = stringResource(R.string.cd_current_song_cover_art),
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                placeholderResId = R.drawable.rounded_music_note_24,
-                                errorResId = R.drawable.rounded_broken_image_24
-                            )
-                        }
-
-                        else -> {
-                            Icon(
-                                painter = painterResource(id = R.drawable.rounded_music_note_24),
-                                contentDescription = null,
-                                modifier = Modifier.size(72.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                    )
-                                )
-                            )
+            when {
+                isDeleted -> {
+                    Icon(
+                        painter = painterResource(id = R.drawable.rounded_music_note_24),
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = Yuyu.textMuted
+                    )
+                }
+                preview != null -> {
+                    Image(
+                        bitmap = preview,
+                        contentDescription = stringResource(R.string.cd_cover_art_preview),
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                else -> {
+                    YuyuArt(
+                        model = albumArtUri,
+                        title = artKey,
+                        size = 92.dp,
+                        shape = YuyuShapes.lg,
+                        contentDescription = stringResource(R.string.cd_current_song_cover_art)
                     )
                 }
             }
-
-            Text(
-                text = stringResource(R.string.edit_song_cover_art_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
-            ) {
-                FilledTonalButton(onClick = onPickNewArt) {
-                    Icon(Icons.Rounded.Image, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.edit_song_change_cover_art))
-                }
-
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (isAutofilled) {
+                YuyuStatusChip(
+                    text = "New cover",
+                    status = YuyuStatus.Accent,
+                    icon = rememberVectorPainter(Icons.Rounded.AutoAwesome)
+                )
+            } else if (fileName != null) {
+                Text(
+                    text = fileName,
+                    style = YuyuType.caption,
+                    color = Yuyu.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                YuyuButton(
+                    text = if (albumArtUri != null || preview != null) "Change" else "Add cover",
+                    onClick = onPickNewArt,
+                    style = YuyuButtonStyle.Secondary,
+                    size = YuyuButtonSize.Small,
+                    icon = rememberVectorPainter(Icons.Rounded.Image)
+                )
                 if (preview != null || isDeleted) {
-                    TextButton(onClick = onReset) {
-                        Icon(Icons.Rounded.Restore, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(stringResource(R.string.action_reset))
-                    }
+                    YuyuButton(
+                        text = stringResource(R.string.action_reset),
+                        onClick = onReset,
+                        style = YuyuButtonStyle.Quiet,
+                        size = YuyuButtonSize.Small
+                    )
                 } else if (albumArtUri != null) {
-                    FilledTonalButton(
+                    YuyuButton(
+                        text = "Remove",
                         onClick = onDelete,
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    ) {
-                        Icon(Icons.Rounded.Delete, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.edit_song_delete_cover_art))
-                    }
+                        style = YuyuButtonStyle.DangerQuiet,
+                        size = YuyuButtonSize.Small
+                    )
                 }
+            }
+            if (formatLine.isNotBlank()) {
+                Text(formatLine, style = YuyuType.caption, color = Yuyu.textMuted, maxLines = 1)
             }
         }
     }

@@ -1,5 +1,21 @@
 package com.twilighty.lmusic.presentation.screens
 
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.sp
+import com.twilighty.lmusic.presentation.yuyu.Yuyu
+import com.twilighty.lmusic.presentation.yuyu.YuyuArt
+import com.twilighty.lmusic.presentation.yuyu.YuyuAvatar
+import com.twilighty.lmusic.presentation.yuyu.YuyuChip
+import com.twilighty.lmusic.presentation.yuyu.YuyuEmptyState
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButton
+import com.twilighty.lmusic.presentation.yuyu.YuyuIconButtonStyle
+import com.twilighty.lmusic.presentation.yuyu.YuyuSectionHeader
+import com.twilighty.lmusic.presentation.yuyu.YuyuShapes
+import com.twilighty.lmusic.presentation.yuyu.YuyuType
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 import com.twilighty.lmusic.presentation.navigation.navigateSafelyReplacing
 
@@ -129,7 +145,8 @@ import androidx.compose.ui.res.stringResource
 
 private data class SearchUiSlice(
     val selectedSearchFilter: SearchFilterType = SearchFilterType.ALL,
-    val searchResults: ImmutableList<SearchResultItem> = persistentListOf()
+    val searchResults: ImmutableList<SearchResultItem> = persistentListOf(),
+    val searchHistory: ImmutableList<SearchHistoryItem> = persistentListOf()
 )
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -153,7 +170,8 @@ fun SearchScreen(
             .map { uiState ->
                 SearchUiSlice(
                     selectedSearchFilter = uiState.selectedSearchFilter,
-                    searchResults = uiState.searchResults
+                    searchResults = uiState.searchResults,
+                    searchHistory = uiState.searchHistory
                 )
             }
             .distinctUntilChanged()
@@ -229,115 +247,55 @@ fun SearchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surface)
     ) {
 
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            Row(
+            // Yuyu header: "Search" h1 + settings, then the rounded muted search field.
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 24.dp, top = statusBarTopInset, end = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 16.dp, top = statusBarTopInset + 12.dp, end = 16.dp, bottom = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                val searchBarInputFieldColors = SearchBarDefaults.inputFieldColors(
-                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                )
-
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .background(color = Color.Transparent)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    DockedSearchBar(
-                        inputField = {
-                            SearchBarDefaults.InputField(
-                                modifier = Modifier.focusRequester(searchInputFocusRequester),
-                                query = searchQuery,
-                                onQueryChange = {
-                                    searchQuery = it
-                                    playerViewModel.updateSearchQuery(it)
-                                },
-                                onSearch = { query ->
-                                    if (query.isNotBlank()) {
-                                        playerViewModel.onSearchQuerySubmitted(query)
-                                    }
-                                    keyboardController?.hide()
-                                },
-                                expanded = false,
-                                onExpandedChange = {},
-                                placeholder = {
-                                    Text(
-                                        stringResource(R.string.search_placeholder),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Search,
-                                        contentDescription = stringResource(R.string.cd_search_icon),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (searchQuery.isNotBlank()) {
-                                        IconButton(
-                                            onClick = {
-                                                searchQuery = ""
-                                                playerViewModel.updateSearchQuery("")
-                                            },
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(CircleShape)
-                                                .background(
-                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
-                                                )
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Close,
-                                                contentDescription = stringResource(R.string.cd_clear_search_query),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                },
-                                colors = searchBarInputFieldColors
-                            )
-                        },
-                        expanded = false,
-                        onExpandedChange = {},
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(searchbarCornerRadius)),
-                        colors = SearchBarDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                            dividerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                            inputFieldColors = searchBarInputFieldColors
-                        ),
-                        content = {}
+                    Text(
+                        text = stringResource(R.string.search),
+                        style = YuyuType.h1,
+                        color = Yuyu.text,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-
-                FilledIconButton(
-                    modifier = Modifier.padding(bottom = 2.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    onClick = { navController.navigateSafely(Screen.Settings.route) }
-                ) {
-                    Icon(
+                    YuyuIconButton(
                         painter = painterResource(R.drawable.rounded_settings_24),
-                        contentDescription = stringResource(R.string.presentation_batch_d_open_settings_cd)
+                        contentDescription = stringResource(R.string.presentation_batch_d_open_settings_cd),
+                        onClick = { navController.navigateSafely(Screen.Settings.route) },
+                        style = YuyuIconButtonStyle.Tonal
                     )
                 }
+                YuyuSearchField(
+                    query = searchQuery,
+                    onQueryChange = {
+                        searchQuery = it
+                        playerViewModel.updateSearchQuery(it)
+                    },
+                    onSearch = { query ->
+                        if (query.isNotBlank()) {
+                            playerViewModel.onSearchQuerySubmitted(query)
+                        }
+                        keyboardController?.hide()
+                    },
+                    onClear = {
+                        searchQuery = ""
+                        playerViewModel.updateSearchQuery("")
+                    },
+                    placeholder = stringResource(R.string.search_placeholder),
+                    focusRequester = searchInputFocusRequester
+                )
             }
 
             val showGenreBrowse by remember(searchQuery) { derivedStateOf { searchQuery.isBlank() } }
@@ -358,6 +316,34 @@ fun SearchScreen(
                 label = "search_mode_transition"
             ) { isGenreMode ->
                 if (isGenreMode) {
+                    Column(Modifier.fillMaxSize()) {
+                    val recentSearches = searchUiState.searchHistory
+                    if (recentSearches.isNotEmpty()) {
+                        Column(Modifier.padding(top = 10.dp)) {
+                            YuyuSectionHeader(
+                                title = stringResource(R.string.recent_searches),
+                                actionLabel = stringResource(R.string.clear_all),
+                                onAction = { playerViewModel.clearSearchHistory() },
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(recentSearches, key = { "recent_${it.id ?: it.query}" }) { item ->
+                                    YuyuRecentSearchChip(
+                                        text = item.query,
+                                        onClick = {
+                                            searchQuery = item.query
+                                            playerViewModel.updateSearchQuery(item.query)
+                                        },
+                                        onRemove = { playerViewModel.deleteSearchHistoryItem(item.query) }
+                                    )
+                                }
+                            }
+                        }
+                    }
                     GenreCategoriesGrid(
                         genres = genres,
                         onGenreClick = { genre ->
@@ -367,8 +353,9 @@ fun SearchScreen(
                             navController.navigateSafely(Screen.GenreDetail.createRoute(encodedGenreId))
                         },
                         playerViewModel = playerViewModel,
-                        modifier = Modifier.padding(top = 12.dp)
+                        modifier = Modifier.padding(top = 16.dp)
                     )
+                    }
                 } else {
                     Column(
                         modifier = Modifier
@@ -378,9 +365,9 @@ fun SearchScreen(
                         FlowRow(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp, horizontal = 8.dp),
+                                .padding(top = 8.dp, bottom = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(0.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             SearchFilterChip(SearchFilterType.ALL, currentFilter, playerViewModel)
                             SearchFilterChip(SearchFilterType.SONGS, currentFilter, playerViewModel)
@@ -420,13 +407,6 @@ fun SearchScreen(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .height(170.dp)
-                .background(brush = bottomGradientBrush)
-        )
     }
 
     if (showSongInfoBottomSheet && selectedSongForInfo != null) {
@@ -523,12 +503,9 @@ fun SearchScreen(
 
 @Composable
 fun SearchResultSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+    YuyuSectionHeader(
+        title = title,
+        modifier = Modifier.padding(top = 12.dp, bottom = 6.dp)
     )
 }
 
@@ -619,41 +596,16 @@ fun SearchHistoryListItem(
 
 @Composable
 fun EmptySearchResults(searchQuery: String, colorScheme: ColorScheme) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.Search,
-            contentDescription = stringResource(R.string.cd_no_search_results),
-            modifier = Modifier
-                .size(80.dp)
-                .padding(bottom = 16.dp),
-            tint = colorScheme.primary.copy(alpha = 0.6f)
-        )
-
-        Text(
-            text = if (searchQuery.isNotBlank()) {
-                stringResource(R.string.search_no_results_for_query, searchQuery)
-            } else {
-                stringResource(R.string.search_nothing_found)
-            },
-            style = MaterialTheme.typography.titleLarge,
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.search_try_different_or_filters),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-    }
+    YuyuEmptyState(
+        title = if (searchQuery.isNotBlank()) {
+            stringResource(R.string.search_no_results_for_query, searchQuery)
+        } else {
+            stringResource(R.string.search_nothing_found)
+        },
+        body = stringResource(R.string.search_try_different_or_filters),
+        icon = androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Rounded.Search),
+        modifier = Modifier.padding(top = 16.dp)
+    )
 }
 
 
@@ -734,14 +686,9 @@ fun SearchResultsList(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .clip(
-                RoundedCornerShape(
-                    topStart = 28.dp,
-                    topEnd = 28.dp
-                )
-            ),
+            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
         contentPadding = PaddingValues(
-            top = 8.dp,
+            top = 0.dp,
             bottom = if (imePadding <= 8.dp) (MiniPlayerHeight + systemBarPaddingBottom) else imePadding
         )
     ) {
@@ -782,7 +729,7 @@ fun SearchResultsList(
                     }
                 ) { index ->
                     val item = itemsForSection[index]
-                    Box(modifier = Modifier.padding(bottom = 12.dp)) {
+                    Box(modifier = Modifier.padding(bottom = 4.dp)) {
                         when (item) {
                             is SearchResultItem.SongItem -> {
                                 EnhancedSongListItem(
@@ -895,168 +842,47 @@ fun SearchResultsList(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchResultAlbumItem(
     album: Album,
     onOpenClick: () -> Unit,
     onPlayClick: () -> Unit
 ) {
-    val itemShape = remember {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = 26.dp,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTR = 26.dp,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBR = 26.dp,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusBL = 26.dp,
-            smoothnessAsPercentTL = 60
-        )
-    }
-
-    Card(
-        onClick = onOpenClick,
-        shape = itemShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SmartImage(
+    YuyuSearchResultRow(
+        title = album.title,
+        subtitle = listOf("Album", album.artist).filter { it.isNotBlank() }.joinToString(" · "),
+        onOpenClick = onOpenClick,
+        onPlayClick = onPlayClick,
+        playContentDescription = stringResource(R.string.cd_play_album),
+        leading = {
+            YuyuArt(
                 model = album.albumArtUriString,
-                contentDescription = "Album Art: ${album.title}",
-                targetSize = SmartImageListTargetSize,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(itemShape)
+                title = album.title,
+                size = 56.dp,
+                shape = YuyuShapes.md,
+                contentDescription = "Album art: ${album.title}"
             )
-            Spacer(Modifier.width(12.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = album.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = album.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            FilledIconButton(
-                onClick = onPlayClick,
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f),
-                    contentColor = MaterialTheme.colorScheme.onSecondary
-                )
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = stringResource(R.string.cd_play_album), modifier = Modifier.size(24.dp))
-            }
         }
-    }
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchResultArtistItem(
     artist: Artist,
     onOpenClick: () -> Unit,
     onPlayClick: () -> Unit
 ) {
-    val itemShape = remember {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = 26.dp,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTR = 26.dp,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBR = 26.dp,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusBL = 26.dp,
-            smoothnessAsPercentTL = 60
-        )
-    }
-
-    Card(
-        onClick = onOpenClick,
-        shape = itemShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (!artist.effectiveImageUrl.isNullOrBlank()) {
-                SmartImage(
-                    model = artist.effectiveImageUrl,
-                    contentDescription = "Artist: ${artist.name}",
-                    targetSize = SmartImageListTargetSize,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                )
-            } else {
-                Icon(
-                    painter = painterResource(id = R.drawable.rounded_artist_24),
-                    contentDescription = "Artist",
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(MaterialTheme.colorScheme.tertiaryContainer, CircleShape)
-                        .padding(12.dp),
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = artist.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = formatSongCount(artist.songCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            FilledIconButton(
-                onClick = onPlayClick,
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f),
-                    contentColor = MaterialTheme.colorScheme.onTertiary
-                )
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play Artist", modifier = Modifier.size(24.dp))
-            }
-        }
-    }
+    YuyuSearchResultRow(
+        title = artist.name,
+        subtitle = "Artist · ${formatSongCount(artist.songCount)}",
+        onOpenClick = onOpenClick,
+        onPlayClick = onPlayClick,
+        playContentDescription = "Play artist",
+        accentPlay = true,
+        leading = { YuyuAvatar(model = artist.effectiveImageUrl, name = artist.name, size = 56.dp) }
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchResultPlaylistItem(
     playlist: Playlist,
@@ -1064,64 +890,144 @@ fun SearchResultPlaylistItem(
     onOpenClick: () -> Unit,
     onPlayClick: () -> Unit
 ) {
-    val itemShape = remember {
-        AbsoluteSmoothCornerShape(
-            cornerRadiusTL = 26.dp,
-            smoothnessAsPercentTR = 60,
-            cornerRadiusTR = 26.dp,
-            smoothnessAsPercentBR = 60,
-            cornerRadiusBR = 26.dp,
-            smoothnessAsPercentBL = 60,
-            cornerRadiusBL = 26.dp,
-            smoothnessAsPercentTL = 60
-        )
-    }
-
-    Card(
-        onClick = onOpenClick,
-        shape = itemShape,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    YuyuSearchResultRow(
+        title = playlist.name,
+        subtitle = "Playlist · ${formatSongCount(playlist.songIds.size)}",
+        onOpenClick = onOpenClick,
+        onPlayClick = onPlayClick,
+        playContentDescription = "Play playlist",
+        leading = {
             PlaylistCover(
                 playlist = playlist,
                 playlistSongs = playlistSongs,
                 size = 56.dp
             )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = playlist.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = formatSongCount(playlist.songIds.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        }
+    )
+}
+
+/** Flat Yuyu result row: leading art, title, muted meta, round play button. */
+@Composable
+private fun YuyuSearchResultRow(
+    title: String,
+    subtitle: String,
+    onOpenClick: () -> Unit,
+    onPlayClick: () -> Unit,
+    playContentDescription: String,
+    accentPlay: Boolean = false,
+    leading: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(YuyuShapes.lg)
+            .clickable(onClick = onOpenClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        leading()
+        Column(Modifier.weight(1f)) {
+            Text(title, style = YuyuType.title, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = YuyuType.meta, color = Yuyu.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        YuyuIconButton(
+            imageVector = Icons.Rounded.PlayArrow,
+            contentDescription = playContentDescription,
+            onClick = onPlayClick,
+            style = if (accentPlay) YuyuIconButtonStyle.Accent else YuyuIconButtonStyle.Tonal,
+            size = 40.dp,
+            iconSize = 22.dp
+        )
+    }
+}
+
+/** Rounded (16dp) muted search field with a search icon and a clear button. */
+@Composable
+private fun YuyuSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: (String) -> Unit,
+    onClear: () -> Unit,
+    placeholder: String,
+    focusRequester: FocusRequester,
+) {
+    val textColor = Yuyu.text
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(YuyuShapes.lg)
+            .background(Yuyu.muted)
+            .padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Search,
+            contentDescription = stringResource(R.string.cd_search_icon),
+            tint = Yuyu.textMuted,
+            modifier = Modifier.size(20.dp)
+        )
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) {
+                Text(placeholder, style = YuyuType.body.copy(fontSize = 16.sp), color = Yuyu.textMuted, maxLines = 1)
             }
-            FilledIconButton(
-                onClick = onPlayClick,
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play Playlist", modifier = Modifier.size(24.dp))
-            }
+            androidx.compose.foundation.text.BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = YuyuType.body.copy(fontSize = 16.sp, color = textColor),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Yuyu.ink),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch(query) }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+            )
+        }
+        if (query.isNotEmpty()) {
+            YuyuIconButton(
+                imageVector = Icons.Rounded.Close,
+                contentDescription = stringResource(R.string.cd_clear_search_query),
+                onClick = onClear,
+                size = 36.dp,
+                iconSize = 18.dp
+            )
+        }
+    }
+}
+
+/** Recent search as a Yuyu chip; the small x removes it from history. */
+@Composable
+private fun YuyuRecentSearchChip(text: String, onClick: () -> Unit, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = 36.dp)
+            .clip(YuyuShapes.pill)
+            .background(Yuyu.canvas)
+            .border(1.dp, Yuyu.borderStrong, YuyuShapes.pill)
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(Icons.Rounded.History, contentDescription = null, tint = Yuyu.textMuted, modifier = Modifier.size(16.dp))
+        Text(text, style = YuyuType.label, color = Yuyu.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Rounded.Close,
+                contentDescription = stringResource(R.string.cd_delete_search_history_item),
+                tint = Yuyu.textMuted,
+                modifier = Modifier.size(14.dp)
+            )
         }
     }
 }
@@ -1134,36 +1040,10 @@ fun SearchFilterChip(
     playerViewModel: PlayerViewModel,
     modifier: Modifier = Modifier
 ) {
-    val selected = filterType == currentFilter
-
-    FilterChip(
-        selected = selected,
+    YuyuChip(
+        text = filterType.name.lowercase().replaceFirstChar { it.titlecase() },
+        selected = filterType == currentFilter,
         onClick = { playerViewModel.updateSearchFilter(filterType) },
-        label = { Text(filterType.name.lowercase().replaceFirstChar { it.titlecase() }) },
-        modifier = modifier,
-        shape = CircleShape,
-        border = BorderStroke(
-            width = 0.dp,
-            color = Color.Transparent
-        ),
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor =  MaterialTheme.colorScheme.secondaryContainer,
-            labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            selectedContainerColor = MaterialTheme.colorScheme.primary,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-            selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
-         leadingIcon = if (selected) {
-             {
-                 Icon(
-                     painter = painterResource(R.drawable.rounded_check_circle_24),
-                     contentDescription = "Selected",
-                     tint = MaterialTheme.colorScheme.onPrimary,
-                     modifier = Modifier.size(FilterChipDefaults.IconSize)
-                 )
-             }
-         } else {
-             null
-         }
+        modifier = modifier
     )
 }

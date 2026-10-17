@@ -292,6 +292,19 @@ fun AppNavigation(
                 }
             }
             composable(
+                Screen.SmartFeatures.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.smart.SmartSettingsScreen(
+                        onNavigationIconClick = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable(
                 Screen.DailyMixScreen.route,
                 enterTransition = { enterTransition() },
                 exitTransition = { exitTransition() },
@@ -616,6 +629,37 @@ fun AppNavigation(
                 ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
                     com.twilighty.lmusic.presentation.jellyfin.dashboard.JellyfinDashboardScreen(
                         onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable(
+                Screen.LibraryHealth.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.health.LibraryHealthScreen(
+                        playerViewModel = playerViewModel,
+                        onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding()
+                    )
+                }
+            }
+            composable(
+                route = Screen.Recap.route,
+                arguments = listOf(navArgument("period") { type = NavType.StringType }),
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) { backStackEntry ->
+                val period = backStackEntry.arguments?.getString("period").orEmpty()
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.recap.RecapScreen(
+                        period = com.twilighty.lmusic.presentation.recap.RecapPeriod.fromRoute(period),
+                        onClose = { navController.popBackStack() }
                     )
                 }
             }

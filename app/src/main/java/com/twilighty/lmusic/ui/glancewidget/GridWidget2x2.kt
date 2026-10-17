@@ -39,7 +39,7 @@ class GridWidget2x2 : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val playerInfo = currentState<PlayerInfo>()
-            GlanceTheme {
+            GlanceTheme(colors = YuyuGlanceColors) {
                 GridWidget2x2Content(playerInfo = playerInfo, context = context)
             }
         }
@@ -56,8 +56,8 @@ class GridWidget2x2 : GlanceAppWidget() {
 
         val colors = playerInfo.getWidgetColors()
 
-        val widgetCornerRadius = 28.dp
-        val itemCornerRadius = 16.dp
+        val widgetCornerRadius = 24.dp
+        val itemCornerRadius = 12.dp
 
         val size = LocalSize.current
         val minSide = min(size.width, size.height)
@@ -65,6 +65,7 @@ class GridWidget2x2 : GlanceAppWidget() {
         val dynamicIconSize = (minSide.value * 0.14f).dp
         val dynamicPlayIconSize = (minSide.value * 0.16f).dp
         val albumArtSize = (minSide.value * 0.40f).dp
+        val playCircleSize = (minSide.value * 0.36f).dp
 
         Box(
             modifier = GlanceModifier
@@ -101,17 +102,22 @@ class GridWidget2x2 : GlanceAppWidget() {
 
                         Spacer(GlanceModifier.width(6.dp))
 
-                        // Play/Pause Button
-                        PlayPauseButton(
+                        // Play/Pause: an Ember circle centred in its tile
+                        Box(
                             modifier = GlanceModifier
                                 .defaultWeight()
                                 .fillMaxHeight(),
-                            isPlaying = isPlaying,
-                            backgroundColor = colors.playPauseBackground,
-                            iconColor = colors.playPauseIcon,
-                            cornerRadius = itemCornerRadius,
-                            iconSize = dynamicPlayIconSize
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            PlayPauseButton(
+                                modifier = GlanceModifier.size(playCircleSize),
+                                isPlaying = isPlaying,
+                                backgroundColor = colors.playPauseBackground,
+                                iconColor = colors.playPauseIcon,
+                                cornerRadius = playCircleSize,
+                                iconSize = dynamicPlayIconSize
+                            )
+                        }
                     }
 
                     Spacer(GlanceModifier.height(6.dp))
