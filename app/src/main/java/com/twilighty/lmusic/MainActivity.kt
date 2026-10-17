@@ -173,6 +173,8 @@ class MainActivity : ComponentActivity() {
     lateinit var themePreferencesRepository: ThemePreferencesRepository
     @Inject
     lateinit var syncManager: SyncManager
+    @Inject
+    lateinit var lmusicHapticsEngine: com.twilighty.lmusic.presentation.haptics.LMusicHapticsEngine
     // For handling shortcut navigation - using StateFlow so composables can observe changes
     private val _pendingPlaylistNavigation = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     private val _pendingShuffleAll = kotlinx.coroutines.flow.MutableStateFlow(false)
@@ -743,9 +745,12 @@ class MainActivity : ComponentActivity() {
             userPreferencesRepository.clearDeprecatedPlayerSheetPreference()
         }
 
+        LaunchedEffect(rootView) { lmusicHapticsEngine.attachView(rootView) }
+
         CompositionLocalProvider(
             LocalAppHapticsConfig provides appHapticsConfig,
-            LocalHapticFeedback provides scopedHapticFeedback
+            LocalHapticFeedback provides scopedHapticFeedback,
+            com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics provides lmusicHapticsEngine
         ) {
             AppSidebarDrawer(
                 drawerState = drawerState,

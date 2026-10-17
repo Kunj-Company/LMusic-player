@@ -478,18 +478,10 @@ fun PlaylistDetailScreen(
                                         modifier = Modifier
                                             .draggableHandle(
                                                 onDragStarted = {
-                                                    performAppCompatHapticFeedback(
-                                                        view,
-                                                        appHapticsConfig,
-                                                        HapticFeedbackConstantsCompat.GESTURE_START
-                                                    )
+                                                    com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().dragLift()
                                                 },
                                                 onDragStopped = {
-                                                    performAppCompatHapticFeedback(
-                                                        view,
-                                                        appHapticsConfig,
-                                                        HapticFeedbackConstantsCompat.GESTURE_END
-                                                    )
+                                                    com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().dragDrop()
                                                 }
                                             )
                                             .size(40.dp),

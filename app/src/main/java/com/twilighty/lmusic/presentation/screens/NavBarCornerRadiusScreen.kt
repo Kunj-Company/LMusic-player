@@ -239,7 +239,7 @@ fun NavBarCornerRadiusContent(
                                 FilledTonalButton(
                                     onClick = {
                                         sliderValue = DEFAULT_NAV_BAR_CORNER_RADIUS.safeRadius()
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggleOff()
                                     },
                                     colors = ButtonDefaults.filledTonalButtonColors(
                                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -278,7 +278,7 @@ fun NavBarCornerRadiusContent(
                                     onValueChange = {
                                         if (sliderValue != it) {
                                             if (it.toInt() != sliderValue.toInt()) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                                             }
                                             sliderValue = it.safeRadius()
                                         }

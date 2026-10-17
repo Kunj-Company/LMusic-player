@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -56,7 +57,7 @@ data class RecapData(
     val skipCount: Int,
     val startedCount: Int,
     val skipRate: Float,
-    // TODO(lead): fill from the on-device smart layer (mood/genre classification) when it lands.
+    // Filled from the on-device smart layer when it is on and has analysed the songs played.
     val moods: Map<String, Float>? = null,
     val genres: List<String>? = null,
 ) {
@@ -79,6 +80,7 @@ class RecapViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val playbackStatsRepository: PlaybackStatsRepository,
     private val musicRepository: MusicRepository,
+    private val smartRepository: com.twilighty.lmusic.data.smart.SmartRepository,
 ) : ViewModel() {
 
     val period: RecapPeriod = RecapPeriod.fromRoute(savedStateHandle.get<String>("period"))
@@ -131,6 +133,14 @@ class RecapViewModel @Inject constructor(
             ?.maxByOrNull { it.value }
             ?.key
 
+        val smartOn = runCatching { smartRepository.isEnabled.first() }.getOrDefault(false)
+        val moods = if (smartOn) runCatching {
+            smartRepository.moodBreakdown(summary.songs.associate { it.songId to it.playCount })
+        }.getOrNull()?.takeIf { it.isNotEmpty() } else null
+        val genres = if (smartOn) runCatching {
+            smartRepository.insights(StatsTimeRange.CUSTOM).topGenres.map { it.first }
+        }.getOrNull()?.takeIf { it.isNotEmpty() } else null
+
         val topArtist = summary.topArtists.firstOrNull()
         val topArtistArt = topArtist?.let { artist ->
             summary.songs.firstOrNull { it.artist.contains(artist.artist, ignoreCase = true) && !it.albumArtUri.isNullOrBlank() }?.albumArtUri
@@ -158,6 +168,8 @@ class RecapViewModel @Inject constructor(
             skipCount = summary.skipCount,
             startedCount = summary.startedCount,
             skipRate = summary.skipRate,
+            moods = moods,
+            genres = genres,
         )
     }
 }

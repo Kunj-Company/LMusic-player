@@ -193,7 +193,7 @@ private fun AboutHero(versionName: String, onVersionLongPress: () -> Unit) {
                 .combinedClickable(
                     onClick = {},
                     onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().longPress()
                         onVersionLongPress()
                     }
                 )

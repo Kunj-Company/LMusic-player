@@ -146,8 +146,7 @@ fun SwitchSettingItem(
         leadingIcon: @Composable (() -> Unit)? = null,
         enabled: Boolean = true
 ) {
-    val view = LocalView.current
-    val appHapticsConfig = LocalAppHapticsConfig.current
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
 
     Surface(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -189,11 +188,7 @@ fun SwitchSettingItem(
                 checked = checked,
                 onCheckedChange = { newValue ->
                     if (enabled) {
-                        performAppCompatHapticFeedback(
-                            view,
-                            appHapticsConfig,
-                            HapticFeedbackConstantsCompat.GESTURE_START
-                        )
+                        haptics.toggle(newValue)
                         onCheckedChange(newValue)
                     }
                 },

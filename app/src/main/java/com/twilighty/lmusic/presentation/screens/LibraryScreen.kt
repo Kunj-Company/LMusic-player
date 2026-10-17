@@ -452,6 +452,7 @@ fun LibraryScreen(
     // La recolección de estados de alto nivel se mantiene mínima.
     val context = LocalContext.current // Added context
     val haptic = LocalHapticFeedback.current
+    val lmusicHaptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     val lastTabIndex by playerViewModel.lastLibraryTabIndexFlow.collectAsStateWithLifecycle()
     val favoriteIds by playerViewModel.favoriteSongIds.collectAsStateWithLifecycle() // Reintroducir favoriteIds aquí
     val scope = rememberCoroutineScope() // Mantener si se usa para acciones de UI
@@ -547,7 +548,7 @@ fun LibraryScreen(
     // Multi-selection callbacks
     val onSongLongPress: (Song) -> Unit = remember(multiSelectionState, haptic) {
         { song -> 
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            // The row itself plays the long-press haptic (EnhancedSongListItem).
             multiSelectionState.toggleSelection(song) 
         }
     }
@@ -571,7 +572,7 @@ fun LibraryScreen(
 
     val onAlbumLongPress: (Album) -> Unit = remember(toggleAlbumSelection, haptic) {
         { album -> 
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            lmusicHaptics.longPress()
             toggleAlbumSelection(album) 
         }
     }
@@ -598,7 +599,7 @@ fun LibraryScreen(
 
     val onPlaylistLongPress: (com.twilighty.lmusic.data.model.Playlist) -> Unit = remember(playlistMultiSelectionState, haptic) {
         { playlist ->
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            lmusicHaptics.longPress()
             // Only toggle selection, don't show sheet immediately (similar to songs multi-selection)
             playlistMultiSelectionState.toggleSelection(playlist)
             android.util.Log.d("PlaylistMultiSelect", "Toggled: ${playlist.name}, total selected: ${playlistMultiSelectionState.selectedPlaylists.value.size}")
@@ -623,6 +624,7 @@ fun LibraryScreen(
 
     val onRefresh: () -> Unit = remember(scope, syncManager) {
         {
+            lmusicHaptics.refreshTrigger()
             val currentRefreshGeneration = refreshGeneration + 1
             refreshGeneration = currentRefreshGeneration
             isMinDelayActive = true

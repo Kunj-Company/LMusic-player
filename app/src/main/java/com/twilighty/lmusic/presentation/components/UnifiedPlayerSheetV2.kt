@@ -447,7 +447,7 @@ fun UnifiedPlayerSheetV2(
         showQueueSheet = showQueueSheet,
         allowQueueSheetInteraction = allowQueueSheetInteraction,
         onTopEdgeReached = {
-            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().sheetSnap()
         }
     )
 
@@ -683,7 +683,8 @@ fun UnifiedPlayerSheetV2(
                             onQueueDragStart = sheetActionHandlers.beginQueueDrag,
                             onQueueDrag = sheetActionHandlers.dragQueueBy,
                             onQueueRelease = sheetActionHandlers.endQueueDrag,
-                            onShowCastClicked = castSheetState.openCastSheet
+                            onShowCastClicked = castSheetState.openCastSheet,
+                            onShowSongOptions = { song -> sheetActionHandlers.onSelectedSongForInfoChange(song) }
                         )
                     }
                 }

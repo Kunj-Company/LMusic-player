@@ -398,7 +398,10 @@ fun SongInfoBottomSheet(
                         contentDescription = stringResource(
                             if (isFavorite) R.string.cd_remove_from_favorites else R.string.cd_add_to_favorites
                         ),
-                        onClick = onToggleFavorite,
+                        onClick = {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().like(!isFavorite)
+                            onToggleFavorite()
+                        },
                         tint = if (isFavorite) Yuyu.accentText else Yuyu.text
                     )
                 }

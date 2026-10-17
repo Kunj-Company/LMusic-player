@@ -117,11 +117,7 @@ fun ReorderTabsSheet(
                 add(to.index, removeAt(from.index))
             }
             // Haptic feedback on reorder
-            performAppCompatHapticFeedback(
-                view,
-                appHapticsConfig,
-                HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-            )
+            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().dragSlot()
         },
         lazyListState = listState
     )
@@ -189,11 +185,7 @@ fun ReorderTabsSheet(
                             ReorderableItem(reorderableState, key = tab) { isDragging ->
                                 LaunchedEffect(isDragging) {
                                     if (isDragging) {
-                                        performAppCompatHapticFeedback(
-                                            view,
-                                            appHapticsConfig,
-                                            HapticFeedbackConstants.GESTURE_START
-                                        )
+                                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().dragLift()
                                     }
                                 }
 

@@ -144,6 +144,7 @@ fun YuyuButton(
 ) {
     val accentFill = accent ?: Yuyu.accent
     val accentOn = onAccent ?: Yuyu.onAccent
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     val (bg, fg, borderColor) = when {
         !enabled -> Triple(Yuyu.emphasis, Yuyu.textMuted, Color.Transparent)
         style == YuyuButtonStyle.Primary -> Triple(Yuyu.ink, Yuyu.onInk, Color.Transparent)
@@ -160,7 +161,7 @@ fun YuyuButton(
             .clip(YuyuShapes.pill)
             .background(bg)
             .then(if (borderColor != Color.Transparent) Modifier.border(if (style == YuyuButtonStyle.Danger) 1.5.dp else 1.dp, borderColor, YuyuShapes.pill) else Modifier)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = { haptics.tap(); onClick() })
             .padding(horizontal = if (style == YuyuButtonStyle.Quiet || style == YuyuButtonStyle.DangerQuiet) 8.dp else size.hPad),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
@@ -191,6 +192,7 @@ fun YuyuIconButton(
     tint: Color? = null,
     enabled: Boolean = true,
 ) {
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     val bg = when (style) {
         YuyuIconButtonStyle.Tonal -> Yuyu.muted
         YuyuIconButtonStyle.Filled -> Yuyu.ink
@@ -208,7 +210,7 @@ fun YuyuIconButton(
             .clip(CircleShape)
             .background(bg)
             .then(if (style == YuyuIconButtonStyle.Outline) Modifier.border(1.dp, Yuyu.borderStrong, CircleShape) else Modifier)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            .clickable(enabled = enabled, role = Role.Button, onClick = { haptics.tap(); onClick() }),
         contentAlignment = Alignment.Center
     ) {
         Icon(painter, contentDescription = contentDescription, tint = if (enabled) fg else Yuyu.textMuted, modifier = Modifier.size(iconSize))
@@ -244,13 +246,14 @@ fun YuyuChip(
 ) {
     val bg = if (selected) Yuyu.ink else Yuyu.canvas
     val fg = if (selected) Yuyu.onInk else Yuyu.text
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     Row(
         modifier = modifier
             .heightIn(min = 36.dp)
             .clip(YuyuShapes.pill)
             .background(bg)
             .then(if (!selected) Modifier.border(1.dp, Yuyu.borderStrong, YuyuShapes.pill) else Modifier)
-            .clickable(role = Role.Tab, onClick = onClick)
+            .clickable(role = Role.Tab, onClick = { haptics.selection(); onClick() })
             .padding(horizontal = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -562,9 +565,10 @@ fun YuyuSettingRow(
 
 @Composable
 fun YuyuSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     Switch(
         checked = checked,
-        onCheckedChange = onCheckedChange,
+        onCheckedChange = onCheckedChange?.let { callback -> { value: Boolean -> haptics.toggle(value); callback(value) } },
         modifier = modifier,
         enabled = enabled,
         colors = SwitchDefaults.colors(
@@ -582,6 +586,7 @@ fun YuyuSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier
 /** Pill segmented control (Light / Dark / System). */
 @Composable
 fun YuyuSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     Row(
         modifier = modifier.clip(YuyuShapes.pill).background(Yuyu.muted).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -592,7 +597,7 @@ fun YuyuSegmented(options: List<String>, selectedIndex: Int, onSelect: (Int) -> 
                 modifier = Modifier
                     .clip(YuyuShapes.pill)
                     .background(if (selected) Yuyu.canvas else Color.Transparent)
-                    .clickable(role = Role.Tab) { onSelect(index) }
+                    .clickable(role = Role.Tab) { if (index != selectedIndex) haptics.selection(); onSelect(index) }
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {

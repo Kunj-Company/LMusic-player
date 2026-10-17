@@ -444,6 +444,7 @@ fun QueueBottomSheet(
     }
 
     // --- REORDER STATE ---
+    val lmusicHapticsEngine = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     var lastMovedFrom by remember { mutableStateOf<Int?>(null) }
     var lastMovedTo by remember { mutableStateOf<Int?>(null) }
     var reorderHandleInUse by remember { mutableStateOf(false) }
@@ -466,6 +467,7 @@ fun QueueBottomSheet(
             val fromLocalIndex = mapKeyToLocalIndex(from.key, activeKeyToLocalIndex) ?: return@rememberReorderableLazyListState
             val toLocalIndex = mapKeyToLocalIndex(to.key, activeKeyToLocalIndex) ?: return@rememberReorderableLazyListState
             if (fromLocalIndex == toLocalIndex) return@rememberReorderableLazyListState
+            lmusicHapticsEngine.dragSlot()
 
             reorderPreviewOrder = currentOrder.toMutableList().apply {
                 add(toLocalIndex, removeAt(fromLocalIndex))
@@ -862,19 +864,11 @@ fun QueueBottomSheet(
                                                         onDragStarted = {
                                                             draggingSheetFromList = false
                                                             reorderHandleInUse = true
-                                                            performAppCompatHapticFeedback(
-                                                                view,
-                                                                appHapticsConfig,
-                                                                HapticFeedbackConstantsCompat.GESTURE_START
-                                                            )
+                                                            lmusicHapticsEngine.dragLift()
                                                         },
                                                         onDragStopped = {
                                                             reorderHandleInUse = false
-                                                            performAppCompatHapticFeedback(
-                                                                view,
-                                                                appHapticsConfig,
-                                                                HapticFeedbackConstantsCompat.GESTURE_END
-                                                            )
+                                                            lmusicHapticsEngine.dragDrop()
                                                         }
                                                     )
                                                     .size(40.dp)
@@ -999,7 +993,7 @@ private fun QueueToolbarMenuButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
 
     Surface(
         modifier = modifier
@@ -1010,7 +1004,7 @@ private fun QueueToolbarMenuButton(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
             ) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                haptic.tap()
                 onClick()
             },
         shape = RoundedCornerShape(18.dp),

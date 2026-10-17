@@ -689,7 +689,7 @@ private fun PaletteAccuracySlider(
                 if (nextValue == lastDispatchedValue) return@Slider
 
                 if (hapticsEnabled) {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                 }
                 lastDispatchedValue = nextValue
                 onValueChange(nextValue)

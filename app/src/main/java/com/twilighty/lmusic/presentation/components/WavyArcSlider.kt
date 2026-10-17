@@ -119,7 +119,7 @@ fun WavyArcSlider(
                             onValueChange(newValue)
                             val newInt = newValue.roundToInt()
                             if (forceHaptic || newInt != lastHapticValue) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().volumeStep()
                                 lastHapticValue = newInt
                             }
                         }

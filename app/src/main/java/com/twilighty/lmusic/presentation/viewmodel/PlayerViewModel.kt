@@ -628,6 +628,8 @@ class PlayerViewModel @Inject constructor(
     val activeTimerValueDisplay: StateFlow<String?> = sleepTimerStateHolder.activeTimerValueDisplay
     val activeTimerDurationMinutes: StateFlow<Int?> = sleepTimerStateHolder.activeTimerDurationMinutes
     val playCount: StateFlow<Float> = sleepTimerStateHolder.playCount
+    /** Wall-clock end time of a duration sleep timer, or null. */
+    val sleepTimerEndTimeMillis: StateFlow<Long?> = sleepTimerStateHolder.sleepTimerEndTimeMillis
 
     // Lyrics search UI state - managed by LyricsStateHolder
     val lyricsSearchUiState: StateFlow<LyricsSearchUiState> = lyricsStateHolder.searchUiState
@@ -4714,10 +4716,12 @@ class PlayerViewModel @Inject constructor(
 
             // No need for full library sync - file, MediaStore, and local DB are already updated
             // syncManager.sync() was removed to avoid unnecessary wait time
+            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
             _toastEvents.emit(context.getString(R.string.metadata_updated_successfully))
         } else {
             val errorMessage = result.getUserFriendlyErrorMessage()
             Log.e("PlayerViewModel", "METADATA_EDIT_VM: Failed - ${result.error}: $errorMessage")
+            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
             _toastEvents.emit(errorMessage)
         }
     }

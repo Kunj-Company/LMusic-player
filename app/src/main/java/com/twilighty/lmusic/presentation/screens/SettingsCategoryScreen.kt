@@ -896,13 +896,8 @@ fun SettingsCategoryScreen(
                                 title = stringResource(R.string.setcat_haptics),
                                 addBottomSpace = false
                             ) {
-                                SwitchSettingItem(
-                                    title = stringResource(R.string.setcat_haptic_feedback_title),
-                                    subtitle = stringResource(R.string.setcat_haptic_feedback_subtitle),
-                                    checked = uiState.hapticsEnabled,
-                                    onCheckedChange = { settingsViewModel.setHapticsEnabled(it) },
-                                    leadingIcon = { Icon(painterResource(R.drawable.rounded_touch_app_24), null, tint = MaterialTheme.colorScheme.secondary) }
-                                )
+                                // Off / Subtle / Full + seek ticks (Off also clears the legacy haptics switch).
+                                com.twilighty.lmusic.presentation.haptics.HapticsSettingsSection()
                             }
                         }
                         SettingsCategory.AI_INTEGRATION -> {

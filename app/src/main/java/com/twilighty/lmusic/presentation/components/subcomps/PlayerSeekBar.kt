@@ -103,7 +103,7 @@ fun PlayerSeekBar(
                 val quantized = (newFraction.coerceIn(0f, 1f) * 20f).toInt()
                 if (quantized != lastHapticStep[0]) {
                     lastHapticStep[0] = quantized
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().seekTick()
                 }
             },
             onValueChangeFinished = {

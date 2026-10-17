@@ -164,6 +164,9 @@ private fun PlayerInternalNavigationItemsRow(
                     val itemRoute = item.screen.route
                     val isSearchTab = itemRoute == Screen.Search.route
                     val isAlreadySelected = latestCurrentRoute == itemRoute
+                    if (!isAlreadySelected) {
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
+                    }
 
                     if (isSearchTab) {
                         val now = SystemClock.elapsedRealtime()

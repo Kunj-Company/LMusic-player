@@ -86,7 +86,12 @@ class YuyuHomeViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val playbackStatsRepository: PlaybackStatsRepository,
     preferences: YuyuHomePreferences,
+    private val smartRepository: com.twilighty.lmusic.data.smart.SmartRepository,
 ) : ViewModel() {
+
+    /** On-device smart mixes (empty while the experimental smart layer is off). */
+    private val _smartMixes = MutableStateFlow<List<MadeForYouMix>>(emptyList())
+    val smartMixes: StateFlow<List<MadeForYouMix>> = _smartMixes.asStateFlow()
 
     val showClassicSections: StateFlow<Boolean> = preferences.showClassicSections
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -131,6 +136,14 @@ class YuyuHomeViewModel @Inject constructor(
             }.onFailure { Timber.w(it, "Home: favourites failed") }
             runCatching { _forgottenFavourites.value = computeForgottenFavourites() }
                 .onFailure { Timber.w(it, "Home: forgotten favourites failed") }
+            runCatching {
+                val mixes = smartRepository.mixes()
+                _smartMixes.value = mixes.mapNotNull { mix ->
+                    val songs = smartRepository.songsFor(mix.songIds)
+                    if (songs.isEmpty()) null
+                    else MadeForYouMix(id = "smart_${mix.id}", title = mix.title, subtitle = mix.subtitle, songs = songs)
+                }
+            }.onFailure { Timber.w(it, "Home: smart mixes failed") }
         }
     }
 

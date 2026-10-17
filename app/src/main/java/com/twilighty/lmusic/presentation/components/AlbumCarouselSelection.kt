@@ -126,7 +126,7 @@ fun AlbumCarouselSection(
         lastSettledSongId = currentSong?.id
     }
 
-    val hapticFeedback = LocalHapticFeedback.current
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     // Carousel -> Player (cuando se detiene el scroll)
     LaunchedEffect(carouselState, currentSongIndex, queue) {
         snapshotFlow { carouselState.pagerState.isScrollInProgress }
@@ -139,13 +139,13 @@ fun AlbumCarouselSection(
                     return@collect
                 }
                 if (settled != currentSongIndex) {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptics.skip()
                     queue.getOrNull(settled)?.let(onSongSelected)
                 }
             }
     }
 
-    val corner = 18.dp//lerp(36.dp, 15.dp, expansionFraction.coerceIn(0f, 1f))
+    val corner = 20.dp // Yuyu r20 artwork
 
     BoxWithConstraints(modifier = modifier) {
         val availableWidth = this.maxWidth

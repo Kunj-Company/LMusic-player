@@ -82,7 +82,7 @@ fun BottomToggleRow(
                 activeContentColor = onActiveColorMain,
                 inactiveColor = inactiveColor,
                 inactiveContentColor = inactiveContentColor,
-                onClick = onShuffleToggle,
+                onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggle(!isShuffleEnabled); onShuffleToggle() },
                 iconId = R.drawable.rounded_shuffle_24,
                 contentDesc = "Shuffle"
             )
@@ -100,7 +100,12 @@ fun BottomToggleRow(
                 activeContentColor = onActiveColorSecondary,
                 inactiveColor = inactiveColor,
                 inactiveContentColor = inactiveContentColor,
-                onClick = onRepeatToggle,
+                onClick = {
+                    if (repeatMode == Player.REPEAT_MODE_OFF) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggleOn()
+                    else if (repeatMode == Player.REPEAT_MODE_ALL) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
+                    else com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggleOff()
+                    onRepeatToggle()
+                },
                 iconId = repeatIcon,
                 contentDesc = "Repeat"
             )
@@ -112,7 +117,7 @@ fun BottomToggleRow(
                 activeContentColor = onActiveColorTertiary,
                 inactiveColor = inactiveColor,
                 inactiveContentColor = inactiveContentColor,
-                onClick = onFavoriteToggle,
+                onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().like(!isFavorite); onFavoriteToggle() },
                 iconId = if (isFavorite) R.drawable.round_favorite_24 else R.drawable.rounded_favorite_24,
                 contentDesc = "Favorite"
             )

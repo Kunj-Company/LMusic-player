@@ -1446,7 +1446,7 @@ private fun ActiveDeviceHero(
                         }
                         if (quantized != lastStep) {
                             lastStep = quantized
-                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().volumeStep()
                         }
                         onVolumeChange(newValue)
                     },

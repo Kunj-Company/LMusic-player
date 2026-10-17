@@ -71,7 +71,7 @@ internal fun MiniPlayerContentInternal(
     onNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hapticFeedback = LocalHapticFeedback.current
+    val haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     val controlsEnabled = !isCastConnecting && !isPreparingPlayback
 
     val previousInteraction = remember { MutableInteractionSource() }
@@ -156,7 +156,7 @@ internal fun MiniPlayerContentInternal(
                     indication = miniPlayerIndication,
                     enabled = controlsEnabled
                 ) {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    haptics.skip()
                     onPrevious()
                 },
             contentAlignment = Alignment.Center
@@ -181,7 +181,7 @@ internal fun MiniPlayerContentInternal(
                     indication = miniPlayerIndication,
                     enabled = controlsEnabled
                 ) {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    haptics.playPause()
                     onPlayPause()
                 },
             contentAlignment = Alignment.Center
@@ -205,7 +205,10 @@ internal fun MiniPlayerContentInternal(
                     interactionSource = nextInteraction,
                     indication = miniPlayerIndication,
                     enabled = controlsEnabled
-                ) { onNext() },
+                ) {
+                    haptics.skip()
+                    onNext()
+                },
             contentAlignment = Alignment.Center
         ) {
             Icon(

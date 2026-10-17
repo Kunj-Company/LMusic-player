@@ -12,6 +12,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.animateColorAsState
+import com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics
+import com.twilighty.lmusic.presentation.haptics.LMusicHaptics
+import com.twilighty.lmusic.presentation.components.TimerOptionsBottomSheet
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -103,6 +107,7 @@ import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.derivedStateOf
@@ -224,7 +229,8 @@ fun FullPlayerContent(
     onShowCastClicked: () -> Unit,
     onShuffleToggle: () -> Unit,
     onRepeatToggle: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onFavoriteToggle: () -> Unit,
+    onShowSongOptions: (Song) -> Unit = {}
 ) {
     var retainedSong by remember { mutableStateOf(currentSong) }
     LaunchedEffect(currentSong?.id) {
@@ -237,6 +243,7 @@ fun FullPlayerContent(
     var showSongInfoBottomSheet by remember { mutableStateOf(false) }
     var showLyricsSheet by remember { mutableStateOf(false) }
     var showArtistPicker by rememberSaveable { mutableStateOf(false) }
+    var showSleepTimerSheet by remember { mutableStateOf(false) }
     
     val lyricsSearchUiState by playerViewModel.lyricsSearchUiState.collectAsStateWithLifecycle()
 
@@ -277,6 +284,7 @@ fun FullPlayerContent(
                         val validatedImport: ValidatedLyricsImport = when (validation) {
                             is LyricsImportValidationResult.Valid -> validation.value
                             is LyricsImportValidationResult.Invalid -> {
+                                LMusicHaptics.get().error()
                                 playerViewModel.sendToast(
                                     LyricsImportSecurity.messageFor(validation.reason)
                                 )
@@ -295,6 +303,7 @@ fun FullPlayerContent(
                         showLyricsSheet = true
                     } catch (e: Exception) {
                         Timber.e(e, "Error reading imported lyrics file")
+                        LMusicHaptics.get().error()
                         playerViewModel.sendToast("Error reading file.")
                     }
                 }
@@ -558,7 +567,14 @@ fun FullPlayerContent(
             isFavoriteProvider = isFavoriteProvider,
             onShuffleToggle = onShuffleToggle,
             onRepeatToggle = onRepeatToggle,
-            onFavoriteToggle = onFavoriteToggle
+            onFavoriteToggle = onFavoriteToggle,
+            sleepTimerSlot = { slotModifier ->
+                PlayerSleepTimerSegment(
+                    playerViewModel = playerViewModel,
+                    onClick = { showSleepTimerSheet = true },
+                    modifier = slotModifier
+                )
+            }
         )
     }
 
@@ -885,6 +901,22 @@ fun FullPlayerContent(
                                     tint = playerAccentColor
                                 )
                             }
+
+                            // Song options: the full song menu for the current song.
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(playerOnAccentColor.copy(alpha = 0.7f))
+                                    .clickable { onShowSongOptions(song) },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.rounded_more_vert_24),
+                                    contentDescription = "Song options",
+                                    tint = playerAccentColor
+                                )
+                            }
                         }
                     }
                 )
@@ -972,6 +1004,19 @@ fun FullPlayerContent(
         )
     }
 
+    if (showSleepTimerSheet) {
+        MaterialTheme(
+            colorScheme = LocalMaterialTheme.current,
+            typography = MaterialTheme.typography,
+            shapes = MaterialTheme.shapes
+        ) {
+            PlayerSleepTimerSheet(
+                playerViewModel = playerViewModel,
+                onDismiss = { showSleepTimerSheet = false }
+            )
+        }
+    }
+
     val artistPickerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     if (showArtistPicker && currentSongArtists.isNotEmpty()) {
         PlayerArtistPickerBottomSheet(
@@ -1025,11 +1070,21 @@ private fun FullPlayerAlbumCoverSection(
             .fillMaxWidth()
             .padding(vertical = 8.dp)
     ) {
+        // Artwork: about 72-75% of a phone's width, never more than 300dp, and never taller
+        // than the space available (landscape).
+        val heightCap = if (constraints.hasBoundedHeight) maxHeight - 16.dp else MAX_ART_SIZE
+        val artSize = minOf(maxWidth * 0.82f, MAX_ART_SIZE, heightCap).coerceAtLeast(120.dp)
         val carouselHeight = when (carouselStyle) {
-            CarouselStyle.NO_PEEK -> maxWidth
-            CarouselStyle.ONE_PEEK -> maxWidth * 0.8f
-            CarouselStyle.TWO_PEEK -> maxWidth * 0.6f
-            else -> maxWidth * 0.8f
+            CarouselStyle.NO_PEEK -> artSize
+            CarouselStyle.ONE_PEEK -> minOf(maxWidth * 0.8f, artSize)
+            CarouselStyle.TWO_PEEK -> minOf(maxWidth * 0.6f, artSize)
+            else -> minOf(maxWidth * 0.8f, artSize)
+        }
+        // A no-peek carousel shows one square page, so it is as wide as it is tall and centred.
+        val carouselWidthModifier = if (carouselStyle == CarouselStyle.NO_PEEK || currentPlaybackQueue.size <= 1) {
+            Modifier.width(carouselHeight)
+        } else {
+            Modifier.fillMaxWidth()
         }
 
         DelayedContent(
@@ -1056,18 +1111,21 @@ private fun FullPlayerAlbumCoverSection(
                             }
                     )
                 } else {
-                    AlbumPlaceholder(
-                        height = carouselHeight,
-                        color = placeholderColor,
-                        onColor = placeholderOnColor,
-                        modifier = Modifier.graphicsLayer {
-                            scaleX = albumArtScale
-                            scaleY = albumArtScale
-                        }
-                    )
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        AlbumPlaceholder(
+                            height = carouselHeight,
+                            color = placeholderColor,
+                            onColor = placeholderOnColor,
+                            modifier = carouselWidthModifier.graphicsLayer {
+                                scaleX = albumArtScale
+                                scaleY = albumArtScale
+                            }
+                        )
+                    }
                 }
             }
         ) {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             AlbumCarouselSection(
                 currentSong = song,
                 queue = currentPlaybackQueue,
@@ -1082,6 +1140,7 @@ private fun FullPlayerAlbumCoverSection(
                 onAlbumClick = onAlbumClick,
                 carouselStyle = carouselStyle,
                 modifier = Modifier
+                    .then(carouselWidthModifier)
                     .height(carouselHeight)
                     .graphicsLayer {
                         scaleX = albumArtScale
@@ -1089,6 +1148,7 @@ private fun FullPlayerAlbumCoverSection(
                     },
                 albumArtQuality = albumArtQuality
             )
+            }
         }
     }
 }
@@ -1113,11 +1173,9 @@ private fun FullPlayerControlsSection(
     isFavoriteProvider: () -> Boolean,
     onShuffleToggle: () -> Unit,
     onRepeatToggle: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onFavoriteToggle: () -> Unit,
+    sleepTimerSlot: @Composable (Modifier) -> Unit
 ) {
-    val stableControlAnimationSpec = remember {
-        tween<Float>(durationMillis = 240, easing = FastOutSlowInEasing)
-    }
     val shouldDelay = loadingTweaks.delayAll || loadingTweaks.delayControls
 
     DelayedContent(
@@ -1126,7 +1184,7 @@ private fun FullPlayerControlsSection(
         applyPlaceholderDelayOnClose = loadingTweaks.applyPlaceholdersOnClose,
         switchOnDragRelease = loadingTweaks.switchOnDragRelease,
         isSheetDragGestureActive = isSheetDragGestureActive,
-        sharedBoundsModifier = Modifier.fillMaxWidth().height(182.dp),
+        sharedBoundsModifier = Modifier.fillMaxWidth().height(CONTROLS_SECTION_HEIGHT),
         expansionFractionProvider = expansionFractionProvider,
         isExpandedOverride = currentSheetState == PlayerSheetState.EXPANDED,
         normalStartThreshold = 0.42f,
@@ -1134,7 +1192,7 @@ private fun FullPlayerControlsSection(
         delayCloseThreshold = 1f - (loadingTweaks.contentCloseThresholdPercent / 100f),
         placeholder = {
             if (loadingTweaks.transparentPlaceholders) {
-                Box(Modifier.fillMaxWidth().height(182.dp))
+                Box(Modifier.fillMaxWidth().height(CONTROLS_SECTION_HEIGHT))
             } else {
                 ControlsPlaceholder(placeholderColor, placeholderOnColor)
             }
@@ -1143,24 +1201,20 @@ private fun FullPlayerControlsSection(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            AnimatedPlaybackControls(
+            // Compact transport: 48dp prev / next, 64dp play-pause.
+            CompactPlaybackControls(
                 modifier = Modifier
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 isPlayingProvider = isPlayingProvider,
                 onPrevious = onPrevious,
                 onPlayPause = onPlayPause,
                 onNext = onNext,
-                height = 80.dp,
-                pressAnimationSpec = stableControlAnimationSpec,
-                releaseDelay = 220L,
-                colorOtherButtons = transportSkipColors.container,
+                playSize = 64.dp,
+                skipSize = 48.dp,
                 colorPlayPause = transportPlayPauseColors.container,
                 tintPlayPauseIcon = transportPlayPauseColors.content,
-                tintOtherIcons = transportSkipColors.content,
-                colorPreviousButton = transportSkipColors.container,
-                colorNextButton = transportSkipColors.container,
-                tintPreviousIcon = transportSkipColors.content,
-                tintNextIcon = transportSkipColors.content
+                colorSkip = transportSkipColors.container,
+                tintSkipIcon = transportSkipColors.content
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1168,9 +1222,9 @@ private fun FullPlayerControlsSection(
             BottomToggleRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 66.dp, max = 86.dp)
-                    .padding(horizontal = 26.dp, vertical = 0.dp)
-                    .padding(bottom = 6.dp),
+                    .height(TOGGLE_ROW_HEIGHT)
+                    .padding(horizontal = 26.dp, vertical = 0.dp),
+                sleepTimerSlot = sleepTimerSlot,
                 isShuffleEnabled = isShuffleEnabledProvider(),
                 isShuffleTransitionInProgress = shuffleTransitionInProgress,
                 repeatMode = repeatModeProvider(),
@@ -1816,7 +1870,8 @@ private fun PlayerProgressBarSection(
                     inactiveTrackColor = inactiveTrackColor,
                     interactionSource = interactionSource,
                     isPlaying = shouldAnimateWavyProgress,
-                    trackEdgePadding = progressSectionHorizontalInset
+                    trackEdgePadding = progressSectionHorizontalInset,
+                    durationMs = durationForCalc
                 )
             }
 
@@ -1843,27 +1898,52 @@ private fun EfficientSlider(
     inactiveTrackColor: Color,
     interactionSource: MutableInteractionSource,
     isPlaying: Boolean,
-    trackEdgePadding: Dp
+    trackEdgePadding: Dp,
+    durationMs: Long
 ) {
-    val haptics = LocalHapticFeedback.current
+    val haptics = LocalLMusicHaptics.current
     val currentOnValueChange = rememberUpdatedState(onValueChange)
-    val currentHaptics = rememberUpdatedState(haptics)
-    val lastHapticStep = remember { intArrayOf(-1) }
-    val onValueChangeWithHaptics = remember {
+    val currentOnValueChangeFinished = rememberUpdatedState(onValueChangeFinished)
+    val currentDuration = rememberUpdatedState(durationMs)
+    // [0] = last 10-second bucket, [1] = scrubbing (0/1), [2] = edge state (-1 start, 1 end, 0 none)
+    val scrubState = remember { intArrayOf(-1, 0, 0) }
+    val onValueChangeWithHaptics = remember(haptics) {
         { newValue: Float ->
-            val quantized = (newValue.coerceIn(0f, 1f) * 20f).toInt()
-            if (quantized != lastHapticStep[0]) {
-                lastHapticStep[0] = quantized
-                currentHaptics.value.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            val clamped = newValue.coerceIn(0f, 1f)
+            if (scrubState[1] == 0) {
+                scrubState[1] = 1
+                haptics.scrubStart()
             }
+            val bucket = ((clamped * currentDuration.value) / SEEK_TICK_INTERVAL_MS).toInt()
+            val edge = when {
+                clamped <= 0.001f -> -1
+                clamped >= 0.999f -> 1
+                else -> 0
+            }
+            if (edge != 0 && edge != scrubState[2]) {
+                haptics.seekEdge()
+            } else if (scrubState[0] != -1 && bucket != scrubState[0] && edge == 0) {
+                haptics.seekTick()
+            }
+            scrubState[0] = bucket
+            scrubState[2] = edge
             currentOnValueChange.value(newValue)
+        }
+    }
+    val onValueChangeFinishedWithHaptics = remember(haptics) {
+        {
+            if (scrubState[1] == 1) haptics.scrubEnd()
+            scrubState[0] = -1
+            scrubState[1] = 0
+            scrubState[2] = 0
+            currentOnValueChangeFinished.value()
         }
     }
 
     WavySliderExpressive(
         value = valueState.value,
         onValueChange = onValueChangeWithHaptics,
-        onValueChangeFinished = onValueChangeFinished,
+        onValueChangeFinished = onValueChangeFinishedWithHaptics,
         interactionSource = interactionSource,
         activeTrackColor = activeTrackColor,
         inactiveTrackColor = inactiveTrackColor,
@@ -2233,7 +2313,7 @@ private fun AlbumPlaceholder(
         modifier = modifier
             .fillMaxWidth()
             .height(height),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(20.dp),
         color = color,
         tonalElevation = 0.dp
     ) {
@@ -2426,24 +2506,20 @@ private fun ControlsPlaceholder(color: Color, onColor: Color) {
             modifier = Modifier
                 .padding(horizontal = 12.dp, vertical = 8.dp)
                 .fillMaxWidth()
-                .height(80.dp)
+                .height(64.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(28.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 PlaceholderBox(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
+                    modifier = Modifier.size(48.dp),
                     cornerRadius = 60.dp,
                     color = onColor
                 )
                 Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
+                    modifier = Modifier.size(64.dp),
                     shape = AbsoluteSmoothCornerShape(
                         cornerRadiusTL = rowCorners,
                         smoothnessAsPercentTR = 60,
@@ -2458,9 +2534,7 @@ private fun ControlsPlaceholder(color: Color, onColor: Color) {
                     tonalElevation = 0.dp
                 ) {}
                 PlaceholderBox(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
+                    modifier = Modifier.size(48.dp),
                     cornerRadius = 60.dp,
                     color = onColor
                 )
@@ -2472,9 +2546,8 @@ private fun ControlsPlaceholder(color: Color, onColor: Color) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 66.dp, max = 86.dp)
+                .height(TOGGLE_ROW_HEIGHT)
                 .padding(horizontal = 26.dp)
-                .padding(bottom = 6.dp)
                 .background(
                     color = onColor.copy(alpha = 0.1f),
                     shape = RoundedCornerShape(rowCorners)
@@ -2488,7 +2561,7 @@ private fun ControlsPlaceholder(color: Color, onColor: Color) {
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                repeat(3) {
+                repeat(4) {
                     PlaceholderBox(
                         modifier = Modifier
                             .weight(1f)
@@ -2521,6 +2594,11 @@ private fun expressiveSkipButtonColors(colorScheme: ColorScheme): TransportButto
     )
 }
 
+private val CONTROLS_SECTION_HEIGHT = 156.dp
+private val MAX_ART_SIZE = 300.dp
+private const val SEEK_TICK_INTERVAL_MS = 10_000L
+private val TOGGLE_ROW_HEIGHT = 58.dp
+
 @Composable
 private fun BottomToggleRow(
     modifier: Modifier,
@@ -2530,45 +2608,36 @@ private fun BottomToggleRow(
     isFavoriteProvider: () -> Boolean,
     onShuffleToggle: () -> Unit,
     onRepeatToggle: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onFavoriteToggle: () -> Unit,
+    sleepTimerSlot: @Composable (Modifier) -> Unit
 ) {
     val isFavorite = isFavoriteProvider()
+    val haptics = LocalLMusicHaptics.current
     val rowCorners = 60.dp
     val inactiveBg = LocalMaterialTheme.current.onSurface.copy(alpha = 0.07f)
     val inactiveContentColor = LocalMaterialTheme.current.onSurface
-
+    val rowShape = AbsoluteSmoothCornerShape(
+        cornerRadiusBL = rowCorners,
+        smoothnessAsPercentTR = 60,
+        cornerRadiusBR = rowCorners,
+        smoothnessAsPercentBL = 60,
+        cornerRadiusTL = rowCorners,
+        smoothnessAsPercentBR = 60,
+        cornerRadiusTR = rowCorners,
+        smoothnessAsPercentTL = 60
+    )
 
     Box(
         modifier = modifier.background(
             color = LocalMaterialTheme.current.surfaceContainerLowest.copy(alpha = 0.7f),
-            shape = AbsoluteSmoothCornerShape(
-                cornerRadiusBL = rowCorners,
-                smoothnessAsPercentTR = 60,
-                cornerRadiusBR = rowCorners,
-                smoothnessAsPercentBL = 60,
-                cornerRadiusTL = rowCorners,
-                smoothnessAsPercentBR = 60,
-                cornerRadiusTR = rowCorners,
-                smoothnessAsPercentTL = 60
-            )
+            shape = rowShape
         )
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .padding(6.dp)
-                .clip(
-                    AbsoluteSmoothCornerShape(
-                        cornerRadiusBL = rowCorners,
-                        smoothnessAsPercentTR = 60,
-                        cornerRadiusBR = rowCorners,
-                        smoothnessAsPercentBL = 60,
-                        cornerRadiusTL = rowCorners,
-                        smoothnessAsPercentBR = 60,
-                        cornerRadiusTR = rowCorners,
-                        smoothnessAsPercentTL = 60
-                    )
-                )
+                .clip(rowShape)
                 .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -2584,9 +2653,12 @@ private fun BottomToggleRow(
                 activeContentColor = LocalMaterialTheme.current.onPrimaryFixed,
                 inactiveColor = inactiveBg,
                 inactiveContentColor = inactiveContentColor,
-                onClick = onShuffleToggle,
+                onClick = {
+                    haptics.toggle(!isShuffleEnabled)
+                    onShuffleToggle()
+                },
                 iconId = R.drawable.rounded_shuffle_24,
-                contentDesc = "Aleatorio"
+                contentDesc = "Shuffle"
             )
             val repeatActive = repeatMode != Player.REPEAT_MODE_OFF
             val repeatIcon = when (repeatMode) {
@@ -2602,9 +2674,17 @@ private fun BottomToggleRow(
                 activeContentColor = LocalMaterialTheme.current.onSecondaryFixed,
                 inactiveColor = inactiveBg,
                 inactiveContentColor = inactiveContentColor,
-                onClick = onRepeatToggle,
+                onClick = {
+                    // Off -> all -> one -> off
+                    when (repeatMode) {
+                        Player.REPEAT_MODE_OFF -> haptics.toggleOn()
+                        Player.REPEAT_MODE_ALL -> haptics.selection()
+                        else -> haptics.toggleOff()
+                    }
+                    onRepeatToggle()
+                },
                 iconId = repeatIcon,
-                contentDesc = "Repetir"
+                contentDesc = "Repeat"
             )
             ToggleSegmentButton(
                 modifier = commonModifier,
@@ -2614,10 +2694,139 @@ private fun BottomToggleRow(
                 activeContentColor = LocalMaterialTheme.current.onTertiaryFixed,
                 inactiveColor = inactiveBg,
                 inactiveContentColor = inactiveContentColor,
-                onClick = onFavoriteToggle,
+                onClick = {
+                    haptics.like(!isFavorite)
+                    onFavoriteToggle()
+                },
                 iconId = if (isFavorite) R.drawable.round_favorite_24 else R.drawable.rounded_favorite_24,
-                contentDesc = "Favorito"
+                contentDesc = "Favourite"
             )
+            sleepTimerSlot(commonModifier)
         }
     }
+}
+
+/**
+ * Sleep timer segment for the now playing toggle row. Shows the moon icon; when a timer is
+ * running it takes the accent fill and a small "24m" / "End" / "×3" label.
+ * Only this small composable observes the timer flows.
+ */
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+private fun PlayerSleepTimerSegment(
+    playerViewModel: PlayerViewModel,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val haptics = LocalLMusicHaptics.current
+    val timerDisplay by playerViewModel.activeTimerValueDisplay.collectAsStateWithLifecycle()
+    val endTimeMillis by playerViewModel.sleepTimerEndTimeMillis.collectAsStateWithLifecycle()
+    val isEndOfTrack by playerViewModel.isEndOfTrackTimerActive.collectAsStateWithLifecycle()
+    val playCount by playerViewModel.playCount.collectAsStateWithLifecycle()
+    val isCounterActive = playCount > 1f
+    val isActive = timerDisplay != null || isCounterActive
+
+    // Remaining minutes: recomputed once per minute only while a duration timer is running
+    // and this segment is on screen.
+    var remainingMinutes by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(endTimeMillis) {
+        val end = endTimeMillis
+        if (end == null) {
+            remainingMinutes = null
+            return@LaunchedEffect
+        }
+        while (true) {
+            val remainingMs = end - System.currentTimeMillis()
+            if (remainingMs <= 0L) {
+                remainingMinutes = null
+                break
+            }
+            remainingMinutes = (remainingMs + 59_999L) / 60_000L
+            kotlinx.coroutines.delay((remainingMs % 60_000L).coerceAtLeast(1_000L))
+        }
+    }
+
+    val label: String? = when {
+        isEndOfTrack -> "End"
+        remainingMinutes != null -> "${remainingMinutes}m"
+        isCounterActive -> "×${playCount.toInt()}"
+        else -> null
+    }
+
+    val activeColor = LocalMaterialTheme.current.tertiary
+    val activeContentColor = LocalMaterialTheme.current.onTertiary
+    val inactiveBg = LocalMaterialTheme.current.onSurface.copy(alpha = 0.07f)
+    val inactiveContentColor = LocalMaterialTheme.current.onSurface
+    val bgColor by animateColorAsState(
+        targetValue = if (isActive) activeColor else inactiveBg,
+        animationSpec = tween(durationMillis = 250),
+        label = "sleepSegmentBg"
+    )
+    val corner by animateDpAsState(
+        targetValue = if (isActive) 60.dp else 8.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "sleepSegmentCorner"
+    )
+    val contentColor = if (isActive) activeContentColor else inactiveContentColor
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(corner))
+            .background(bgColor)
+            .clickable {
+                haptics.selection()
+                onClick()
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Rounded.Bedtime,
+                contentDescription = if (isActive) "Sleep timer on" else "Sleep timer",
+                tint = contentColor,
+                modifier = Modifier.size(if (label != null) 18.dp else 22.dp)
+            )
+            if (label != null) {
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = label,
+                    color = contentColor,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** The existing sleep timer sheet, wired to the player view model. */
+@androidx.annotation.OptIn(UnstableApi::class)
+@Composable
+private fun PlayerSleepTimerSheet(
+    playerViewModel: PlayerViewModel,
+    onDismiss: () -> Unit
+) {
+    val timerDisplay by playerViewModel.activeTimerValueDisplay.collectAsStateWithLifecycle()
+    val durationMinutes by playerViewModel.activeTimerDurationMinutes.collectAsStateWithLifecycle()
+    val playCount by playerViewModel.playCount.collectAsStateWithLifecycle()
+    val isEndOfTrack by playerViewModel.isEndOfTrackTimerActive.collectAsStateWithLifecycle()
+
+    TimerOptionsBottomSheet(
+        onPlayCounter = playerViewModel::playCounted,
+        activeTimerValueDisplay = timerDisplay,
+        activeTimerDurationMinutes = durationMinutes,
+        playCount = playCount,
+        isEndOfTrackTimerActive = isEndOfTrack,
+        onDismiss = onDismiss,
+        onCancelCountedPlay = playerViewModel::cancelCountedPlay,
+        onSetPredefinedTimer = { minutes -> playerViewModel.setSleepTimer(minutes) },
+        onSetEndOfTrackTimer = { enable -> playerViewModel.setEndOfTrackTimer(enable) },
+        onOpenCustomTimePicker = {},
+        onCancelTimer = { playerViewModel.cancelSleepTimer() }
+    )
 }

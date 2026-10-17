@@ -70,7 +70,7 @@ internal class MiniPlayerDismissGestureHandler(
             }
 
             MiniDismissDragPhase.SNAPPING -> {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().swipeThreshold()
                 offsetJob?.cancel()
                 offsetJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                     offsetAnimatable.animateTo(

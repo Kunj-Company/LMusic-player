@@ -103,6 +103,7 @@ fun EnhancedSongListItem(
     onMoreOptionsClick: (Song) -> Unit,
     onClick: () -> Unit
 ) {
+    val rowHaptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     val albumArtTargetSizePx = with(LocalDensity.current) { albumArtSize.roundToPx() }
     val isHighlighted = isCurrentSong && !isLoading
     val transition = updateTransition(
@@ -265,6 +266,7 @@ fun EnhancedSongListItem(
                         onTap = { 
                             if (isSelectionMode) {
                                 // In selection mode, tap toggles selection
+                                rowHaptics.selection()
                                 onLongPress()
                             } else {
                                 onClick() 
@@ -272,6 +274,7 @@ fun EnhancedSongListItem(
                         },
                         onLongPress = { 
                             // Long press always activates/toggles selection
+                            rowHaptics.longPress()
                             onLongPress()
                         },
                         onPress = {

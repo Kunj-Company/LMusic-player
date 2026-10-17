@@ -3,10 +3,10 @@ package com.twilighty.lmusic.utils
 import com.twilighty.lmusic.data.library.MusicFolderPaths
 import com.twilighty.lmusic.data.model.Song
 import com.twilighty.lmusic.data.update.VersionComparator
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import kotlin.random.Random
 
 class SmartShuffleTest {
@@ -43,7 +43,7 @@ class SmartShuffleTest {
         repeat(20) { seed ->
             val result = SmartShuffle.order(songs, emptySet(), songs[0], Random(seed))
             result.zipWithNext().forEach { (a, b) ->
-                assertFalse("Seed $seed placed ${a.artist} twice in a row", a.artist == b.artist)
+                assertFalse(a.artist == b.artist, "Seed $seed placed ${a.artist} twice in a row")
             }
         }
     }

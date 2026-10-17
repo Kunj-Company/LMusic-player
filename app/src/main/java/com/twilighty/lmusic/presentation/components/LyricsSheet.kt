@@ -546,7 +546,7 @@ fun LyricsSheet(
                         
                         if (committed) {
                             if (dragOffset > 0) onPrev() else onNext()
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().skip()
                         }
 
                         coroutineScope.launch {
@@ -846,7 +846,7 @@ fun LyricsSheet(
                             .clip(RoundedCornerShape(playPauseCornerRadius))
                             .background(playPauseColor)
                             .clickable {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().playPause()
                                 onPlayPause()
                             },
                         contentAlignment = Alignment.Center

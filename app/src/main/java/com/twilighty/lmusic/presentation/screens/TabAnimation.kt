@@ -116,7 +116,7 @@ fun TabAnimation(
         selected = isSelected,
         text = content,
         onClick = {
-            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (!isSelected) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
             onClick()
         },
         selectedContentColor = contentColor,

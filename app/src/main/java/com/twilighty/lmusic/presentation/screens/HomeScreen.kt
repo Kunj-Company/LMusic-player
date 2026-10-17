@@ -264,6 +264,7 @@ fun HomeScreen(
     val showClassicSections by yuyuHomeViewModel.showClassicSections.collectAsStateWithLifecycle()
     val recentlyAddedSongs by yuyuHomeViewModel.recentlyAdded.collectAsStateWithLifecycle()
     val favouriteSongs by yuyuHomeViewModel.favourites.collectAsStateWithLifecycle()
+    val smartMixes by yuyuHomeViewModel.smartMixes.collectAsStateWithLifecycle()
     val forgottenFavourites by yuyuHomeViewModel.forgottenFavourites.collectAsStateWithLifecycle()
     val topArtists by yuyuHomeViewModel.topArtists.collectAsStateWithLifecycle()
     DisposableEffect(lifecycleOwner, yuyuHomeViewModel) {
@@ -287,7 +288,6 @@ fun HomeScreen(
             if (forgottenFavourites.isNotEmpty()) add(
                 MadeForYouMix("forgotten", "Forgotten favourites", "Not played in a month", forgottenFavourites)
             )
-            // TODO: AI mixes appended here.
         }
     }
 
@@ -506,11 +506,11 @@ fun HomeScreen(
                     }
                 }
 
-                if (madeForYouMixes.isNotEmpty()) {
+                if (madeForYouMixes.isNotEmpty() || smartMixes.isNotEmpty()) {
                     item(key = "made_for_you", contentType = "made_for_you") {
                         YuyuMadeForYouRow(
-                            mixes = madeForYouMixes,
-                            // TODO: AI mixes appended here (e.g. extraMixes = aiMixes).
+                            // On-device smart mixes lead the row when the smart layer is on.
+                            mixes = smartMixes + madeForYouMixes,
                             extraMixes = emptyList(),
                             onMixClick = { mix ->
                                 mix.songs.firstOrNull()?.let { first ->

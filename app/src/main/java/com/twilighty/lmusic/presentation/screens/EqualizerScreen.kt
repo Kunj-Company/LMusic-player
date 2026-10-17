@@ -1021,7 +1021,7 @@ private fun CustomVerticalSlider(
 
                         val newInt = newValue.roundToInt()
                         if (forceHaptic || newInt != lastHapticValue) {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().volumeStep()
                             lastHapticValue = newInt
                         }
                     }
@@ -1509,7 +1509,7 @@ private fun VolumeControlCard(
                             val currentPercent = (newValue * 100).roundToInt()
                             val lastPercent = (lastHapticValue * 100).roundToInt()
                             if (currentPercent / 5 != lastPercent / 5) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().volumeStep()
                                 lastHapticValue = newValue
                             }
                             onVolumeChange(newValue)
@@ -1729,7 +1729,7 @@ private fun HybridHorizontalSlider(
                 onValueChange = { 
                     val intVal = it.roundToInt()
                     if (intVal != lastHapticValue) {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                         lastHapticValue = intVal
                     }
                     onLevelChanged(intVal) 

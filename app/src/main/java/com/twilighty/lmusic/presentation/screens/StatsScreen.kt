@@ -222,10 +222,12 @@ fun StatsScreen(
     var hasPendingPullRefresh by remember { mutableStateOf(false) }
     val isRefreshingFromViewModel by rememberUpdatedState(uiState.isRefreshing)
 
+    val pullRefreshHaptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current
     val onPullRefresh: () -> Unit = {
         if (hasPendingPullRefresh || uiState.isLoading) {
             Unit
         } else {
+            pullRefreshHaptics.refreshTrigger()
             hasPendingPullRefresh = true
             isPullRefreshAnimating = true
             isPullRefreshMinDelayActive = true

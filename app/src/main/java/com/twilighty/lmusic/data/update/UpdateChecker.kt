@@ -117,7 +117,7 @@ object UpdateNotifier {
         )
         val text = release.notesFirstLine.ifBlank { "Tap to see what's new." }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.monochrome_player)
+            .setSmallIcon(R.drawable.ic_stat_lmusic)
             .setContentTitle("LMusic ${release.version} is available")
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

@@ -43,6 +43,7 @@ class SleepTimerStateHolder @Inject constructor(
 ) {
     // Timer State
     private val _sleepTimerEndTimeMillis = MutableStateFlow<Long?>(null)
+    val sleepTimerEndTimeMillis: StateFlow<Long?> = _sleepTimerEndTimeMillis.asStateFlow()
 
     private val _isEndOfTrackTimerActive = MutableStateFlow(value = false)
     val isEndOfTrackTimerActive: StateFlow<Boolean> = _isEndOfTrackTimerActive.asStateFlow()

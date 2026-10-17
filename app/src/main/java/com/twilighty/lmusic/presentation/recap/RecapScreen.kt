@@ -146,7 +146,7 @@ private fun EmptyRecap(period: RecapPeriod, onClose: () -> Unit, failed: Boolean
     }
 }
 
-private enum class RecapPage { TIME, PLAYS, TOP_SONG, TOP_SONGS, TOP_ARTIST, TOP_ALBUM, RHYTHM, STREAK, DISCOVERY, SKIPS, SUMMARY }
+private enum class RecapPage { TIME, PLAYS, TOP_SONG, TOP_SONGS, TOP_ARTIST, TOP_ALBUM, RHYTHM, MOODS, STREAK, DISCOVERY, SKIPS, SUMMARY }
 
 private fun pagesFor(data: RecapData): List<RecapPage> = buildList {
     add(RecapPage.TIME)
@@ -158,6 +158,7 @@ private fun pagesFor(data: RecapData): List<RecapPage> = buildList {
     if (data.topArtists.isNotEmpty()) add(RecapPage.TOP_ARTIST)
     if (data.topAlbum != null) add(RecapPage.TOP_ALBUM)
     if (data.busiestDay != null || data.peakHour != null) add(RecapPage.RHYTHM)
+    if (!data.moods.isNullOrEmpty()) add(RecapPage.MOODS)
     add(RecapPage.STREAK)
     add(RecapPage.DISCOVERY)
     if (data.startedCount > 0) add(RecapPage.SKIPS)
@@ -263,6 +264,7 @@ private fun colorsFor(page: RecapPage): CardColors = when (page) {
     RecapPage.TOP_SONGS, RecapPage.SKIPS -> CardColors(Yuyu.tintPeach, Yuyu.text, Yuyu.textMuted)
     RecapPage.TOP_ARTIST, RecapPage.DISCOVERY -> CardColors(Yuyu.tintMint, Yuyu.text, Yuyu.textMuted)
     RecapPage.RHYTHM -> CardColors(Yuyu.muted, Yuyu.text, Yuyu.textMuted)
+    RecapPage.MOODS -> CardColors(Yuyu.tintLavender, Yuyu.text, Yuyu.textMuted)
 }
 
 @Composable
@@ -286,6 +288,7 @@ private fun RecapCard(page: RecapPage, data: RecapData) {
                 RecapPage.TOP_ARTIST -> TopArtistCard(data, colors)
                 RecapPage.TOP_ALBUM -> TopAlbumCard(data, colors)
                 RecapPage.RHYTHM -> RhythmCard(data, colors)
+                RecapPage.MOODS -> MoodsCard(data, colors)
                 RecapPage.STREAK -> StreakCard(data, colors)
                 RecapPage.DISCOVERY -> DiscoveryCard(data, colors)
                 RecapPage.SKIPS -> SkipsCard(data, colors)
@@ -491,6 +494,28 @@ private fun ColumnScope.DiscoveryCard(data: RecapData, colors: CardColors) {
     Spacer(Modifier.height(20.dp))
     BigNumber(data.newArtistCount.toString(), colors.text, 48)
     Body(stringResource(R.string.recap_new_artists), colors.muted)
+}
+
+@Composable
+private fun ColumnScope.MoodsCard(data: RecapData, colors: CardColors) {
+    val moods = data.moods.orEmpty().entries.sortedByDescending { it.value }.take(5)
+    Kicker("Your moods", colors.text)
+    Spacer(Modifier.weight(1f))
+    moods.firstOrNull()?.let { top ->
+        BigNumber(top.key, colors.text, 56)
+        Body("${(top.value * 100).roundToInt()}% of your listening", colors.muted)
+    }
+    Spacer(Modifier.height(20.dp))
+    moods.drop(1).forEach { (mood, share) ->
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+            Text(mood, style = YuyuType.title, color = colors.text, modifier = Modifier.weight(1f))
+            Text("${(share * 100).roundToInt()}%", style = YuyuType.title, color = colors.muted)
+        }
+    }
+    data.genres?.takeIf { it.isNotEmpty() }?.let { genres ->
+        Spacer(Modifier.height(16.dp))
+        Body("Sounds like: " + genres.take(3).joinToString(", "), colors.muted)
+    }
 }
 
 @Composable

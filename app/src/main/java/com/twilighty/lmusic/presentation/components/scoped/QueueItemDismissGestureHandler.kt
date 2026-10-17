@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Density
 import androidx.core.view.HapticFeedbackConstantsCompat
 import com.twilighty.lmusic.presentation.utils.AppHapticsConfig
 import com.twilighty.lmusic.presentation.utils.performAppCompatHapticFeedback
+import com.twilighty.lmusic.presentation.haptics.LMusicHaptics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -92,11 +93,7 @@ internal class QueueItemDismissGestureHandler(
             }
 
             QueueDismissDragPhase.SNAPPING -> {
-                performAppCompatHapticFeedback(
-                    hapticView,
-                    appHapticsConfig,
-                    HapticFeedbackConstantsCompat.GESTURE_THRESHOLD_ACTIVATE
-                )
+                LMusicHaptics.get().selection()
                 scope.launch {
                     offsetAnimatable.animateTo(
                         targetValue = accumulatedDragX,
@@ -114,12 +111,7 @@ internal class QueueItemDismissGestureHandler(
                 val nowInZone = abs(accumulatedDragX) > dismissThreshold
                 if (nowInZone != isInDismissZone) {
                     isInDismissZone = nowInZone
-                    performAppCompatHapticFeedback(
-                        hapticView,
-                        appHapticsConfig,
-                        if (nowInZone) HapticFeedbackConstantsCompat.GESTURE_THRESHOLD_ACTIVATE
-                        else HapticFeedbackConstantsCompat.GESTURE_THRESHOLD_DEACTIVATE
-                    )
+                    if (nowInZone) LMusicHaptics.get().swipeThreshold() else LMusicHaptics.get().toggleOff()
                 }
                 scope.launch {
                     offsetAnimatable.animateTo(
@@ -144,11 +136,7 @@ internal class QueueItemDismissGestureHandler(
         if (abs(accumulatedDragX) > dismissThreshold) {
             // Dismiss: animate off-screen to the left
             isDismissing = true
-            performAppCompatHapticFeedback(
-                hapticView,
-                appHapticsConfig,
-                HapticFeedbackConstantsCompat.GESTURE_END
-            )
+            LMusicHaptics.get().dragDrop()
             scope.launch {
                 offsetAnimatable.animateTo(
                     targetValue = -itemWidthPx,
