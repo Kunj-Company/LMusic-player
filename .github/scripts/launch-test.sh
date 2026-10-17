@@ -20,7 +20,5 @@ run() {
   grep -A40 "FATAL EXCEPTION\|AndroidRuntime" "launch-logs/$name-logcat.txt" | head -120
 }
 REL=$(ls app/build/outputs/apk/release/*.apk | head -1)
-DBG=$(ls app/build/outputs/apk/debug/*.apk | head -1)
 run "$REL" com.twilighty.lmusic release
-run "$DBG" com.twilighty.lmusic.debug debug
 exit 0

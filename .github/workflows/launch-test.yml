@@ -34,8 +34,8 @@ jobs:
             echo "keyPassword=testpass"
           } > keystore.properties
 
-      - name: Build release + debug APKs (universal)
-        run: ./gradlew :app:assembleRelease :app:assembleDebug --stacktrace
+      - name: Build release APK (universal, includes x86_64 for the emulator)
+        run: ./gradlew :app:assembleRelease --stacktrace -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Enable KVM
         run: |
