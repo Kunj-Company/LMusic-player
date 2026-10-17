@@ -31,15 +31,21 @@ data class YuyuAccent(
 fun yuyuAccentFrom(seed: Color, isDark: Boolean): YuyuAccent {
     val canvas = if (isDark) YuyuColors.DarkBgCanvas else YuyuColors.BgCanvas
     // Keep fills deep enough for white text; keep accent-as-text readable on the canvas.
-    val fill = when {
-        seed.luminance() > 0.32f -> lerp(seed, Color.Black, 0.45f)
-        seed.luminance() < 0.02f && isDark -> lerp(seed, Color.White, 0.18f)
-        else -> seed
+    // Light: deep fills that carry white icons. Dark: light fills (tone ~80) that carry
+    // dark icons, so the play button and seek bar stand out from the near-black canvas.
+    val fill = if (isDark) {
+        when {
+            seed.luminance() < 0.12f -> lerp(seed, Color.White, 0.40f)
+            seed.luminance() > 0.65f -> lerp(seed, Color.Black, 0.15f)
+            else -> seed
+        }
+    } else {
+        if (seed.luminance() > 0.32f) lerp(seed, Color.Black, 0.45f) else seed
     }
-    val onFill = if (fill.luminance() > 0.4f) YuyuColors.Text else Color.White
-    val text = if (isDark) lerp(fill, Color.White, 0.42f) else fill
-    val soft = lerp(canvas, fill, if (isDark) 0.18f else 0.09f)
-    val softStrong = lerp(canvas, fill, if (isDark) 0.30f else 0.18f)
+    val onFill = if (fill.luminance() > 0.3f) YuyuColors.Text else Color.White
+    val text = if (isDark) lerp(fill, Color.White, if (fill.luminance() > 0.3f) 0.1f else 0.42f) else fill
+    val soft = lerp(canvas, fill, if (isDark) 0.12f else 0.09f)
+    val softStrong = lerp(canvas, fill, if (isDark) 0.22f else 0.18f)
     return YuyuAccent(fill = fill, onFill = onFill, text = text, soft = soft, softStrong = softStrong)
 }
 
@@ -52,7 +58,7 @@ fun yuyuPlayerScheme(albumScheme: ColorScheme, base: ColorScheme, isDark: Boolea
     val seed = if (albumScheme == base) {
         YuyuDefaultAccent
     } else if (isDark) {
-        albumScheme.primaryContainer
+        albumScheme.primary
     } else {
         albumScheme.primary
     }

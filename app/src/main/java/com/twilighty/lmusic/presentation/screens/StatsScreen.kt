@@ -190,19 +190,6 @@ fun StatsScreen(
         }
     }
 
-    LaunchedEffect(lazyListState.isScrollInProgress) {
-        if (!lazyListState.isScrollInProgress) {
-            val shouldExpand = topBarHeight.value > (minTopBarHeightPx + maxTopBarHeightPx) / 2
-            val canExpand = lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0
-            val target = if (shouldExpand && canExpand) maxTopBarHeightPx else minTopBarHeightPx
-
-            if (topBarHeight.value != target) {
-                coroutineScope.launch {
-                    topBarHeight.animateTo(target, spring(stiffness = Spring.StiffnessMedium))
-                }
-            }
-        }
-    }
 
     @Suppress("UNUSED_VARIABLE")
     val currentTopBarHeightDp = with(density) { topBarHeight.value.toDp() }
@@ -294,7 +281,7 @@ fun StatsScreen(
                         .fillMaxSize(),
                     contentPadding = PaddingValues(
                         top = yuyuHeaderHeight + 12.dp,
-                        bottom = bottomInset + MiniPlayerHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp
+                        bottom = (if (showBackButton) WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() else bottomInset) + MiniPlayerHeight + 16.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {

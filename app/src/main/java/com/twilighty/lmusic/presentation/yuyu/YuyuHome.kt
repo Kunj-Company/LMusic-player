@@ -216,7 +216,14 @@ fun YuyuWeekStats(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.padding(horizontal = 16.dp)) {
-        YuyuSectionHeader(title = "This week", actionLabel = "Stats", onAction = onOpenStats)
+        val title = when (summary.range) {
+            com.twilighty.lmusic.data.stats.StatsTimeRange.DAY -> "Today"
+            com.twilighty.lmusic.data.stats.StatsTimeRange.WEEK -> "This week"
+            com.twilighty.lmusic.data.stats.StatsTimeRange.MONTH -> "This month"
+            com.twilighty.lmusic.data.stats.StatsTimeRange.YEAR -> "This year"
+            else -> "Your listening"
+        }
+        YuyuSectionHeader(title = title, actionLabel = "Stats", onAction = onOpenStats)
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             YuyuStatTile(

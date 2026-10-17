@@ -1,5 +1,6 @@
 package com.twilighty.lmusic.presentation.screens
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 
@@ -329,11 +330,11 @@ fun ExpressiveNavigationItem(
         onClick = onClick,
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().height(76.dp)
+        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(16.dp).fillMaxSize()
+            modifier = Modifier.padding(16.dp).fillMaxWidth()
         ) {
             Box(
                 contentAlignment = Alignment.Center,
@@ -384,11 +385,11 @@ fun ExpressiveCategoryItem(
         onClick = onClick,
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().height(76.dp) 
+        modifier = Modifier.fillMaxWidth().heightIn(min = 76.dp) 
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(16.dp).fillMaxSize()
+            modifier = Modifier.padding(16.dp).fillMaxWidth()
         ) {
             // Icon Container
             Box(
