@@ -642,46 +642,21 @@ fun WelcomePage() {
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = stringResource(R.string.setup_welcome_prefix),
-                style = ExpTitleTypography.displayLarge.copy(
-                    fontSize = 42.sp,
-                    lineHeight = 1.1.em
-                ),
+                text = stringResource(R.string.setup_welcome_prefix).trim(),
+                style = com.twilighty.lmusic.presentation.yuyu.YuyuType.h2,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.displayLarge.copy(
-                    fontFamily = GoogleSansRounded,
-                    fontSize = 46.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    lineHeight = 1.1.em
-                ),
+                style = com.twilighty.lmusic.presentation.yuyu.YuyuType.display(56.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
             )
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 2.dp,
-            shadowElevation = 0.dp
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.setup_beta_symbol),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    text = stringResource(R.string.setup_beta_label),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                text = "Your music, on your phone.",
+                style = com.twilighty.lmusic.presentation.yuyu.YuyuType.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Spacer(modifier = Modifier.height(16.dp))
         // Placeholder for vector art
