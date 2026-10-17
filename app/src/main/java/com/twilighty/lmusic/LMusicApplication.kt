@@ -138,19 +138,25 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
             }
         }
 
+        // Resolve these on the main thread: their dependency graphs create objects that
+        // register lifecycle observers, which Android only allows on the main thread.
+        val foldersRepository = musicFoldersRepository.get()
         startupScope.launch {
             // One-time move from "excluded folders" to the "music folders" include list.
-            musicFoldersRepository.get().migrateIfNeeded()
+            runCatching { foldersRepository.migrateIfNeeded() }
+                .onFailure { Timber.w(it, "Music folders migration failed") }
         }
 
         // Smart shuffle setting -> shuffle order used by every shuffle path (QueueUtils).
         smartShuffleController.get().start(startupScope)
 
         if (BuildConfig.BUILD_TYPE != "benchmark") {
+            val prefs = updatePreferences.get()
+            val scheduler = updateScheduler.get()
             startupScope.launch {
                 // Weekly update check (KEEP keeps the existing schedule); cancelled when switched off.
-                val enabled = runCatching { updatePreferences.get().checksEnabled.first() }.getOrDefault(true)
-                runCatching { updateScheduler.get().apply(enabled) }
+                val enabled = runCatching { prefs.checksEnabled.first() }.getOrDefault(true)
+                runCatching { scheduler.apply(enabled) }
             }
         }
     }

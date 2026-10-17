@@ -32,7 +32,14 @@ class MediaStoreObserver @Inject constructor(
     private var isRegistered: Boolean = false
 
     init {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        // Lifecycle observers must be added on the main thread; this singleton can be
+        // created from a background thread (e.g. a Hilt graph resolved inside a coroutine).
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            lifecycle.addObserver(this)
+        } else {
+            android.os.Handler(android.os.Looper.getMainLooper()).post { lifecycle.addObserver(this) }
+        }
     }
 
     fun register() {
