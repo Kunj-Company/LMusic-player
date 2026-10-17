@@ -19,6 +19,6 @@ run() {
   echo "===== $name AndroidRuntime ====="
   grep -A40 "FATAL EXCEPTION\|AndroidRuntime" "launch-logs/$name-logcat.txt" | head -120
 }
-REL=$(ls app/build/outputs/apk/release/*.apk | head -1)
+REL=$(ls apk/*.apk | head -1)
 run "$REL" com.twilighty.lmusic release
 exit 0
