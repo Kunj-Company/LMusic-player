@@ -27,6 +27,7 @@ class MusicFoldersRepository @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val musicDao: MusicDao,
     private val syncManager: SyncManager,
+    private val noticePreferences: MusicFoldersNoticePreferences,
 ) {
     val includedFolders: Flow<Set<String>> = userPreferencesRepository.includedDirectoriesFlow
 
@@ -58,25 +59,35 @@ class MusicFoldersRepository @Inject constructor(
         return true
     }
 
-    suspend fun removeFolder(path: String, rescan: Boolean) = editMutex.withLock { removeLocked(path, rescan) }
+    /**
+     * Removes [path]. Returns false (and changes nothing) when it would leave no music folders
+     * after setup is done, since an empty include list would hide the whole library.
+     */
+    suspend fun removeFolder(path: String, rescan: Boolean): Boolean = editMutex.withLock { removeLocked(path, rescan) }
 
-    private suspend fun removeLocked(path: String, rescan: Boolean) {
+    private suspend fun removeLocked(path: String, rescan: Boolean): Boolean {
         val normalized = normalize(path)
         val current = includedFolders.first()
         val updated = current.filterNot { it.equals(normalized, ignoreCase = true) }.toSet()
-        if (updated.size == current.size) return
+        if (updated.size == current.size) return true
+        if (updated.isEmpty() && userPreferencesRepository.initialSetupDoneFlow.first()) return false
         userPreferencesRepository.updateIncludedDirectories(updated)
         if (rescan) syncManager.forceRefresh()
+        return true
     }
 
-    /** Toggles a folder picked in the explorer: removes it when included, adds it otherwise. */
-    suspend fun toggleFolder(path: String, rescan: Boolean) = editMutex.withLock {
+    /**
+     * Toggles a folder picked in the explorer: removes it when included, adds it otherwise.
+     * Returns false when the removal was refused because it was the last folder.
+     */
+    suspend fun toggleFolder(path: String, rescan: Boolean): Boolean = editMutex.withLock {
         val normalized = normalize(path)
         val current = includedFolders.first()
         if (current.any { it.equals(normalized, ignoreCase = true) }) {
             removeLocked(normalized, rescan)
         } else {
             addLocked(normalized, rescan)
+            true
         }
     }
 
@@ -87,7 +98,7 @@ class MusicFoldersRepository @Inject constructor(
      * build the include list from the top-level folders that currently hold songs so nothing
      * disappears. Leaves the flag unset when there is nothing to derive from yet.
      */
-    suspend fun migrateIfNeeded() = withContext(Dispatchers.IO) {
+    suspend fun migrateIfNeeded(): Unit = withContext(Dispatchers.IO) {
         runCatching {
             if (userPreferencesRepository.includedDirectoriesMigratedFlow.first()) return@runCatching
             if (userPreferencesRepository.includedDirectoriesFlow.first().isNotEmpty()) {
@@ -103,6 +114,7 @@ class MusicFoldersRepository @Inject constructor(
             Timber.i("Migrating to music folders include list: $roots")
             userPreferencesRepository.updateIncludedDirectories(roots)
             userPreferencesRepository.setIncludedDirectoriesMigrated(true)
+            noticePreferences.setShowFoldersMigratedNotice(true)
         }.onFailure { Timber.w(it, "Music folders migration failed") }
     }
 
@@ -124,8 +136,8 @@ object MusicFolderPaths {
     /**
      * Maps song parent directories to the top-level folder of their storage volume,
      * e.g. /storage/emulated/0/Music/Artist/Album -> /storage/emulated/0/Music.
-     * Songs sitting in a volume root keep the root itself. App-private Android/data paths
-     * (cloud/Telegram caches, always shown anyway) are skipped.
+     * Songs sitting in a volume root keep the root itself. Songs under Android/data (app folders
+     * such as Telegram's) keep their own parent folder, so the rest of Android/data stays out.
      */
     fun topLevelFolders(parentDirs: Collection<String>): Set<String> {
         val result = linkedSetOf<String>()
@@ -144,7 +156,10 @@ object MusicFolderPaths {
             }
             if (segments.size < volumeDepth) return@forEach
             val top = segments.getOrNull(volumeDepth)
-            if (top == "Android" && segments.getOrNull(volumeDepth + 1) == "data") return@forEach
+            if (top == "Android" && segments.getOrNull(volumeDepth + 1) == "data") {
+                result += "/" + segments.joinToString("/")
+                return@forEach
+            }
             val take = if (top != null) volumeDepth + 1 else volumeDepth
             result += "/" + segments.take(take).joinToString("/")
         }

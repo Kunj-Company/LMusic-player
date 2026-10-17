@@ -195,8 +195,9 @@ object SmartShuffle {
 
 /**
  * Process-wide switch read by [QueueUtils] so every shuffle path picks up smart shuffle
- * without threading a setting through each caller. Off by default (plain Fisher-Yates);
- * the app turns it on from the "Smart shuffle" setting.
+ * without threading a setting through each caller. The "Smart shuffle" setting is on by
+ * default; [enabled] starts false (plain Fisher-Yates) only until the app mirrors that setting
+ * into it at startup, and goes back to false when the user turns the setting off.
  */
 object SmartShuffleRuntime {
     @Volatile

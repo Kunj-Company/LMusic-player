@@ -47,7 +47,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /** Why batch autofill left a song alone. */
-enum class SkipReason { FILE_MISSING, NO_TITLE, NO_MATCH, LOW_CONFIDENCE, NOTHING_NEW, NETWORK, SAVE_FAILED, PERMISSION_DENIED }
+enum class SkipReason { FILE_MISSING, NO_TITLE, NO_MATCH, LOW_CONFIDENCE, NOTHING_NEW, NETWORK, SAVE_FAILED, PERMISSION_DENIED, UNREADABLE }
 
 data class SkippedSong(val song: Song, val reason: SkipReason)
 
@@ -192,7 +192,8 @@ class LibraryHealthViewModel @Inject constructor(
             val skipped = mutableListOf<SkippedSong>()
             var cancelled = false
             var networkFailures = 0
-            val library = currentSongs()
+            // Songs by folder, built once so each song's siblings are a map lookup.
+            val byFolder = withContext(Dispatchers.Default) { currentSongs().groupBy { File(it.path).parent } }
             _progress.value = BatchProgress(total = songs.size, done = 0, current = songs.firstOrNull())
             try {
                 for ((index, song) in songs.withIndex()) {
@@ -202,7 +203,7 @@ class LibraryHealthViewModel @Inject constructor(
                         skipped += SkippedSong(song, SkipReason.NETWORK)
                         continue
                     }
-                    when (val outcome = fixOne(song, library)) {
+                    when (val outcome = fixOne(song, byFolder)) {
                         is Outcome.Fixed -> {
                             networkFailures = 0
                             fixed += outcome.fixed
@@ -236,7 +237,10 @@ class LibraryHealthViewModel @Inject constructor(
         data class Skipped(val reason: SkipReason, val confidence: Int? = null) : Outcome
     }
 
-    /** What's already in the file, so nothing that exists gets overwritten. */
+    /**
+     * What's already in the file (read from the file itself, never from the library database),
+     * so nothing that exists gets overwritten and every field we don't fill is written back as is.
+     */
     private data class CurrentTags(
         val title: String,
         val artist: String,
@@ -246,40 +250,60 @@ class LibraryHealthViewModel @Inject constructor(
         val genre: String,
         val composer: String,
         val lyrics: String,
+        val trackNumber: Int,
+        val discNumber: Int?,
         val hasArtwork: Boolean,
     )
+
+    private sealed interface ReadResult {
+        data object Missing : ReadResult
+        /** The file exists but its tags couldn't be read, so its current values are unknown. */
+        data object Unreadable : ReadResult
+        data class Tags(val tags: CurrentTags) : ReadResult
+    }
 
     private fun known(vararg values: String?): String =
         values.firstOrNull { !OfflineMetadataGuesser.isUnknown(it) }?.trim().orEmpty()
 
-    private suspend fun readCurrent(song: Song): CurrentTags? = withContext(Dispatchers.IO) {
+    private suspend fun readCurrent(song: Song): ReadResult = withContext(Dispatchers.IO) {
         val file = File(song.path)
-        if (!file.exists()) return@withContext null
-        val meta: AudioMetadata? = runCatching { AudioMetadataReader.read(file) }.getOrNull()
+        if (!file.exists()) return@withContext ReadResult.Missing
+        val meta: AudioMetadata = runCatching { AudioMetadataReader.read(file) }.getOrNull()
+            ?: return@withContext ReadResult.Unreadable
         val extended = runCatching { ExtendedTagReader.read(file) }.getOrNull()
-        CurrentTags(
-            title = known(song.title, meta?.title),
-            artist = known(song.artist, meta?.artist),
-            album = known(song.album, meta?.album),
-            albumArtist = known(song.albumArtist, meta?.albumArtist, extended?.albumArtist),
-            year = song.year.takeIf { it in 1000..9999 } ?: meta?.year?.takeIf { it in 1000..9999 }
-                ?: extended?.year?.take(4)?.toIntOrNull()?.takeIf { it in 1000..9999 },
-            genre = known(song.genre, meta?.genre),
-            composer = extended?.composer.orEmpty().trim(),
-            lyrics = meta?.lyrics?.takeIf { it.isNotBlank() } ?: song.lyrics.orEmpty(),
-            hasArtwork = meta?.artwork != null || !song.albumArtUriString.isNullOrBlank(),
+            ?: return@withContext ReadResult.Unreadable
+        ReadResult.Tags(
+            CurrentTags(
+                title = meta.title.orEmpty().trim(),
+                artist = meta.artist.orEmpty().trim(),
+                album = meta.album.orEmpty().trim(),
+                albumArtist = extended.albumArtist.ifBlank { meta.albumArtist.orEmpty() }.trim(),
+                year = meta.year?.takeIf { it in 1000..9999 }
+                    ?: extended.year.take(4).toIntOrNull()?.takeIf { it in 1000..9999 },
+                genre = meta.genre.orEmpty().trim(),
+                composer = extended.composer.trim(),
+                lyrics = meta.lyrics.orEmpty(),
+                trackNumber = meta.trackNumber ?: 0,
+                discNumber = meta.discNumber,
+                hasArtwork = meta.artwork != null || !song.albumArtUriString.isNullOrBlank(),
+            )
         )
     }
 
-    private suspend fun fixOne(song: Song, library: List<Song>): Outcome {
-        val current = readCurrent(song) ?: return Outcome.Skipped(SkipReason.FILE_MISSING)
-        val folder = File(song.path).parent
-        val siblings = library.filter { File(it.path).parent == folder }
+    private fun isEmpty(value: String) = OfflineMetadataGuesser.isUnknown(value) || value.isBlank()
+
+    private suspend fun fixOne(song: Song, byFolder: Map<String?, List<Song>>): Outcome {
+        val current = when (val read = readCurrent(song)) {
+            ReadResult.Missing -> return Outcome.Skipped(SkipReason.FILE_MISSING)
+            ReadResult.Unreadable -> return Outcome.Skipped(SkipReason.UNREADABLE)
+            is ReadResult.Tags -> read.tags
+        }
+        val siblings = byFolder[File(song.path).parent].orEmpty()
         val guess = runCatching { OfflineMetadataGuesser.guess(song, siblings) }.getOrNull()?.fields
 
-        val queryTitle = current.title.ifBlank { guess?.title.orEmpty() }
-        val queryArtist = current.artist.ifBlank { guess?.artist.orEmpty() }
-        val queryAlbum = current.album.ifBlank { guess?.album.orEmpty() }
+        val queryTitle = known(current.title, song.title).ifBlank { guess?.title.orEmpty() }
+        val queryArtist = known(current.artist, song.artist).ifBlank { guess?.artist.orEmpty() }
+        val queryAlbum = known(current.album, song.album).ifBlank { guess?.album.orEmpty() }
         if (queryTitle.isBlank()) return Outcome.Skipped(SkipReason.NO_TITLE)
 
         val best: AutofillCandidate = try {
@@ -313,14 +337,14 @@ class LibraryHealthViewModel @Inject constructor(
             val clean = value.trim()
             return if (isEmpty && clean.isNotEmpty()) clean.also { filled += field } else null
         }
-        val newTitle = fill(AutofillField.TITLE, current.title.isBlank(), found.title)
-        val newArtist = fill(AutofillField.ARTIST, current.artist.isBlank(), found.artist)
-        val newAlbum = fill(AutofillField.ALBUM, current.album.isBlank(), found.album)
-        val newAlbumArtist = fill(AutofillField.ALBUM_ARTIST, current.albumArtist.isBlank(), found.albumArtist)
+        val newTitle = fill(AutofillField.TITLE, isEmpty(current.title), found.title)
+        val newArtist = fill(AutofillField.ARTIST, isEmpty(current.artist), found.artist)
+        val newAlbum = fill(AutofillField.ALBUM, isEmpty(current.album), found.album)
+        val newAlbumArtist = fill(AutofillField.ALBUM_ARTIST, isEmpty(current.albumArtist), found.albumArtist)
         val newYear = fill(AutofillField.YEAR, current.year == null, found.year.take(4).takeIf { it.toIntOrNull() != null }.orEmpty())
-        val newGenre = fill(AutofillField.GENRE, current.genre.isBlank(), found.genre)
-        val newTrack = fill(AutofillField.TRACK, song.trackNumber <= 0, found.trackNumber.takeIf { (it.toIntOrNull() ?: 0) > 0 }.orEmpty())
-        val newDisc = fill(AutofillField.DISC, (song.discNumber ?: 0) <= 0, found.discNumber.takeIf { (it.toIntOrNull() ?: 0) > 0 }.orEmpty())
+        val newGenre = fill(AutofillField.GENRE, isEmpty(current.genre), found.genre)
+        val newTrack = fill(AutofillField.TRACK, current.trackNumber <= 0, found.trackNumber.takeIf { (it.toIntOrNull() ?: 0) > 0 }.orEmpty())
+        val newDisc = fill(AutofillField.DISC, (current.discNumber ?: 0) <= 0, found.discNumber.takeIf { (it.toIntOrNull() ?: 0) > 0 }.orEmpty())
         val newComposer = fill(AutofillField.COMPOSER, current.composer.isBlank(), found.composer)
 
         val cover = if (!current.hasArtwork) {
@@ -345,8 +369,8 @@ class LibraryHealthViewModel @Inject constructor(
             newAlbum = newAlbum ?: current.album,
             newGenre = newGenre ?: current.genre,
             newLyrics = current.lyrics,
-            newTrackNumber = newTrack?.toIntOrNull() ?: song.trackNumber,
-            newDiscNumber = newDisc?.toIntOrNull() ?: song.discNumber,
+            newTrackNumber = newTrack?.toIntOrNull() ?: current.trackNumber,
+            newDiscNumber = newDisc?.toIntOrNull() ?: current.discNumber,
             coverArtUpdate = cover?.let { CoverArtUpdate(bytes = it.bytes, mimeType = it.mimeType) },
             extendedTags = ExtendedTagUpdate(
                 // Always pass the album artist: leaving it null makes the writer copy the artist into it.
@@ -396,7 +420,7 @@ class LibraryHealthViewModel @Inject constructor(
     }
 
     private suspend fun applyReview(song: Song, autofill: AutofillResult) {
-        val current = readCurrent(song)
+        val current = (readCurrent(song) as? ReadResult.Tags)?.tags
         if (current == null) {
             _messages.tryEmit(HealthMessage.SaveFailed)
             return
@@ -413,8 +437,8 @@ class LibraryHealthViewModel @Inject constructor(
             newAlbum = value(AutofillField.ALBUM) ?: current.album,
             newGenre = value(AutofillField.GENRE) ?: current.genre,
             newLyrics = current.lyrics,
-            newTrackNumber = value(AutofillField.TRACK)?.toIntOrNull() ?: song.trackNumber,
-            newDiscNumber = value(AutofillField.DISC)?.toIntOrNull() ?: song.discNumber,
+            newTrackNumber = value(AutofillField.TRACK)?.toIntOrNull() ?: current.trackNumber,
+            newDiscNumber = value(AutofillField.DISC)?.toIntOrNull() ?: current.discNumber,
             coverArtUpdate = autofill.coverArt?.let { CoverArtUpdate(bytes = it.bytes, mimeType = it.mimeType) },
             extendedTags = ExtendedTagUpdate(
                 albumArtist = value(AutofillField.ALBUM_ARTIST) ?: current.albumArtist,

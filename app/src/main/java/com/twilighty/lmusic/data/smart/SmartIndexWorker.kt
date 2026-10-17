@@ -43,28 +43,41 @@ class SmartIndexWorker @AssistedInject constructor(
         if (!runLock.tryLock()) return@withContext Result.success()
         try {
             dao.deleteOrphans()
-            val pending = dao.getPendingSongs(SmartModel.MODEL_VERSION, BATCH_SIZE)
+            val retryFailedBefore = System.currentTimeMillis() - FAILED_RETRY_AFTER_MS
+            val pending = dao.getPendingSongs(SmartModel.MODEL_VERSION, retryFailedBefore, BATCH_SIZE)
             if (pending.isEmpty()) {
                 preferences.setLastIndexedAt(System.currentTimeMillis())
                 return@withContext Result.success()
             }
             var done = 0
+            var written = 0
             setProgress(workDataOf(KEY_DONE to 0, KEY_BATCH to pending.size))
             SongAnalyzer(applicationContext).use { analyzer ->
                 for (song in pending) {
                     if (isStopped) break
                     if (done > 0 && done % 10 == 0 && !batteryOk(applicationContext)) break
                     val result = analyzer.analyze(song) { isStopped }
-                    if (result != null) dao.upsert(result)
+                    // null: cancelled or a transient error; the song stays pending for a later run.
+                    if (result != null) {
+                        dao.upsert(result)
+                        written++
+                    }
                     done++
                     setProgress(workDataOf(KEY_DONE to done, KEY_BATCH to pending.size))
                 }
             }
             preferences.setLastIndexedAt(System.currentTimeMillis())
-            if (!isStopped && done == pending.size && dao.countPendingSongs(SmartModel.MODEL_VERSION) > 0) {
+            // Chain only when this run made progress, so songs hitting transient errors don't loop.
+            if (!isStopped && done == pending.size && written > 0 &&
+                dao.countPendingSongs(SmartModel.MODEL_VERSION, retryFailedBefore) > 0
+            ) {
                 SmartIndexScheduler.enqueueContinuation(applicationContext)
             }
             Result.success()
+        } catch (e: SmartAnalysisUnavailableException) {
+            // The ML runtime couldn't load or run: nothing was marked failed, try again later.
+            Timber.w(e, "Smart: analysis unavailable, retrying later")
+            Result.retry()
         } catch (t: Throwable) {
             if (t is kotlinx.coroutines.CancellationException) throw t
             Timber.e(t, "Smart: indexing run failed")
@@ -79,6 +92,8 @@ class SmartIndexWorker @AssistedInject constructor(
         const val KEY_BATCH = "batch"
         const val BATCH_SIZE = 40
         const val MIN_BATTERY_PERCENT = 50
+        /** Songs whose decode failed are retried after this long. */
+        val FAILED_RETRY_AFTER_MS = TimeUnit.DAYS.toMillis(14)
         private val runLock = Mutex()
 
         fun batteryOk(context: Context): Boolean {

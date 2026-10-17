@@ -811,7 +811,14 @@ constructor(
             dataStore.data.map { preferences ->
                 val raw = preferences[PreferencesKeys.ALLOWED_DIRECTORIES] ?: emptySet()
                 val included = preferences[PreferencesKeys.INCLUDED_DIRECTORIES] ?: emptySet()
-                if (included.isEmpty()) raw else raw + included
+                if (included.isEmpty()) {
+                    raw
+                } else {
+                    // Allow rules outside every included folder would re-open folders the include list leaves out.
+                    raw.filter { rule ->
+                        included.any { com.twilighty.lmusic.data.library.MusicFolderPaths.isSameOrInside(rule, it) }
+                    }.toSet() + included
+                }
             }.distinctUntilChanged()
 
     /**

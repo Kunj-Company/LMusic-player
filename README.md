@@ -47,6 +47,14 @@ from **Artifacts**.
   artists** discovered in the period.
 - History is kept for life (PixelPlayer trimmed it to two years).
 
+### New in 1.2
+
+- New Home, Yuyu redesign of every screen and widget, smaller now-playing layout with sleep timer and song menu.
+- Refined haptics (Off / Subtle / Full), smart shuffle, music folders to include, weekly update alerts.
+- Library health with batch autofill of empty tags; weekly and monthly recaps.
+- Experimental, off by default: on-device mood/genre tagging with YAMNet (Apache-2.0, bundled), mixes,
+  song radio and insights. Indexing runs only while charging, idle and above 50% battery; nothing leaves the phone.
+
 ## Everything from PixelPlayer is still there
 
 Queue with drag-and-drop, shuffle and repeat, playlists, gapless playback, sleep timer
@@ -100,5 +108,6 @@ the tag). Pushing a `v*` tag yourself works too. Other pushes just build an APK 
 - Fonts: [Figtree](https://github.com/erikdkennedy/figtree) and
   [Bricolage Grotesque](https://github.com/ateliertriay/bricolage), SIL Open Font
   License — see [licenses/](licenses/).
+- On-device audio model: [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet) (Apache-2.0), run with TensorFlow Lite.
 - Metadata: [MusicBrainz](https://musicbrainz.org) (CC0) and
   [Cover Art Archive](https://coverartarchive.org).

@@ -470,6 +470,7 @@ private fun skipReasonText(reason: SkipReason): String = stringResource(
         SkipReason.NETWORK -> R.string.health_skip_network
         SkipReason.SAVE_FAILED -> R.string.health_skip_save_failed
         SkipReason.PERMISSION_DENIED -> R.string.health_skip_permission
+        SkipReason.UNREADABLE -> R.string.health_skip_unreadable
     }
 )
 

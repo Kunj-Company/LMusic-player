@@ -51,6 +51,7 @@
     <string name="health_skip_network">Couldn\'t reach MusicBrainz</string>
     <string name="health_skip_save_failed">Couldn\'t save the file</string>
     <string name="health_skip_permission">Edit access not given</string>
+    <string name="health_skip_unreadable">Couldn\'t read the file\'s tags</string>
     <string name="health_review_title">Review</string>
     <string name="health_review_desc">Matches too weak to apply on their own</string>
     <string name="health_review_match">Best match %d%%</string>

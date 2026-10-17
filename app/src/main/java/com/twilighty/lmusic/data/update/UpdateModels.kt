@@ -36,7 +36,11 @@ sealed interface UpdateCheckResult {
     data class Failed(val message: String) : UpdateCheckResult
 }
 
-/** Semantic version compare: "v1.2.10" > "1.2.9"; pre-release suffixes sort before the release. */
+/**
+ * Semantic version compare: "v1.2.10" > "1.2.9"; pre-release suffixes sort before the release.
+ * A CI "-build.N" suffix (non-release builds, e.g. "1.2.0-build.57") is build metadata and
+ * compares equal to its base version.
+ */
 object VersionComparator {
     fun normalize(version: String): String = version.trim().removePrefix("v").removePrefix("V")
 
@@ -59,8 +63,10 @@ object VersionComparator {
 
     fun isNewer(candidate: String, current: String): Boolean = compare(candidate, current) > 0
 
+    private val CI_BUILD_SUFFIX = Regex("-build\\.\\d+$", RegexOption.IGNORE_CASE)
+
     private fun split(v: String): Pair<List<Int>, String?> {
-        val withoutBuild = v.substringBefore('+')
+        val withoutBuild = v.substringBefore('+').replace(CI_BUILD_SUFFIX, "")
         val core = withoutBuild.substringBefore('-')
         val pre = withoutBuild.substringAfter('-', missingDelimiterValue = "").ifEmpty { null }
         val parts = core.split('.').map { part -> part.takeWhile { it.isDigit() }.toIntOrNull() ?: 0 }

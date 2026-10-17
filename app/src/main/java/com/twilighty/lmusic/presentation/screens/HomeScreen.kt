@@ -332,6 +332,7 @@ fun HomeScreen(
             containerColor = MaterialTheme.colorScheme.surface
         ) { innerPadding ->
             val showUpdateBanner = com.twilighty.lmusic.presentation.update.rememberUpdateBannerVisible()
+            val showFoldersNotice = com.twilighty.lmusic.presentation.folders.rememberFoldersMigratedNoticeVisible()
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -352,6 +353,11 @@ fun HomeScreen(
                     )
                 }
                 if (showUpdateBanner) item(key = "update_banner") { com.twilighty.lmusic.presentation.update.UpdateBanner() }
+                if (showFoldersNotice) item(key = "folders_migrated_notice") {
+                    com.twilighty.lmusic.presentation.folders.FoldersMigratedNotice(
+                        onReview = { navController.navigateSafely(Screen.SettingsCategory.createRoute("library")) }
+                    )
+                }
 
                 // Continue listening — the current song, or the last one played.
                 val continueSong = currentSong?.takeIf { it != Song.emptySong() && it.id.isNotBlank() }

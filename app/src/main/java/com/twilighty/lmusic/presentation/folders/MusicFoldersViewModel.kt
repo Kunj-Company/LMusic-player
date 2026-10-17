@@ -1,8 +1,10 @@
 package com.twilighty.lmusic.presentation.folders
 
 import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.twilighty.lmusic.R
 import com.twilighty.lmusic.data.library.MusicFoldersRepository
 import com.twilighty.lmusic.data.library.QuickAddFolder
 import com.twilighty.lmusic.data.preferences.UserPreferencesRepository
@@ -25,7 +27,7 @@ import javax.inject.Inject
 class MusicFoldersViewModel @Inject constructor(
     private val repository: MusicFoldersRepository,
     userPreferencesRepository: UserPreferencesRepository,
-    @ApplicationContext context: Context,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     var rescanOnChange: Boolean = true
@@ -57,13 +59,21 @@ class MusicFoldersViewModel @Inject constructor(
     }
 
     fun removeFolder(path: String) {
-        viewModelScope.launch { repository.removeFolder(path, rescan = rescanOnChange) }
+        viewModelScope.launch {
+            if (!repository.removeFolder(path, rescan = rescanOnChange)) showKeepOneToast()
+        }
     }
 
     /** Explorer toggles are batched; the rescan runs once when the picker closes. */
     fun togglePickedFolder(file: File) {
         pendingRescan = true
-        viewModelScope.launch { repository.toggleFolder(file.absolutePath, rescan = false) }
+        viewModelScope.launch {
+            if (!repository.toggleFolder(file.absolutePath, rescan = false)) showKeepOneToast()
+        }
+    }
+
+    private fun showKeepOneToast() {
+        Toast.makeText(context, R.string.folders_keep_one, Toast.LENGTH_SHORT).show()
     }
 
     fun onPickerClosed() {

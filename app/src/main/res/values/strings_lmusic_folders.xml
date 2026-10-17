@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="folders_migrated_notice">We set your music folders from your current library. Review them in Settings › Library › Music folders.</string>
+    <string name="folders_migrated_review">Review</string>
+    <string name="folders_migrated_dismiss">Dismiss</string>
+    <string name="folders_keep_one">Keep at least one music folder</string>
+</resources>

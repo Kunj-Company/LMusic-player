@@ -92,6 +92,10 @@ class SmartShuffleTest {
         assertFalse(VersionComparator.isNewer("v1.0.0", "1.0.0"))
         assertTrue(VersionComparator.isNewer("1.0.0", "1.0.0-beta.2"))
         assertFalse(VersionComparator.isNewer("1.0.0-beta.1", "1.0.0"))
+        // CI non-release builds count as their base version.
+        assertEquals(0, VersionComparator.compare("1.2.0-build.57", "1.2.0"))
+        assertFalse(VersionComparator.isNewer("1.2.0", "1.2.0-build.57"))
+        assertTrue(VersionComparator.isNewer("1.2.1", "1.2.0-build.57"))
     }
 
     @Test
@@ -112,6 +116,7 @@ class SmartShuffleTest {
                 "/storage/emulated/0/Download",
                 "/storage/emulated/0",
                 "/storage/1234-ABCD/Songs",
+                "/storage/emulated/0/Android/data/com.example/cache",
             ),
             tops
         )

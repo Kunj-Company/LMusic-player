@@ -74,7 +74,8 @@ class SmartRepository @Inject constructor(
     private val mutex = Mutex()
 
     private var cachedVectors: List<SongVector>? = null
-    private var cachedVectorsKey: Int = -1
+    /** (analysed song count, newest analyzedAt): changes when songs are added, removed or re-analysed. */
+    private var cachedVectorsKey: Pair<Int, Long>? = null
     private var memoryMixes: Pair<Long, List<SmartMix>>? = null
 
     val isEnabled: Flow<Boolean> = preferences.enabled
@@ -111,7 +112,7 @@ class SmartRepository @Inject constructor(
         preferences.clearCaches()
         mutex.withLock {
             cachedVectors = null
-            cachedVectorsKey = -1
+            cachedVectorsKey = null
             memoryMixes = null
         }
         // Keep indexing if the feature is still on.
@@ -122,7 +123,7 @@ class SmartRepository @Inject constructor(
 
     private suspend fun vectors(): List<SongVector> = mutex.withLock {
         val rows = dao.getAnalyzedSongRows(SmartModel.MODEL_VERSION)
-        val key = rows.size
+        val key = rows.size to (dao.getMaxAnalyzedAt(SmartModel.MODEL_VERSION) ?: 0L)
         cachedVectors?.let { if (key == cachedVectorsKey) return@withLock it }
         val artistById = rows.associate { it.id.toString() to it.artistName }
         val features = dao.getAllAnalyzed(SmartModel.MODEL_VERSION)

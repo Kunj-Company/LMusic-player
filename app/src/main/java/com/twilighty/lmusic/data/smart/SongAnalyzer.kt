@@ -4,11 +4,15 @@ import android.content.Context
 import com.twilighty.lmusic.data.database.SmartSongRow
 import com.twilighty.lmusic.data.database.SongFeaturesEntity
 import java.io.Closeable
+import java.io.IOException
 import timber.log.Timber
 
 /**
  * Analyses one song at a time: decode 3 short windows → YAMNet scores + DSP → tags.
- * Blocking; run on a background dispatcher. Never throws — failures become STATUS_FAILED rows.
+ * Blocking; run on a background dispatcher. Real decode failures become STATUS_FAILED rows;
+ * transient errors (I/O, permissions, codec state, low memory) return null so the song is tried
+ * again later. Throws [SmartAnalysisUnavailableException] when the ML runtime itself fails, so
+ * the caller can stop the whole batch without marking songs failed.
  */
 class SongAnalyzer(context: Context) : Closeable {
 
@@ -23,7 +27,12 @@ class SongAnalyzer(context: Context) : Closeable {
                 .filter { AudioDsp.meanAbs(it) > 0.0005f }
             if (isCancelled()) return null
             if (windows.isEmpty()) return failed(songId)
-            val scores = classifier.classifyWindows(windows, isCancelled) ?: return if (isCancelled()) null else failed(songId)
+            val scores = try {
+                classifier.classifyWindows(windows, isCancelled)
+            } catch (t: Throwable) {
+                // Native load errors (UnsatisfiedLinkError etc.) or interpreter failures aren't about this song.
+                throw SmartAnalysisUnavailableException(t)
+            } ?: return if (isCancelled()) null else failed(songId)
             val dsp = AudioDsp.compute(windows)
             val moods = SmartTagger.moodTags(scores, dsp.rmsMean, dsp.tempoBpm, dsp.zcr)
             val genres = SmartTagger.genreTags(scores)
@@ -40,11 +49,29 @@ class SongAnalyzer(context: Context) : Closeable {
                 genreTags = SmartTagger.joinTags(genres),
                 status = SongFeaturesEntity.STATUS_OK
             )
+        } catch (e: SmartAnalysisUnavailableException) {
+            throw e
+        } catch (e: IOException) {
+            transient(songId, e)
+        } catch (e: SecurityException) {
+            transient(songId, e)
+        } catch (e: IllegalStateException) {
+            // MediaExtractor.setDataSource / MediaCodec state errors (codec busy, reclaimed, …).
+            transient(songId, e)
+        } catch (e: OutOfMemoryError) {
+            System.gc()
+            transient(songId, e)
+        } catch (e: Error) {
+            throw SmartAnalysisUnavailableException(e)
         } catch (t: Throwable) {
-            if (t is OutOfMemoryError) System.gc()
             Timber.w(t, "Smart: analysis failed for song %s", songId)
             failed(songId)
         }
+    }
+
+    private fun transient(songId: String, t: Throwable): SongFeaturesEntity? {
+        Timber.w(t, "Smart: transient error for song %s, will retry", songId)
+        return null
     }
 
     private fun failed(songId: String) = SongFeaturesEntity(
@@ -65,3 +92,6 @@ class SongAnalyzer(context: Context) : Closeable {
         classifier.close()
     }
 }
+
+/** The on-device model couldn't be loaded or run; abort the batch and retry later. */
+class SmartAnalysisUnavailableException(cause: Throwable) : Exception("Smart analysis unavailable", cause)

@@ -24,7 +24,7 @@
             android:scaleType="centerInside"
             android:padding="18dp" />
 
-        <Space
+        <FrameLayout
             android:layout_width="12dp"
             android:layout_height="wrap_content"/>
 
@@ -44,7 +44,7 @@
                 android:maxLines="2"
                 android:ellipsize="end" />
 
-            <Space
+            <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="4dp"/>
 
@@ -59,7 +59,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <Space
+    <FrameLayout
         android:layout_width="wrap_content"
         android:layout_height="12dp"/>
 
@@ -79,7 +79,7 @@
             android:src="@drawable/ic_skip_previous_widget_preview"
             android:padding="12dp"/>
 
-        <Space
+        <FrameLayout
             android:layout_width="8dp"
             android:layout_height="wrap_content"/>
 
@@ -91,7 +91,7 @@
             android:src="@drawable/ic_play_arrow_widget_preview"
             android:padding="12dp"/>
 
-        <Space
+        <FrameLayout
             android:layout_width="8dp"
             android:layout_height="wrap_content"/>
 
