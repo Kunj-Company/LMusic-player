@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="lmusic_changelog_110_highlights">
+        <item>A new look across the whole app: clean white and ink surfaces, Bricolage Grotesque headlines and Figtree text.</item>
+        <item>The player takes its accent from the album art: seek bar, play button and background follow every song.</item>
+        <item>New Home with Your mix, Recently played and this week\'s listening at a glance.</item>
+        <item>Stats now has its own tab in the bottom bar.</item>
+    </string-array>
+    <string-array name="lmusic_changelog_110_improvements">
+        <item>Song rows, the mini player, the bottom bar and Settings redesigned around the new components.</item>
+        <item>A new About page.</item>
+    </string-array>
+    <string-array name="lmusic_changelog_100_highlights">
+        <item>Edit tags straight into your MP3, FLAC and M4A files, including album artist, year and composer.</item>
+        <item>Autofill tags from MusicBrainz and the Cover Art Archive — free, no account and no key.</item>
+        <item>Listening stats with a 30-second play rule: week, month, year, lifetime and custom ranges.</item>
+    </string-array>
+</resources>

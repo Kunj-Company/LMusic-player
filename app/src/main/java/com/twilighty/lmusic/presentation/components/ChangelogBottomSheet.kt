@@ -64,12 +64,18 @@ data class ChangelogVersion(
 @Composable
 private fun changelogVersions(): List<ChangelogVersion> = listOf(
     ChangelogVersion(
-        version = "0.7.0-beta",
-        date = "2026-05-08",
+        version = "1.1.0",
+        date = "2026-10-17",
         sections = listOf(
-            ChangelogSection(R.string.presentation_batch_g_changelog_sec_highlights, R.array.presentation_batch_g_changelog_070_highlights),
-            ChangelogSection(R.string.presentation_batch_g_changelog_sec_improvements, R.array.presentation_batch_g_changelog_070_improvements),
-            ChangelogSection(R.string.presentation_batch_g_changelog_sec_fixes, R.array.presentation_batch_g_changelog_070_fixes)
+            ChangelogSection(R.string.presentation_batch_g_changelog_sec_highlights, R.array.lmusic_changelog_110_highlights),
+            ChangelogSection(R.string.presentation_batch_g_changelog_sec_improvements, R.array.lmusic_changelog_110_improvements)
+        )
+    ),
+    ChangelogVersion(
+        version = "1.0.0",
+        date = "2026-10-17",
+        sections = listOf(
+            ChangelogSection(R.string.presentation_batch_g_changelog_sec_highlights, R.array.lmusic_changelog_100_highlights)
         )
     )
 )
@@ -80,7 +86,7 @@ fun ChangelogBottomSheet(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val changelogUrl = "https://github.com/twilighty-abhi/LMusic-player/blob/main/CHANGELOG.md"
+    val changelogUrl = "https://github.com/twilighty-abhi/lmusic-player/releases"
     val changelog = changelogVersions()
 
     val fabCornerRadius = 16.dp

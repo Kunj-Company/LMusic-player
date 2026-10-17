@@ -119,6 +119,17 @@ internal fun rememberSheetThemeState(
         systemColorScheme = systemColorScheme
     )
 
+    // LMusic: in the Yuyu palette the artwork colour is only the accent; surfaces and text
+    // stay Yuyu neutrals (see yuyuPlayerScheme).
+    val useYuyuColors = com.twilighty.lmusic.ui.theme.LocalUseYuyuColors.current
+    val yuyuAlbumScheme = remember(rawAlbumColorScheme, systemColorScheme, isDarkTheme, useYuyuColors) {
+        if (useYuyuColors) {
+            com.twilighty.lmusic.ui.theme.yuyuPlayerScheme(rawAlbumColorScheme, systemColorScheme, isDarkTheme)
+        } else {
+            rawAlbumColorScheme
+        }
+    }
+
     val rawMiniPlayerScheme = resolvePlayerSheetTargetScheme(
         isAlbumArtTheme = isAlbumArtTheme,
         hasAlbumArt = hasAlbumArt,
@@ -132,8 +143,15 @@ internal fun rememberSheetThemeState(
     // we use a single Animatable<Float> progress [0,1] that interpolates between the
     // previous and the new target ColorScheme manually. This reduces per-frame State reads
     // from 68 → 0 (the lerp runs during the Animatable tick, not during recomposition).
-    val albumColorScheme = rememberBatchAnimatedColorScheme(rawAlbumColorScheme)
-    val miniPlayerScheme = rememberBatchAnimatedColorScheme(rawMiniPlayerScheme)
+    val yuyuMiniScheme = remember(rawMiniPlayerScheme, systemColorScheme, isDarkTheme, useYuyuColors) {
+        if (useYuyuColors) {
+            com.twilighty.lmusic.ui.theme.yuyuPlayerScheme(rawMiniPlayerScheme, systemColorScheme, isDarkTheme)
+        } else {
+            rawMiniPlayerScheme
+        }
+    }
+    val albumColorScheme = rememberBatchAnimatedColorScheme(yuyuAlbumScheme)
+    val miniPlayerScheme = rememberBatchAnimatedColorScheme(yuyuMiniScheme)
 
     val miniAppearProgress = remember { Animatable(0f) }
     LaunchedEffect(currentSong?.id) {

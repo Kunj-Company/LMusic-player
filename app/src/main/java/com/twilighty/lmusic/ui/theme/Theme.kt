@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -169,6 +170,10 @@ val YuyuDarkColorScheme = darkColorScheme(
     surfaceContainerHighest = YuyuColors.DarkBgEmphasis,
 )
 
+// Built once so the scheme instance stays stable across recompositions.
+private val YuyuLightAppScheme: ColorScheme by lazy { YuyuLightColorScheme.withYuyuFixedRoles(false) }
+private val YuyuDarkAppScheme: ColorScheme by lazy { YuyuDarkColorScheme.withYuyuFixedRoles(true) }
+
 @Composable
 fun LMusicTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -181,7 +186,7 @@ fun LMusicTheme(
         // LMusic default: the Yuyu palette app-wide. The now-playing screen still takes its
         // colors from the album art through colorSchemePairOverride.
         colorSchemePairOverride == null && useYuyuColors -> {
-            if (darkTheme) YuyuDarkColorScheme else YuyuLightColorScheme
+            if (darkTheme) YuyuDarkAppScheme else YuyuLightAppScheme
         }
         colorSchemePairOverride == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             // Tema dinámico del sistema como prioridad si no hay override
@@ -213,7 +218,10 @@ fun LMusicTheme(
 
     LMusicStatusBarStyle(color = defaultStatusBarColor)
 
-    CompositionLocalProvider(LocalLMusicDarkTheme provides darkTheme) {
+    CompositionLocalProvider(
+        LocalLMusicDarkTheme provides darkTheme,
+        LocalUseYuyuColors provides (useYuyuColors && colorSchemePairOverride == null)
+    ) {
         MaterialTheme(
             colorScheme = finalColorScheme,
             typography = Typography,
