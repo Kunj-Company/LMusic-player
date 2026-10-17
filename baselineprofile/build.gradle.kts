@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.theveloper.pixelplay.baselineprofile"
+    namespace = "com.twilighty.lmusic.baselineprofile"
     compileSdk = 37
 
     compileOptions {

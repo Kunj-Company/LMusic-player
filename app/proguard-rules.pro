@@ -58,31 +58,31 @@
 -dontwarn com.softsynth.**
 
 # Mantener clases de datos y sus miembros para evitar que R8 Full elimine campos
--keepclassmembers class com.theveloper.pixelplay.data.model.** { *; }
--keepclassmembers class com.theveloper.pixelplay.domain.model.** { *; }
+-keepclassmembers class com.twilighty.lmusic.data.model.** { *; }
+-keepclassmembers class com.twilighty.lmusic.domain.model.** { *; }
 
 -keepattributes Signature, InnerClasses, EnclosingMethod, AnnotationDefault, *Annotation*
 
 # Cast framework classes loaded via manifest/reflective entry points.
--keep class com.theveloper.pixelplay.data.service.cast.CastOptionsProvider { *; }
+-keep class com.twilighty.lmusic.data.service.cast.CastOptionsProvider { *; }
 -keep class * implements com.google.android.gms.cast.framework.OptionsProvider
 
 # Gson generic type capture for backup/restore in release builds.
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
--keep class com.theveloper.pixelplay.data.preferences.PreferenceBackupEntry { *; }
--keep class com.theveloper.pixelplay.data.backup.model.** { *; }
--keep class com.theveloper.pixelplay.data.backup.module.** { *; }
+-keep class com.twilighty.lmusic.data.preferences.PreferenceBackupEntry { *; }
+-keep class com.twilighty.lmusic.data.backup.model.** { *; }
+-keep class com.twilighty.lmusic.data.backup.module.** { *; }
 # LMusic: listening history and skips are stored as Gson JSON. Keep field names stable
 # across builds so stats survive app updates.
--keep class com.theveloper.pixelplay.data.stats.PlaybackStatsRepository$PlaybackEvent { *; }
--keep class com.theveloper.pixelplay.data.stats.PlaybackStatsRepository$SkipEvent { *; }
+-keep class com.twilighty.lmusic.data.stats.PlaybackStatsRepository$PlaybackEvent { *; }
+-keep class com.twilighty.lmusic.data.stats.PlaybackStatsRepository$SkipEvent { *; }
 # Backup payload entities are part of the persisted .pxpl contract.
--keep class com.theveloper.pixelplay.data.database.FavoritesEntity { *; }
--keep class com.theveloper.pixelplay.data.database.SongEngagementEntity { *; }
--keep class com.theveloper.pixelplay.data.database.LyricsEntity { *; }
--keep class com.theveloper.pixelplay.data.database.SearchHistoryEntity { *; }
--keep class com.theveloper.pixelplay.data.database.TransitionRuleEntity { *; }
+-keep class com.twilighty.lmusic.data.database.FavoritesEntity { *; }
+-keep class com.twilighty.lmusic.data.database.SongEngagementEntity { *; }
+-keep class com.twilighty.lmusic.data.database.LyricsEntity { *; }
+-keep class com.twilighty.lmusic.data.database.SearchHistoryEntity { *; }
+-keep class com.twilighty.lmusic.data.database.TransitionRuleEntity { *; }
 
 # Netty channel classes are instantiated reflectively and require public no-arg constructors.
 # Without these, release builds can fail with:
@@ -173,7 +173,7 @@
 -dontwarn io.netty.**
 
 # Ensure internal server can start
--keep class com.theveloper.pixelplay.data.telegram.TelegramStreamProxy { *; }
+-keep class com.twilighty.lmusic.data.telegram.TelegramStreamProxy { *; }
 
 # Keep Kotlin reflection if needed by Ktor/Serialization in Release
 -keep class kotlin.reflect.** { *; }

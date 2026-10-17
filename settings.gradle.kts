@@ -30,7 +30,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PixelPlay"
+rootProject.name = "LMusic"
 include(":app")
 include(":shared")
 include(":wear")

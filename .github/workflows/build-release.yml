@@ -141,7 +141,7 @@ jobs:
           # arm64 build only: every Android 15+ phone (including the Galaxy S23) is
           # 64-bit ARM, and it keeps the APK a fraction of the universal size.
           ./gradlew :app:assembleRelease --stacktrace \
-            -Ppixelplay.enableAbiSplits=true \
+            -Plmusic.enableAbiSplits=true \
             -PAPP_VERSION_CODE=${{ steps.version.outputs.code }} \
             -PAPP_VERSION_NAME=${{ steps.version.outputs.name }}
 

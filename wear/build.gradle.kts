@@ -7,7 +7,7 @@ plugins {
 }
 
 android {
-    namespace = "com.theveloper.pixelplay"
+    namespace = "com.twilighty.lmusic"
     compileSdk = 37
 
     defaultConfig {

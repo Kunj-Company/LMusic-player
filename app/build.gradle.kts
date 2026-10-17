@@ -18,17 +18,17 @@ val keystoreProperties = Properties().apply {
     }
 }
 
-val enableAbiSplits = providers.gradleProperty("pixelplay.enableAbiSplits")
+val enableAbiSplits = providers.gradleProperty("lmusic.enableAbiSplits")
     .getOrElse("true")
     .toBoolean()
 
-val enableComposeCompilerReports = providers.gradleProperty("pixelplay.enableComposeCompilerReports")
+val enableComposeCompilerReports = providers.gradleProperty("lmusic.enableComposeCompilerReports")
     .getOrElse("false")
     .toBoolean()
 
 @Suppress("DEPRECATION")
 android {
-    namespace = "com.theveloper.pixelplay"
+    namespace = "com.twilighty.lmusic"
     compileSdk = 37
 
     sourceSets {
