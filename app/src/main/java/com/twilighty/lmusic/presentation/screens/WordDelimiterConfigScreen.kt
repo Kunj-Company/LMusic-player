@@ -409,6 +409,7 @@ fun WordDelimiterConfigScreen(
                 confirmButton = {
                     Button(
                         onClick = {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                             viewModel.resetWordDelimitersToDefault()
                             Toast.makeText(context, context.getString(R.string.word_delimiter_toast_reset), Toast.LENGTH_SHORT).show()
                             showResetDialog = false

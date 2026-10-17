@@ -56,8 +56,10 @@ sealed class Screen(val route: String) {
     object NavidromeDashboard : Screen("navidrome_dashboard")
     object JellyfinDashboard : Screen("jellyfin_dashboard")
     object LibraryHealth : Screen("library_health")
+    object Lofi : Screen("lofi")
     object Recap : Screen("recap/{period}") {
         fun createRoute(period: String) = "recap/$period"
     }
+    object Party : Screen("party")
 
 }

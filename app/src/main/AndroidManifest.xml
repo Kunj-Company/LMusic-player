@@ -235,6 +235,14 @@
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
         <service
+            android:name=".data.lofi.LofiService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+        <service
+            android:name=".data.party.PartyServerService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
+        <service
             android:name=".data.service.wear.WatchTransferForegroundService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />

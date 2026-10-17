@@ -528,6 +528,7 @@ fun PlaylistDetailScreen(
     if (showPlaylistOptionsSheet && !isFolderPlaylist) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+        com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
         ModalBottomSheet(
             onDismissRequest = { showPlaylistOptionsSheet = false },
             sheetState = sheetState,

@@ -94,6 +94,7 @@ fun LibrarySortBottomSheet(
         label = "boxCornerRadiusAnimation"
     )
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -158,6 +159,7 @@ fun LibrarySortBottomSheet(
                     isDescending = isDescending,
                     enabled = resolvedSelectedOption.canFlipDirection,
                     onClick = {
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                         onDirectionToggle(resolvedSelectedOption.flipDirection())
                     }
                 )
@@ -198,6 +200,7 @@ fun LibrarySortBottomSheet(
                             .selectable(
                                 selected = isSelected,
                                 onClick = {
+                                    if (!isSelected) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                                     onOptionSelected(option.resolveForDirection(selectedDirection))
                                 },
                                 role = Role.RadioButton
@@ -420,7 +423,7 @@ internal fun LibrarySheetToggleCard(
                 )
             )
             .background(color = boxBackgroundColor)
-            .clickable(onClick = { onCheckedChange(!checked) })
+            .clickable(onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggle(!checked); onCheckedChange(!checked) })
     ) {
         Row(
             modifier = Modifier
@@ -438,7 +441,7 @@ internal fun LibrarySheetToggleCard(
             )
             Switch(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggle(it); onCheckedChange(it) },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.onTertiary,
                     checkedTrackColor = MaterialTheme.colorScheme.onTertiaryContainer,

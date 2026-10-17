@@ -87,6 +87,7 @@ fun ReorderTabsSheet(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                         onReset()
                         localTabs = tabs
                         showResetDialog = false
@@ -123,6 +124,7 @@ fun ReorderTabsSheet(
     )
     var isLoading by remember { mutableStateOf(false) }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = { onDismiss() },
         sheetState = sheetState,

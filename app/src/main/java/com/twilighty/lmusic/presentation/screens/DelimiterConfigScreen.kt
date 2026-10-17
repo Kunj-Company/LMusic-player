@@ -414,6 +414,7 @@ fun DelimiterConfigScreen(
                 confirmButton = {
                     Button(
                         onClick = {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                             viewModel.resetDelimitersToDefault()
                             Toast.makeText(context, context.getString(R.string.delimiter_toast_reset), Toast.LENGTH_SHORT).show()
                             showResetDialog = false

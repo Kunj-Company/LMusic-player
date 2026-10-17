@@ -34,8 +34,8 @@ import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-internal val NavBarContentHeight = 90.dp // Altura del contenido de la barra de navegación
-internal val NavBarCompactContentHeight = 64.dp
+internal val NavBarContentHeight = 64.dp // Icon + small label
+internal val NavBarCompactContentHeight = 56.dp // Icons only
 internal val NavBarContentHeightFullWidth = NavBarContentHeight // Altura del contenido de la barra de navegación en modo completo
 // Some OEM freeform/floating-window modes can report a bottom inset close to the whole window height.
 internal val MaxNavigationBarBottomInset = 96.dp

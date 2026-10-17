@@ -956,6 +956,7 @@ private fun ChipsSingleSelect(
                 FilledTonalButton(
                     onClick = {
                         if (customInputValue.isNotBlank()) {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                             onSelectedChange(customInputValue.trim())
                         }
                         showCustomDialog = false

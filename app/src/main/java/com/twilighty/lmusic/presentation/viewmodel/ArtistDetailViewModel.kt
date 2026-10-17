@@ -12,6 +12,14 @@ import com.twilighty.lmusic.data.model.Artist
 import com.twilighty.lmusic.data.model.Song
 import com.twilighty.lmusic.data.repository.ArtistImageRepository
 import com.twilighty.lmusic.data.repository.MusicRepository
+import com.twilighty.lmusic.data.stats.PlaybackStatsRepository
+import com.twilighty.lmusic.presentation.artist.ArtistStory
+import com.twilighty.lmusic.presentation.artist.ArtistStoryCalculator
+import com.twilighty.lmusic.presentation.artist.StoryEvent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.ZoneId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -50,11 +58,25 @@ data class ArtistAlbumSection(
     val songs: List<Song>
 )
 
+/** State of the "Your story with <artist>" section. */
+sealed interface ArtistStoryState {
+    data object Loading : ArtistStoryState
+    data object Empty : ArtistStoryState
+    @Immutable
+    data class Ready(
+        val story: ArtistStory,
+        val topSong: Song?,
+        val firstSong: Song?,
+        val nowMillis: Long,
+    ) : ArtistStoryState
+}
+
 @HiltViewModel
 class ArtistDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val musicRepository: MusicRepository,
     private val artistImageRepository: ArtistImageRepository,
+    private val playbackStatsRepository: PlaybackStatsRepository,
     val themeStateHolder: ThemeStateHolder,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -74,7 +96,17 @@ class ArtistDetailViewModel @Inject constructor(
     private val _artistColorScheme = MutableStateFlow<ColorSchemePair?>(null)
     val artistColorScheme: StateFlow<ColorSchemePair?> = _artistColorScheme.asStateFlow()
 
+    private val _story = MutableStateFlow<ArtistStoryState>(ArtistStoryState.Loading)
+    val story: StateFlow<ArtistStoryState> = _story.asStateFlow()
+    private var storyJob: Job? = null
+    private var storyInputs: Pair<Artist, List<Song>>? = null
+
     init {
+        // Recompute the story when new plays are recorded (event-driven, no polling).
+        playbackStatsRepository.refreshFlow
+            .onEach { storyInputs?.let { (artist, songs) -> loadStory(artist, songs) } }
+            .launchIn(viewModelScope)
+
         savedStateHandle.getStateFlow<String?>("artistId", null)
             .onEach { idString ->
                 if (idString != null) {
@@ -161,6 +193,7 @@ class ArtistDetailViewModel @Inject constructor(
                             effectiveImageUrl = effectiveUrl,
                             isLoading = false
                         )
+                        loadStory(artist, orderedSongs)
                     }
 
             } catch (e: Exception) {
@@ -256,6 +289,80 @@ class ArtistDetailViewModel @Inject constructor(
         }
     }
 
+    private fun loadStory(artist: Artist, artistSongs: List<Song>) {
+        storyInputs = artist to artistSongs
+        val version = playbackStatsRepository.refreshFlow.value
+        val cacheKey = StoryCacheKey(artist.id, version, artistSongs.size)
+        storyCache[cacheKey]?.let { cached ->
+            storyJob?.cancel()
+            _story.value = cached
+            return
+        }
+        storyJob?.cancel()
+        storyJob = viewModelScope.launch {
+            if (_story.value !is ArtistStoryState.Ready) _story.value = ArtistStoryState.Loading
+            val state = try {
+                computeStory(artist, artistSongs)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("ArtistDebug", "Artist story failed: ${e.message}")
+                ArtistStoryState.Empty
+            }
+            synchronized(storyCache) {
+                storyCache.keys.removeAll { it.artistId == artist.id }
+                if (storyCache.size >= STORY_CACHE_SIZE) storyCache.keys.firstOrNull()?.let { storyCache.remove(it) }
+                storyCache[cacheKey] = state
+            }
+            _story.value = state
+        }
+    }
+
+    private suspend fun computeStory(artist: Artist, artistSongs: List<Song>): ArtistStoryState {
+        val rawEvents = playbackStatsRepository.exportEventsForBackup() // IO inside
+        if (rawEvents.isEmpty()) return ArtistStoryState.Empty
+        return withContext(Dispatchers.Default) {
+            val events = rawEvents.map { e ->
+                val end = (e.endTimestamp ?: e.timestamp).coerceAtLeast(0L)
+                val start = (e.startTimestamp ?: (end - e.durationMs)).coerceAtLeast(0L).coerceAtMost(end)
+                StoryEvent(songId = e.songId, startMillis = start, durationMs = e.durationMs.coerceAtLeast(0L), endMillis = end)
+            }
+            val songsById = HashMap<String, Song>(artistSongs.size * 2)
+            artistSongs.forEach { songsById[it.id] = it }
+            val unmatchedIds = events.asSequence().map { it.songId }.filter { it !in songsById }.toHashSet()
+            if (unmatchedIds.isNotEmpty()) {
+                // Songs credited to the artist by name only (e.g. features in the artist string).
+                val library = withContext(Dispatchers.IO) { musicRepository.getAllSongsOnce() }
+                library.forEach { song ->
+                    if (song.id in unmatchedIds && ArtistStoryCalculator.songMatchesArtist(
+                            songArtistId = song.artistId,
+                            songArtistRefIds = song.artists.map { it.id },
+                            songArtistNames = song.artists.map { it.name },
+                            songArtistString = song.artist,
+                            artistId = artist.id,
+                            artistName = artist.name
+                        )
+                    ) {
+                        songsById[song.id] = song
+                    }
+                }
+            }
+            val now = System.currentTimeMillis()
+            val story = ArtistStoryCalculator.compute(
+                allEvents = events,
+                artistSongIds = songsById.keys,
+                nowMillis = now,
+                zoneId = ZoneId.systemDefault()
+            ) ?: return@withContext ArtistStoryState.Empty
+            ArtistStoryState.Ready(
+                story = story,
+                topSong = songsById[story.topSongId],
+                firstSong = songsById[story.firstSongId],
+                nowMillis = now
+            )
+        }
+    }
+
     fun removeSongFromAlbumSection(songId: String) {
         _uiState.update { currentState ->
             val updatedAlbumSections = currentState.albumSections.map { section ->
@@ -270,6 +377,13 @@ class ArtistDetailViewModel @Inject constructor(
         }
     }
 }
+
+private data class StoryCacheKey(val artistId: Long, val statsVersion: Long, val songCount: Int)
+
+private const val STORY_CACHE_SIZE = 16
+
+/** Process-wide per-artist cache, so revisiting an artist page shows the story instantly. */
+private val storyCache = LinkedHashMap<StoryCacheKey, ArtistStoryState>()
 
 private val songDisplayComparator = compareBy<Song> { it.discNumber ?: 1 }
     .thenBy { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }

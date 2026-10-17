@@ -289,6 +289,7 @@ fun ThemeSelectorItem(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface
         ) {
+            com.twilighty.lmusic.presentation.haptics.HapticSheetLifecycleEffect()
             Column(modifier = Modifier.padding(bottom = 24.dp)) {
                 Text(
                     text = label,

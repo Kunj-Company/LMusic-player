@@ -648,6 +648,20 @@ fun AppNavigation(
                 }
             }
             composable(
+                Screen.Lofi.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.lofi.LofiScreen(
+                        onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding()
+                    )
+                }
+            }
+            composable(
                 route = Screen.Recap.route,
                 arguments = listOf(navArgument("period") { type = NavType.StringType }),
                 enterTransition = { enterTransition() },
@@ -660,6 +674,20 @@ fun AppNavigation(
                     com.twilighty.lmusic.presentation.recap.RecapScreen(
                         period = com.twilighty.lmusic.presentation.recap.RecapPeriod.fromRoute(period),
                         onClose = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable(
+                Screen.Party.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.party.PartyScreen(
+                        onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding()
                     )
                 }
             }

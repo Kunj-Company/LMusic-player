@@ -521,6 +521,8 @@ fun FullPlayerContent(
             onAlbumClick = { albumSong ->
                 playerViewModel.triggerAlbumNavigationFromPlayer(albumSong.albumId)
             },
+            isFavoriteProvider = isFavoriteProvider,
+            onFavoriteToggle = onFavoriteToggle,
             modifier = modifier
         )
     }
@@ -1052,10 +1054,38 @@ private fun FullPlayerAlbumCoverSection(
     requestedScrollIndex: Int?,
     onSongSelected: (Song) -> Unit,
     onAlbumClick: (Song) -> Unit,
+    isFavoriteProvider: () -> Boolean,
+    onFavoriteToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shouldDelay = loadingTweaks.delayAll || loadingTweaks.delayAlbumCarousel
     val shouldApplyPausedScale = !isPlayingProvider() && !playWhenReadyProvider()
+
+    // Living artwork: breathes in time with the song's tempo while playing and expanded.
+    val livingArtworkViewModel: LivingArtworkViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val livingArtworkEnabled by livingArtworkViewModel.enabled.collectAsStateWithLifecycle()
+    val livingArtworkTempo by livingArtworkViewModel.tempoBpm.collectAsStateWithLifecycle()
+    LaunchedEffect(song.id, livingArtworkEnabled) {
+        if (livingArtworkEnabled) livingArtworkViewModel.loadTempo(song.id)
+    }
+    val livingArtworkActive = livingArtworkEnabled &&
+        currentSheetState == PlayerSheetState.EXPANDED &&
+        !isSheetDragGestureActive &&
+        (isPlayingProvider() || playWhenReadyProvider())
+    val livingArtwork = rememberLivingArtworkState(
+        active = livingArtworkActive,
+        tempoBpm = livingArtworkTempo
+    )
+
+    // Double-tap the cover to like.
+    val haptics = LocalLMusicHaptics.current
+    val heartPop = rememberHeartPopState()
+    val onCoverDoubleTap: (Song) -> Unit = {
+        val nowLiked = !isFavoriteProvider()
+        if (nowLiked) haptics.heartbeat() else haptics.like(false)
+        heartPop.pop(liked = nowLiked)
+        onFavoriteToggle()
+    }
     val albumArtScale by animateFloatAsState(
         targetValue = if (shouldApplyPausedScale) 0.95f else 1f,
         animationSpec = spring(
@@ -1138,15 +1168,19 @@ private fun FullPlayerAlbumCoverSection(
                     }
                 },
                 onAlbumClick = onAlbumClick,
+                onAlbumDoubleTap = onCoverDoubleTap,
                 carouselStyle = carouselStyle,
                 modifier = Modifier
                     .then(carouselWidthModifier)
                     .height(carouselHeight)
                     .graphicsLayer {
-                        scaleX = albumArtScale
-                        scaleY = albumArtScale
+                        livingArtwork.apply(this, albumArtScale)
                     },
                 albumArtQuality = albumArtQuality
+            )
+            HeartPopOverlay(
+                state = heartPop,
+                modifier = Modifier.align(Alignment.Center)
             )
             }
         }

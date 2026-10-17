@@ -153,6 +153,7 @@ class LibraryHealthViewModel @Inject constructor(
             is PendingWrite.Batch -> if (granted) {
                 runBatch(pending.songs)
             } else {
+                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
                 _summary.value = BatchSummary(
                     fixed = emptyList(),
                     skipped = pending.songs.map { SkippedSong(it, SkipReason.PERMISSION_DENIED) },
@@ -162,6 +163,7 @@ class LibraryHealthViewModel @Inject constructor(
             is PendingWrite.Review -> if (granted) {
                 viewModelScope.launch { applyReview(pending.song, pending.result) }
             } else {
+                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
                 _messages.tryEmit(HealthMessage.PermissionDenied)
             }
         }
@@ -220,6 +222,11 @@ class LibraryHealthViewModel @Inject constructor(
             } finally {
                 _progress.value = null
                 _summary.value = BatchSummary(fixed = fixed.toList(), skipped = skipped.toList(), cancelled = cancelled)
+                when {
+                    cancelled -> {}
+                    fixed.isNotEmpty() -> com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
+                    else -> com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
+                }
             }
         }
     }
@@ -454,8 +461,10 @@ class LibraryHealthViewModel @Inject constructor(
         if (result.success && updated != null) {
             libraryStateHolder.updateSong(updated)
             removeFromReview(song.id)
+            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
             _messages.tryEmit(HealthMessage.Saved)
         } else {
+            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
             _messages.tryEmit(HealthMessage.SaveFailed)
         }
     }

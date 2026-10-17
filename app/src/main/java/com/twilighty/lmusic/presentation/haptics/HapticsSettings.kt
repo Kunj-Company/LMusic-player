@@ -26,7 +26,7 @@ import com.twilighty.lmusic.presentation.screens.SwitchSettingItem
 import com.twilighty.lmusic.presentation.yuyu.YuyuSegmented
 
 /**
- * Settings → Behavior → Haptics. "Off / Subtle / Full" plus the seek-tick switch.
+ * Settings → Behavior → Haptics. "Off / Subtle / Full / Strong" plus the seek-tick switch.
  * Off also turns off the legacy master switch, so every older haptic call site goes quiet too.
  */
 @Composable
@@ -35,7 +35,8 @@ fun HapticsSettingsSection() {
     val level by engine.level.collectAsState()
     val seekTicks by engine.seekTicksEnabled.collectAsState()
     val levels = HapticsLevel.entries
-    val labels = listOf("Off", "Subtle", "Full")
+    val richLevel = level == HapticsLevel.FULL || level == HapticsLevel.STRONG
+    val labels = listOf("Off", "Subtle", "Full", "Strong")
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Surface(
@@ -78,6 +79,7 @@ fun HapticsSettingsSection() {
                                 HapticsLevel.OFF -> "No vibration feedback"
                                 HapticsLevel.SUBTLE -> "Lighter, only for key moments"
                                 HapticsLevel.FULL -> "Crisp feedback across the app"
+                                HapticsLevel.STRONG -> "Punchy, rich feedback everywhere"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -91,8 +93,8 @@ fun HapticsSettingsSection() {
                         val newLevel = levels[index]
                         if (newLevel != level) {
                             engine.setLevel(newLevel)
-                            // Preview the new level (the engine picks it up a moment later).
-                            if (newLevel != HapticsLevel.OFF) engine.selection()
+                            // Preview at the NEW level right away (the saved level updates a moment later).
+                            engine.preview(newLevel)
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -102,8 +104,8 @@ fun HapticsSettingsSection() {
         SwitchSettingItem(
             title = "Seek ticks",
             subtitle = "A soft tick every 10 seconds while you scrub",
-            checked = seekTicks && level == HapticsLevel.FULL,
-            enabled = level == HapticsLevel.FULL,
+            checked = seekTicks && richLevel,
+            enabled = richLevel,
             onCheckedChange = { engine.setSeekTicks(it) },
             leadingIcon = {
                 Icon(

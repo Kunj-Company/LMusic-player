@@ -676,6 +676,7 @@ private fun ChannelActionsBottomSheet(
             ?.let { if (it.startsWith("@")) it else "@$it" }
     }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

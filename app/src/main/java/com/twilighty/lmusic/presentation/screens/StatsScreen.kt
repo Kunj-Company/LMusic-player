@@ -1130,7 +1130,7 @@ private fun ListeningTimelineSection(
                 val isSelected = metric == selectedMetric
                 FilterChip(
                     selected = isSelected,
-                    onClick = { onMetricSelected(metric) },
+                    onClick = { if (!isSelected) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection(); onMetricSelected(metric) },
                     label = {
                         Text(
                             text = stringResource(metric.displayNameRes),
@@ -1282,7 +1282,7 @@ private fun CategoryMetricsSection(
                 val chipPalette = categoryPaletteFor(dimension)
                 FilterChip(
                     selected = isSelected,
-                    onClick = { onDimensionSelected(dimension) },
+                    onClick = { if (!isSelected) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection(); onDimensionSelected(dimension) },
                     label = {
                         Text(
                             text = stringResource(dimension.displayNameRes),

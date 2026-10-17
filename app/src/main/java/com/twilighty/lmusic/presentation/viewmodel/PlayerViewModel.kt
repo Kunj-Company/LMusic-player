@@ -3398,6 +3398,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun addSongToQueue(song: Song) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         mediaController?.let { controller ->
             val mediaItem = buildPlaybackMediaItem(song)
             controller.addMediaItem(mediaItem)
@@ -3406,6 +3407,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun addSongNextToQueue(song: Song) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         mediaController?.let { controller ->
             val mediaItem = buildPlaybackMediaItem(song)
 
@@ -3458,6 +3460,7 @@ class PlayerViewModel @Inject constructor(
      * Clears selection after adding.
      */
     fun addSelectedToQueue(songs: List<Song>) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         songs.forEach { addSongToQueue(it) }
         viewModelScope.launch {
             val n = songs.size
@@ -3474,6 +3477,7 @@ class PlayerViewModel @Inject constructor(
      * Clears selection after adding.
      */
     fun addSelectedAsNext(songs: List<Song>) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         songs.reversed().forEach { addSongNextToQueue(it) }
         viewModelScope.launch {
             val n = songs.size
@@ -3524,6 +3528,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun addSelectedAlbumsAsNext(albums: List<Album>) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         if (albums.isEmpty()) return
 
         viewModelScope.launch {
@@ -3551,6 +3556,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun addSelectedAlbumsToQueue(albums: List<Album>) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         if (albums.isEmpty()) return
 
         viewModelScope.launch {

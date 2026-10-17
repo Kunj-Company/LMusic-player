@@ -100,6 +100,7 @@ fun PlaylistBottomSheet(
         label = "fab_alpha"
     )
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

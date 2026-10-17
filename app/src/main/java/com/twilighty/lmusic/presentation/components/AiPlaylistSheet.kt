@@ -182,6 +182,7 @@ fun AiPlaylistSheet(
         )
     }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         sheetState = sheetState,
         onDismissRequest = onDismiss,

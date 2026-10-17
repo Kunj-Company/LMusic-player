@@ -435,7 +435,10 @@ fun YuyuActionRow(
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .clip(YuyuShapes.md)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = {
+                if (danger) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection() else com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().tap()
+                onClick()
+            })
             .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)

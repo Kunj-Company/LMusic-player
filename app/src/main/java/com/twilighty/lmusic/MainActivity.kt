@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -240,9 +241,6 @@ class MainActivity : ComponentActivity() {
             val appColorStyle by themePreferencesRepository.appColorStyleFlow.collectAsStateWithLifecycle(initialValue = com.twilighty.lmusic.data.preferences.AppColorStyle.YUYU)
             val isSetupComplete by mainViewModel.isSetupComplete.collectAsStateWithLifecycle()
             
-            // Crash report dialog state
-            var showCrashReportDialog by remember { mutableStateOf(false) }
-            var crashLogData by remember { mutableStateOf<CrashLogData?>(null) }
             
             // Permissions Logic
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -267,14 +265,6 @@ class MainActivity : ComponentActivity() {
                 if (showSetupScreen == false) {
                      LogUtils.i(this, "Setup complete/skipped and permissions valid. Starting sync.")
                      mainViewModel.startSync()
-                }
-            }
-
-            // Check for crash log when app starts
-            LaunchedEffect(Unit) {
-                if (!isBenchmarkMode && CrashHandler.hasCrashLog()) {
-                    crashLogData = CrashHandler.getCrashLog()
-                    showCrashReportDialog = true
                 }
             }
 
@@ -326,17 +316,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Show crash report dialog if needed
-                    if (showCrashReportDialog && crashLogData != null) {
-                        CrashReportDialog(
-                            crashLog = crashLogData!!,
-                            onDismiss = {
-                                CrashHandler.clearCrashLog()
-                                crashLogData = null
-                                showCrashReportDialog = false
-                            }
+                    // Safe mode banner (after repeated early crashes) — see data/crash/SafeMode.kt.
+                    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                        com.twilighty.lmusic.presentation.crash.SafeModeBanner(
+                            Modifier
+                                .align(androidx.compose.ui.Alignment.TopCenter)
+                                .statusBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
+                    // "Something went wrong last time" — shown once per saved crash (filesDir/crash/last_crash.txt).
+                    com.twilighty.lmusic.presentation.crash.CrashReportOnLaunch(enabled = !isBenchmarkMode)
                 }
             }
         }
@@ -621,6 +611,7 @@ class MainActivity : ComponentActivity() {
                 Screen.EasterEgg.route,
                 Screen.WordDelimiterConfig.route,
                 Screen.LibraryHealth.route,
+                Screen.Lofi.route,
                 Screen.Recap.route
             )
         }
@@ -653,7 +644,12 @@ class MainActivity : ComponentActivity() {
             AppHapticsConfig(enabled = hapticsEnabled)
         }
         val scopedHapticFeedback = remember(platformHapticFeedback, appHapticsConfig.enabled) {
-            if (appHapticsConfig.enabled) platformHapticFeedback else NoOpHapticFeedback
+            // Route Compose/Material haptics through the LMusic engine so they follow the haptics level.
+            if (appHapticsConfig.enabled) {
+                com.twilighty.lmusic.presentation.haptics.EngineHapticFeedback(lmusicHapticsEngine)
+            } else {
+                NoOpHapticFeedback
+            }
         }
 
         val systemNavBarInset = sanitizeNavigationBarBottomInset(
@@ -1078,8 +1074,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Resumed this long without crashing -> the launch counts as stable (resets the safe mode counter).
+    private val markStableRunnable = Runnable {
+        runCatching { com.twilighty.lmusic.data.crash.SafeMode.markStable(applicationContext) }
+    }
+    private val stabilityHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
     override fun onResume() {
         super.onResume()
+        stabilityHandler.removeCallbacks(markStableRunnable)
+        stabilityHandler.postDelayed(markStableRunnable, 10_000L)
+    }
+
+    override fun onPause() {
+        stabilityHandler.removeCallbacks(markStableRunnable)
+        super.onPause()
     }
 
 

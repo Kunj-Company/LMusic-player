@@ -123,6 +123,7 @@ fun TimerOptionsBottomSheet(
     val isCounterActive = playCount > 1f
     val hasActiveTimer = activeTimerValueDisplay != null || isCounterActive
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

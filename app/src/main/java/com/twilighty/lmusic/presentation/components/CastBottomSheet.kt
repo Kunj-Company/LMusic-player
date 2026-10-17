@@ -343,6 +343,7 @@ fun CastBottomSheet(
         onDispose { onExpansionChanged(0f) }
     }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -370,6 +371,7 @@ fun CastBottomSheet(
                     CastSheetContent(
                         state = uiState,
                         onSelectDevice = { id ->
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggleOn()
                             when {
                                 id.startsWith("bluetooth_") -> {
                                     val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
@@ -380,6 +382,7 @@ fun CastBottomSheet(
                             }
                         },
                         onDisconnect = {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().toggleOff()
                             playerViewModel.disconnect()
                             onDismiss()
                         },

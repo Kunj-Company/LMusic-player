@@ -486,6 +486,7 @@ fun LibraryScreen(
     } else {
         rememberPagerState(initialPage = normalizedLastTabIndex) { tabCount }
     }
+    com.twilighty.lmusic.presentation.haptics.HapticPagerEffect(pagerState, userDragOnly = true)
     val currentTabIndex by remember(pagerState, tabTitles, isCompactNavigation) {
         derivedStateOf {
             resolveTabIndex(
@@ -2104,6 +2105,7 @@ fun LibraryScreen(
                 TextButton(
                     onClick = {
                         if (mergePlaylistName.isNotEmpty()) {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                             playlistViewModel.mergePlaylistsIntoOne(
                                 pendingMergePlaylistIds,
                                 mergePlaylistName
@@ -2591,6 +2593,7 @@ private fun LibraryTabSwitcherSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

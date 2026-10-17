@@ -253,6 +253,8 @@ dependencies {
     implementation(libs.kotlinx.collections.immutable)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
+    // Party queue: local QR encoding for the join link
+    implementation(libs.zxing.core)
 
     // Smart features (on-device YAMNet audio tagging)
     implementation(libs.tensorflow.lite)

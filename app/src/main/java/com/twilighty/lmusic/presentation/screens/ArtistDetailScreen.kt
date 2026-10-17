@@ -50,6 +50,7 @@ import com.twilighty.lmusic.presentation.components.SongInfoBottomSheet
 import com.twilighty.lmusic.presentation.components.resolveNavBarOccupiedHeight
 import com.twilighty.lmusic.presentation.navigation.Screen
 import com.twilighty.lmusic.presentation.viewmodel.ArtistDetailViewModel
+import com.twilighty.lmusic.presentation.artist.ArtistStorySection
 import com.twilighty.lmusic.presentation.viewmodel.ArtistAlbumSection
 import com.twilighty.lmusic.presentation.viewmodel.PlayerViewModel
 import com.twilighty.lmusic.presentation.viewmodel.PlaylistViewModel
@@ -82,6 +83,7 @@ fun ArtistDetailScreen(
     playlistViewModel: PlaylistViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val storyState by viewModel.story.collectAsStateWithLifecycle()
     val stablePlayerState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
     
     // Optimization: Defer heavy list rendering until navigation transition settles
@@ -259,6 +261,15 @@ fun ArtistDetailScreen(
                                                 startAtZero = true
                                             )
                                         }
+                                    }
+                                )
+                                ArtistStorySection(
+                                    artistName = artist.name,
+                                    state = storyState,
+                                    canPlay = songs.isNotEmpty(),
+                                    onPlaySong = { song -> playerViewModel.showAndPlaySong(song, songs, artist.name) },
+                                    onPlayArtist = {
+                                        songs.firstOrNull()?.let { playerViewModel.showAndPlaySong(it, songs, artist.name) }
                                     }
                                 )
                                 if (albumCount > 0) {

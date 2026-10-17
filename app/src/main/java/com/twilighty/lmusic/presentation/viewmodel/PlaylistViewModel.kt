@@ -300,6 +300,7 @@ class PlaylistViewModel @Inject constructor(
         source: String = "LOCAL", // Mark source
         smartRuleKey: String? = null
     ) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
         viewModelScope.launch {
             var savedCoverPath: String? = null
 
@@ -653,6 +654,7 @@ class PlaylistViewModel @Inject constructor(
 
     fun addSongsToPlaylist(playlistId: String, songIdsToAdd: List<String>) {
         if (isFolderPlaylistId(playlistId)) return
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         viewModelScope.launch {
             playlistPreferencesRepository.addSongsToPlaylist(playlistId, songIdsToAdd)
             if (_uiState.value.currentPlaylistDetails?.id == playlistId) {
@@ -669,6 +671,7 @@ class PlaylistViewModel @Inject constructor(
         playlistIds: List<String>,
         currentPlaylistId: String?
     ) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         viewModelScope.launch {
             val removedFromPlaylists =
                 playlistPreferencesRepository.addOrRemoveSongFromPlaylists(songId, playlistIds)
@@ -679,6 +682,7 @@ class PlaylistViewModel @Inject constructor(
     }
 
     fun addSongsToPlaylists(songIds: List<String>, playlistIds: List<String>) {
+        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()
         viewModelScope.launch {
             playlistIds.forEach { playlistId ->
                 playlistPreferencesRepository.addSongsToPlaylist(playlistId, songIds)

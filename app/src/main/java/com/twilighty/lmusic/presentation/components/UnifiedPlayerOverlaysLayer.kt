@@ -97,6 +97,7 @@ internal fun UnifiedPlayerQueueLayer(
             )
         }
 
+        com.twilighty.lmusic.presentation.haptics.HapticVisibilityEffect(showQueueSheet)
         val shouldRenderQueueSheet = remember(showQueueSheet, queueSheetHeightPx) {
             showQueueSheet || queueSheetHeightPx == 0f
         }
