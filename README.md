@@ -5,6 +5,8 @@ LMusic is built on top of [PixelPlayer](https://github.com/theovilardo/PixelPlay
 (the last MIT-licensed version) and adds a Yuyu-styled look, a richer tag editor with
 metadata autofill, and deeper listening analytics.
 
+Made by **Abhiram NJ** ([Twilight Abhi](https://github.com/twilighty-abhi)).
+
 ## Install
 
 1. Open the [latest release](https://github.com/twilighty-abhi/LMusic-player/releases/latest)

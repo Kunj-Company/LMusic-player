@@ -91,8 +91,8 @@ internal fun MiniPlayerContentInternal(
             key(song.id) {
                 SmartImage(
                     model = albumArtModel,
-                    contentDescription = "Carátula de ${song.title}",
-                    shape = CircleShape,
+                    contentDescription = "Artwork for ${song.title}",
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
                     targetSize = Size(150, 150),
                     modifier = Modifier.size(44.dp),
                     placeholderModel = if (albumArtModel?.startsWith("telegram_art") == true) {

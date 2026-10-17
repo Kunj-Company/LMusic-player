@@ -122,9 +122,9 @@ private fun PlayerInternalNavigationItemsRow(
         var lastSearchTapTimestamp by remember { mutableStateOf(0L) }
         navItems.forEach { item ->
             val isSelected = currentRoute != null && currentRoute == item.screen.route
-            val selectedColor = MaterialTheme.colorScheme.primary
+            val selectedColor = MaterialTheme.colorScheme.onSurface
             val unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-            val indicatorColorFromTheme = MaterialTheme.colorScheme.secondaryContainer
+            val indicatorColorFromTheme = MaterialTheme.colorScheme.surfaceContainerHigh
 
             val iconPainterResId = if (isSelected && item.selectedIconResId != null && item.selectedIconResId != 0) {
                 item.selectedIconResId

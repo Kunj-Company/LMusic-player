@@ -46,6 +46,8 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Hearing
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -138,7 +140,9 @@ private const val PULL_TO_REFRESH_MIN_DURATION_MS = 3500L
 @Composable
 fun StatsScreen(
     navController: NavController,
-    statsViewModel: StatsViewModel = hiltViewModel()
+    statsViewModel: StatsViewModel = hiltViewModel(),
+    bottomInset: Dp = 0.dp,
+    showBackButton: Boolean = false,
 ) {
     val uiState by statsViewModel.uiState.collectAsStateWithLifecycle()
     val summary = uiState.summary
@@ -200,7 +204,9 @@ fun StatsScreen(
         }
     }
 
+    @Suppress("UNUSED_VARIABLE")
     val currentTopBarHeightDp = with(density) { topBarHeight.value.toDp() }
+    val yuyuHeaderHeight = statusBarHeight + 76.dp + 52.dp
     val tabsHeight = 62.dp
     val showRangeTabIndicator = false
     val tabIndicatorExtraSpacing = if (showRangeTabIndicator) 8.dp else 0.dp
@@ -266,7 +272,7 @@ fun StatsScreen(
                 isRefreshing = isPullRefreshAnimating,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = currentTopBarHeightDp + tabsHeight + tabIndicatorExtraSpacing + 4.dp)
+                    .padding(top = yuyuHeaderHeight + 4.dp)
             )
         }
     ) {
@@ -274,7 +280,6 @@ fun StatsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surface)
-                .nestedScroll(nestedScrollConnection)
         ) {
             if (uiState.isLoading && summary == null) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -288,8 +293,8 @@ fun StatsScreen(
                     modifier = Modifier
                         .fillMaxSize(),
                     contentPadding = PaddingValues(
-                        top = currentTopBarHeightDp + tabsHeight + tabIndicatorExtraSpacing + tabContentSpacing + 0.dp,
-                        bottom = MiniPlayerHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp
+                        top = yuyuHeaderHeight + 12.dp,
+                        bottom = bottomInset + MiniPlayerHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
@@ -361,53 +366,67 @@ fun StatsScreen(
                     .fillMaxWidth()
                     .zIndex(5f)
             ) {
-                val solidAlpha = (collapseFraction * 2f).coerceIn(0f, 1f)
-                val backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = solidAlpha)
-
+                val isScrolled by remember {
+                    derivedStateOf { lazyListState.firstVisibleItemIndex > 0 || lazyListState.firstVisibleItemScrollOffset > 4 }
+                }
                 Column(
                     modifier = Modifier
-                        .background(backgroundColor)
-                        .padding(bottom = 8.dp) // Reduced padding below tabs
+                        .background(MaterialTheme.colorScheme.surface)
+                        .statusBarsPadding()
                 ) {
-                    CollapsibleCommonTopBar(
+                    com.twilighty.lmusic.presentation.yuyu.YuyuTopBar(
                         title = stringResource(R.string.presentation_batch_g_stats_title),
-                        collapseFraction = collapseFraction,
-                        headerHeight = currentTopBarHeightDp,
-                        onBackClick = { navController.popBackStack() },
-                        containerColor = Color.Transparent,
+                        kicker = "Your listening",
+                        navigationIcon = if (showBackButton) {
+                            {
+                                com.twilighty.lmusic.presentation.yuyu.YuyuIconButton(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = "Back",
+                                    onClick = { navController.popBackStack() }
+                                )
+                            }
+                        } else null,
+                        modifier = Modifier.height(76.dp),
                         actions = {
-                            FilledIconButton(
-                                modifier = Modifier
-                                    .padding(end = 12.dp),
+                            com.twilighty.lmusic.presentation.yuyu.YuyuIconButton(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = stringResource(R.string.presentation_batch_g_stats_cd_refresh),
                                 onClick = statsViewModel::requestStatsRefresh,
                                 enabled = !uiState.isLoading && !uiState.isRefreshing && !isPullRefreshAnimating,
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Refresh,
-                                    contentDescription = stringResource(R.string.presentation_batch_g_stats_cd_refresh)
-                                )
-                            }
+                                style = com.twilighty.lmusic.presentation.yuyu.YuyuIconButtonStyle.Tonal
+                            )
                         }
                     )
-
-                    RangeTabsHeader(
-                        ranges = uiState.availableRanges,
-                        selected = uiState.selectedRange,
-                        onRangeSelected = { range ->
-                            if (range == StatsTimeRange.CUSTOM) {
-                                showCustomRangePicker = true
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        items(uiState.availableRanges.size) { index ->
+                            val range = uiState.availableRanges[index]
+                            val selected = range == uiState.selectedRange
+                            val label = if (range == StatsTimeRange.CUSTOM && customRangeLabel != null && selected) {
+                                customRangeLabel
                             } else {
-                                statsViewModel.onRangeSelected(range)
+                                stringResource(range.displayNameRes())
                             }
-                        },
-                        customRangeLabel = customRangeLabel,
-                        indicatorSpacing = tabIndicatorExtraSpacing,
-                        showIndicator = showRangeTabIndicator,
-                    )
+                            com.twilighty.lmusic.presentation.yuyu.YuyuChip(
+                                text = label,
+                                selected = selected,
+                                onClick = {
+                                    if (range == StatsTimeRange.CUSTOM) {
+                                        showCustomRangePicker = true
+                                    } else {
+                                        statsViewModel.onRangeSelected(range)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    if (isScrolled) {
+                        com.twilighty.lmusic.presentation.yuyu.YuyuDivider()
+                    }
                 }
             }
         }

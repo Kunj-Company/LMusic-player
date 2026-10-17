@@ -1,5 +1,6 @@
 package com.twilighty.lmusic.presentation.screens
 
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 
 import androidx.compose.animation.core.Animatable
@@ -327,8 +328,8 @@ fun ExpressiveNavigationItem(
     Surface(
         onClick = onClick,
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().height(88.dp)
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().height(76.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -337,14 +338,14 @@ fun ExpressiveNavigationItem(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(colors.first)
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = colors.second,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -364,7 +365,7 @@ fun ExpressiveNavigationItem(
                     text = subtitle,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
                 )
             }
@@ -382,8 +383,8 @@ fun ExpressiveCategoryItem(
     Surface(
         onClick = onClick,
         shape = shape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().height(88.dp) 
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().height(76.dp) 
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -393,22 +394,22 @@ fun ExpressiveCategoryItem(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-                    .background(customColors?.first ?: MaterialTheme.colorScheme.primaryContainer)
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 if (category.icon != null) {
                     Icon(
                         imageVector = category.icon,
                         contentDescription = null,
-                        tint = customColors?.second ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
                     )
                 } else if (category.iconRes != null) {
                     Icon(
                         painter = painterResource(id = category.iconRes),
                         contentDescription = null,
-                        tint = customColors?.second ?: MaterialTheme.colorScheme.onPrimaryContainer,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -420,22 +421,25 @@ fun ExpressiveCategoryItem(
                 Text(
                     text = stringResource(category.titleRes),
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    style = com.twilighty.lmusic.presentation.yuyu.YuyuType.title,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
                 )
                 Text(
                     text = stringResource(category.subtitleRes),
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                    style = com.twilighty.lmusic.presentation.yuyu.YuyuType.meta,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2
                 )
             }
             
             Spacer(modifier = Modifier.width(8.dp))
-            
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 //            // Chevron or indicator
 //             Box(
 //                contentAlignment = Alignment.Center,

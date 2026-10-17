@@ -64,7 +64,7 @@ fun CollapsibleCommonTopBar(
     // Actually GenreDetailScreen uses: (collapseFraction * 2f).coerceIn(0f, 1f)
     val solidAlpha = (collapseFraction * 2f).coerceIn(0f, 1f)
     
-    val backgroundColor = containerColor ?: MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = solidAlpha)
+    val backgroundColor = containerColor ?: MaterialTheme.colorScheme.surface.copy(alpha = solidAlpha)
     val statusBarFallbackColor = backgroundColor.compositeOver(MaterialTheme.colorScheme.surface)
 
     if (syncStatusBarWithContainer) {

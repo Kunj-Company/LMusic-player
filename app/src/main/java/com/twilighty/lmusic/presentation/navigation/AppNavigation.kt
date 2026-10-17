@@ -321,14 +321,39 @@ fun AppNavigation(
             }
             composable(
                 Screen.Stats.route,
-                enterTransition = { enterTransition() },
-                exitTransition = { exitTransition() },
-                popEnterTransition = { popEnterTransition() },
-                popExitTransition = { popExitTransition() },
+                enterTransition = {
+                    mainRootEnterTransition(
+                        fromRoute = initialState.destination.route,
+                        toRoute = targetState.destination.route,
+                        fallback = enterTransition()
+                    )
+                },
+                exitTransition = {
+                    mainRootExitTransition(
+                        fromRoute = initialState.destination.route,
+                        toRoute = targetState.destination.route,
+                        fallback = exitTransition()
+                    )
+                },
+                popEnterTransition = {
+                    mainRootEnterTransition(
+                        fromRoute = initialState.destination.route,
+                        toRoute = targetState.destination.route,
+                        fallback = popEnterTransition()
+                    )
+                },
+                popExitTransition = {
+                    mainRootExitTransition(
+                        fromRoute = initialState.destination.route,
+                        toRoute = targetState.destination.route,
+                        fallback = popExitTransition()
+                    )
+                },
             ) {
                 ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
                     StatsScreen(
-                        navController = navController
+                        navController = navController,
+                        bottomInset = paddingValues.calculateBottomPadding()
                     )
                 }
             }

@@ -2,6 +2,7 @@ package com.twilighty.lmusic.presentation.screens
 
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 import com.twilighty.lmusic.presentation.navigation.navigateSafelyReplacing
+import com.twilighty.lmusic.presentation.navigation.navigateToTopLevelSafely
 
 import android.content.Intent
 import androidx.activity.compose.ReportDrawnWhen
@@ -93,7 +94,10 @@ import com.twilighty.lmusic.presentation.jellyfin.dashboard.JellyfinDashboardVie
 import com.twilighty.lmusic.presentation.navidrome.dashboard.NavidromeDashboardViewModel
 import com.twilighty.lmusic.presentation.qqmusic.dashboard.QqMusicDashboardViewModel
 import com.twilighty.lmusic.presentation.components.DailyMixSection
-import com.twilighty.lmusic.presentation.components.HomeGradientTopBar
+import com.twilighty.lmusic.presentation.yuyu.YuyuHomeHeader
+import com.twilighty.lmusic.presentation.yuyu.YuyuMixTile
+import com.twilighty.lmusic.presentation.yuyu.YuyuRecentlyPlayedRow
+import com.twilighty.lmusic.presentation.yuyu.YuyuWeekStats
 import com.twilighty.lmusic.presentation.components.HomeOptionsBottomSheet
 import com.twilighty.lmusic.presentation.components.MiniPlayerHeight
 import com.twilighty.lmusic.presentation.components.NavBarContentHeight
@@ -275,26 +279,7 @@ fun HomeScreen(
     ) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            topBar = {
-                HomeGradientTopBar(
-                    onNavigationIconClick = {
-                        navController.navigateSafely(Screen.Settings.route)
-                    },
-                    onMoreOptionsClick = {
-                        showChangelogBottomSheet = true
-                    },
-                    onBetaClick = {
-                        showBetaInfoBottomSheet = true
-                    },
-                    onTelegramClick = {
-                         showStreamingProviderSheet = true
-                    },
-                    onMenuClick = {
-                        // onOpenSidebar() // Disabled
-                    },
-                    isScrolled = isScrolledPastThreshold.value
-                )
-            }
+            containerColor = MaterialTheme.colorScheme.surface
         ) { innerPadding ->
             LazyColumn(
                 state = listState,
@@ -302,12 +287,19 @@ fun HomeScreen(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background),
                 contentPadding = PaddingValues(
-                    top = innerPadding.calculateTopPadding(),
+                    top = 0.dp,
                     bottom = paddingValuesParent.calculateBottomPadding()
                             + 38.dp + bottomPadding
                 ),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                item(key = "yuyu_home_header", contentType = "yuyu_home_header") {
+                    YuyuHomeHeader(
+                        onSettingsClick = { navController.navigateSafely(Screen.Settings.route) },
+                        onWhatsNewClick = { showChangelogBottomSheet = true },
+                        onSourcesClick = { showStreamingProviderSheet = true }
+                    )
+                }
                 if (yourMixSongs.isEmpty()) {
                     item(
                         key = "your_mix_placeholder",
@@ -330,10 +322,11 @@ fun HomeScreen(
                         key = "your_mix_header",
                         contentType = "your_mix_header"
                     ) {
-                        YourMixHeader(
-                            song = yourMixSong,
+                        YuyuMixTile(
+                            songs = yourMixSongs,
                             isShuffleEnabled = isShuffleEnabled,
-                            onPlayShuffled = {
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            onPlay = {
                                 if (usesFallbackHomeMix) {
                                     playerViewModel.shuffleAllSongs(queueName = "Your Mix")
                                 } else {
@@ -423,8 +416,8 @@ fun HomeScreen(
                         key = "recently_played_section",
                         contentType = "recently_played_section"
                     ) {
-                        RecentlyPlayedSection(
-                            songs = recentlyPlayedSongs,
+                        YuyuRecentlyPlayedRow(
+                            songs = recentlyPlayedQueue.take(20),
                             onSongClick = { song ->
                                 if (recentlyPlayedQueue.isNotEmpty()) {
                                     playerViewModel.playSongs(
@@ -434,11 +427,10 @@ fun HomeScreen(
                                     )
                                 }
                             },
-                            onOpenAllClick = {
+                            onSeeAll = {
                                 navController.navigateSafely(Screen.RecentlyPlayed.route)
                             },
-                            currentSongId = currentSong?.id,
-                            contentPadding = PaddingValues(start = 8.dp, end = 24.dp)
+                            currentSongId = currentSong?.id
                         )
                     }
                 }
@@ -448,31 +440,15 @@ fun HomeScreen(
                         key = "listening_stats_preview",
                         contentType = "listening_stats_preview"
                     ) {
-                        StatsOverviewCard(
-                            summary = homeStatsOverview,
-                            onClick = { navController.navigateSafely(Screen.Stats.route) }
-                        )
+                        homeStatsOverview?.let { overview ->
+                            YuyuWeekStats(
+                                summary = overview,
+                                onOpenStats = { navController.navigateToTopLevelSafely(Screen.Stats.route) }
+                            )
+                        }
                     }
                 }
             }
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .height(170.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0.0f to Color.Transparent,
-                            0.2f to Color.Transparent,
-                            0.8f to MaterialTheme.colorScheme.surfaceContainerLowest,
-                            1.0f to MaterialTheme.colorScheme.surfaceContainerLowest
-                        )
-                    )
-                )
-        ) {
-
         }
     }
     if (showOptionsBottomSheet) {

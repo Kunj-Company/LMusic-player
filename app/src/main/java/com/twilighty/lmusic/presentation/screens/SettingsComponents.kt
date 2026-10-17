@@ -82,9 +82,8 @@ fun SettingsSection(title: String, icon: @Composable () -> Unit, content: @Compo
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                     text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    style = com.twilighty.lmusic.presentation.yuyu.YuyuType.overline,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         content()
@@ -100,7 +99,7 @@ fun SettingsItem(
         onClick: () -> Unit
 ) {
     Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier =
                     Modifier.fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
@@ -111,7 +110,7 @@ fun SettingsItem(
                 modifier = Modifier.padding(16.dp).fillMaxWidth()
         ) {
             Box(
-                    modifier = Modifier.padding(end = 16.dp).size(24.dp),
+                    modifier = Modifier.padding(end = 14.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
             ) { leadingIcon() }
 
@@ -151,7 +150,7 @@ fun SwitchSettingItem(
     val appHapticsConfig = LocalAppHapticsConfig.current
 
     Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
     ) {
         Row(
@@ -161,7 +160,7 @@ fun SwitchSettingItem(
         ) {
             if (leadingIcon != null) {
                 Box(
-                        modifier = Modifier.padding(end = 4.dp).size(24.dp),
+                        modifier = Modifier.padding(end = 2.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
                         contentAlignment = Alignment.Center
                 ) { leadingIcon() }
             }
@@ -239,7 +238,7 @@ fun ThemeSelectorItem(
     val selectedOption = options[selectedKey] ?: selectedKey
 
     Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier =
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
                         showSheet = true
@@ -251,7 +250,7 @@ fun ThemeSelectorItem(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
-                    modifier = Modifier.padding(end = 16.dp).size(24.dp),
+                    modifier = Modifier.padding(end = 14.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
                         contentAlignment = Alignment.Center
                 ) { leadingIcon() }
 
@@ -379,7 +378,7 @@ fun SliderSettingsItem(
         valueText: (Float) -> String
 ) {
     Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -419,7 +418,7 @@ fun RefreshLibraryItem(
         onRebuild: () -> Unit
 ) {
     Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -428,7 +427,7 @@ fun RefreshLibraryItem(
                     modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
-                        modifier = Modifier.padding(end = 16.dp).size(24.dp),
+                        modifier = Modifier.padding(end = 14.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
                         contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -566,7 +565,7 @@ fun RefreshLyricsItem(
                     modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
-                        modifier = Modifier.padding(end = 16.dp).size(24.dp),
+                        modifier = Modifier.padding(end = 14.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
                         contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -641,7 +640,7 @@ fun ActionSettingsItem(
     enabled: Boolean = true
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -650,7 +649,7 @@ fun ActionSettingsItem(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Box(
-                    modifier = Modifier.padding(end = 16.dp).size(24.dp),
+                    modifier = Modifier.padding(end = 14.dp).size(40.dp).clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center
                 ) {
                     icon()
@@ -718,7 +717,7 @@ fun AiApiKeyItem(
     }
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -805,7 +804,7 @@ fun AiSystemPromptItem(
     }
 
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

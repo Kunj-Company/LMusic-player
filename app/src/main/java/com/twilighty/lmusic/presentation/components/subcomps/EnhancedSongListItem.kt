@@ -139,8 +139,9 @@ fun EnhancedSongListItem(
         if (state.isSelected) 1f else 0f
     }
 
-    val animatedCornerRadius = lerpDp(22.dp, 50.dp, highlightProgress)
-    val animatedAlbumCornerRadius = lerpDp(10.dp, 50.dp, highlightProgress)
+    // Yuyu song row: a flat row on the canvas, 16dp radius, square art with 10dp corners.
+    val animatedCornerRadius = 16.dp
+    val animatedAlbumCornerRadius = 10.dp
     val selectionScale = lerpFloat(1f, 0.98f, selectionScaleProgress)
     val selectionBorderWidth = lerpDp(0.dp, 2.5.dp, selectionVisualProgress)
 
@@ -157,13 +158,14 @@ fun EnhancedSongListItem(
     }
 
     val colors = MaterialTheme.colorScheme
-    val baseContainerColor = containerColorOverride ?: colors.surfaceContainerLow
-    val playbackContainerColor = lerpColor(baseContainerColor, colors.primaryContainer, highlightProgress)
-    val containerColor = lerpColor(playbackContainerColor, colors.secondaryContainer, selectionVisualProgress)
+    val baseContainerColor = containerColorOverride ?: colors.surface
+    val playbackContainerColor = lerpColor(baseContainerColor, colors.surfaceContainerLow, highlightProgress)
+    val containerColor = lerpColor(playbackContainerColor, colors.surfaceContainerHigh, selectionVisualProgress)
 
     val baseContentColor = colors.onSurface
-    val playbackContentColor = lerpColor(baseContentColor, colors.onPrimaryContainer, highlightProgress)
-    val contentColor = lerpColor(playbackContentColor, colors.onSecondaryContainer, selectionVisualProgress)
+    val contentColor = lerpColor(baseContentColor, colors.onSurface, selectionVisualProgress)
+    val titleColor = lerpColor(lerpColor(baseContentColor, colors.tertiary, highlightProgress), colors.onSurface, selectionVisualProgress)
+    val metaColor = colors.onSurfaceVariant
 
     val selectionBorderColor = lerpColor(colors.primary.copy(alpha = 0f), colors.primary, selectionVisualProgress)
     val mvContainerColor = lerpColor(colors.onSurface, colors.primaryContainer, highlightProgress)
@@ -187,7 +189,7 @@ fun EnhancedSongListItem(
                 .fillMaxWidth()
                 .clip(surfaceShape),
             shape = surfaceShape,
-            color = containerColorOverride ?: colors.surfaceContainerLow,
+            color = containerColorOverride ?: colors.surface,
         ) {
             Row(
                 modifier = Modifier
@@ -199,7 +201,7 @@ fun EnhancedSongListItem(
                     ShimmerBox(
                         modifier = Modifier
                             .size(albumArtSize)
-                            .clip(CircleShape)
+                            .clip(RoundedCornerShape(10.dp))
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                 }
@@ -289,14 +291,14 @@ fun EnhancedSongListItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 13.dp, vertical = 12.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (showAlbumArt) {
                     Box(
                         modifier = Modifier
                             .size(albumArtSize)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh, albumShape)
                     ) {
                         SmartImage(
                             model = song.albumArtUriString,
@@ -335,7 +337,7 @@ fun EnhancedSongListItem(
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                 } else {
                     Spacer(modifier = Modifier.width(4.dp))
                 }
@@ -347,7 +349,7 @@ fun EnhancedSongListItem(
                     if (isHighlighted && !isSelectionMode) {
                         AutoScrollingTextOnDemand(
                             text = song.title,
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = com.twilighty.lmusic.presentation.yuyu.YuyuType.title.copy(color = titleColor),
                             gradientEdgeColor = containerColor,
                             expansionFractionProvider = { 1f },
                         )
@@ -355,18 +357,17 @@ fun EnhancedSongListItem(
                     } else {
                         Text(
                             text = song.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            style = com.twilighty.lmusic.presentation.yuyu.YuyuType.title,
                             maxLines = 1,
-                            color = contentColor,
+                            color = titleColor,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = song.displayArtist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor.copy(alpha = 0.7f),
+                        style = com.twilighty.lmusic.presentation.yuyu.YuyuType.meta,
+                        color = metaColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -380,7 +381,7 @@ fun EnhancedSongListItem(
                          modifier = Modifier
                              .padding(start = 8.dp)
                              .size(width = 18.dp, height = 16.dp),
-                         color = contentColor,
+                         color = colors.tertiary,
                          isPlaying = isPlaying
                      )
                 }
@@ -393,12 +394,11 @@ fun EnhancedSongListItem(
                     FilledIconButton(
                         onClick = { onMoreOptionsClick(song) },
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = mvContentColor,
-                            contentColor = mvContainerColor
+                            containerColor = Color.Transparent,
+                            contentColor = colors.onSurfaceVariant
                         ),
                         modifier = Modifier
-                            .size(36.dp)
-                            .padding(end = 4.dp)
+                            .size(40.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.MoreVert,
