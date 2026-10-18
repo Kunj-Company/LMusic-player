@@ -109,11 +109,11 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
             // Crash capture first (writes filesDir/crash/last_crash.txt, then the default handler runs).
             runCatching { CrashHandler.install(this) }
         }
-        // Safe mode after two unstable launches in a row (see data/crash/SafeMode.kt).
+        // Safe mode after two early crashes in a row (counted by CrashHandler; see data/crash/SafeMode.kt).
         val safeMode = !isBenchmarkBuild &&
             runCatching { com.twilighty.lmusic.data.crash.SafeMode.onAppStart(this) }.getOrDefault(false)
         if (!isBenchmarkBuild) {
-            // A process that lives this long (e.g. started only for playback) counts as stable.
+            // A process that lives this long (e.g. started only for playback) resets the early-crash count.
             runCatching {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
                     { com.twilighty.lmusic.data.crash.SafeMode.markStable(this) }, 60_000L
@@ -191,20 +191,26 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
 
     /**
      * Runs when safe mode is active this launch: smart shuffle stays plain, update checks are not
-     * scheduled this session, the music folders migration waits. When safe mode was entered just
-     * now, Smart features are also switched off and their background indexing cancelled.
+     * scheduled this session, the music folders migration waits, and Smart indexing is kept off for
+     * this session (SmartIndexScheduler / SmartIndexWorker check SafeMode). The saved Smart setting
+     * is left unchanged, so indexing resumes after "Turn features back on".
      */
     private fun applySafeMode() {
         com.twilighty.lmusic.utils.SmartShuffleRuntime.enabled = false
-        if (!com.twilighty.lmusic.data.crash.SafeMode.enteredThisLaunch) return
-        Timber.w("Safe mode entered after repeated early crashes")
+        if (com.twilighty.lmusic.data.crash.SafeMode.enteredThisLaunch) {
+            Timber.w("Safe mode entered after repeated early crashes")
+        }
         val smartPreferences = smartPreferences.get() // resolved on the main thread (trivial constructor)
         startupScope.launch {
-            runCatching { smartPreferences.setEnabled(false) }
-            runCatching {
-                val wm = androidx.work.WorkManager.getInstance(this@LMusicApplication)
-                wm.cancelUniqueWork(com.twilighty.lmusic.data.smart.SmartIndexScheduler.UNIQUE_PERIODIC)
-                wm.cancelUniqueWork(com.twilighty.lmusic.data.smart.SmartIndexScheduler.UNIQUE_CONTINUATION)
+            runCatching { com.twilighty.lmusic.data.smart.SmartIndexScheduler.cancel(this@LMusicApplication) }
+        }
+        com.twilighty.lmusic.data.crash.SafeMode.addExitListener {
+            startupScope.launch {
+                runCatching {
+                    if (smartPreferences.isEnabled()) {
+                        com.twilighty.lmusic.data.smart.SmartIndexScheduler.schedule(this@LMusicApplication)
+                    }
+                }
             }
         }
     }

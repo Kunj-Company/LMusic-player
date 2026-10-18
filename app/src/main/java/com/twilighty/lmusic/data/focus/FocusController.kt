@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -72,29 +74,44 @@ class FocusController @Inject constructor(
     /** A short note for the screen, e.g. when the chosen music wasn't available. */
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    private val _exactAlarmNeeded = MutableStateFlow(false)
+    /** True when a session started without exact-alarm access (breaks may start a little late). */
+    val exactAlarmNeeded: StateFlow<Boolean> = _exactAlarmNeeded.asStateFlow()
+
     /** Set by the Focus screen: plays a list of songs through the main player. */
     var songPlayer: ((List<Song>) -> Unit)? = null
 
     @Volatile internal var service: FocusServiceHandle? = null
 
     private var restored = false
+    private val restoreMutex = Mutex()
     private var tickJob: Job? = null
     private var musicStarted = false
     private var musicJob: Job? = null
 
     // ---------------------------------------------------------------- public API
 
-    /** Restores a session saved before process death (once). Never auto-resumes in safe mode. */
+    /** Restores a session saved before process death (once), in the background. */
     fun ensureRestored() {
         if (restored) return
+        scope.launch { restore() }
+    }
+
+    /**
+     * Restores a session saved before process death (once; later calls wait for the first one to
+     * finish). Never auto-resumes in safe mode. Main thread. Called by [FocusService] before it
+     * handles an alarm or notification action, so a cold-started process acts on the real session.
+     */
+    internal suspend fun restore() = restoreMutex.withLock {
+        if (restored) return@withLock
         restored = true
-        scope.launch {
-            val saved = runCatching { repository.loadActive() }.getOrNull() ?: return@launch
-            if (timer.state.phase.isActive) return@launch // a session was started meanwhile
+        run {
+            val saved = runCatching { repository.loadActive() }.getOrNull() ?: return@run
+            if (timer.state.phase.isActive) return@run // a session was started meanwhile
             val now = System.currentTimeMillis()
             if (!saved.timer.phase.isActive || now - saved.savedAt > STALE_MS) {
-                repository.saveActive(null)
-                return@launch
+                runCatching { repository.saveActive(null) }
+                return@run
             }
             timer.restore(saved.timer)
             _music.value = saved.music
@@ -118,6 +135,9 @@ class FocusController @Inject constructor(
 
     fun start(config: FocusConfig, source: FocusMusicSource) {
         _notice.value = null
+        _exactAlarmNeeded.value = runCatching {
+            context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == false
+        }.getOrDefault(false)
         _music.value = source
         musicStarted = false
         timer.start(config, System.currentTimeMillis())
@@ -174,6 +194,10 @@ class FocusController @Inject constructor(
 
     fun dismissNotice() {
         _notice.value = null
+    }
+
+    fun dismissExactAlarmNotice() {
+        _exactAlarmNeeded.value = false
     }
 
     // ---------------------------------------------------------------- service hooks
@@ -277,7 +301,8 @@ class FocusController @Inject constructor(
         runCatching { context.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent()) }
     }
 
-    private fun alarmIntent(): PendingIntent = PendingIntent.getService(
+    // A foreground-service PendingIntent: the alarm may cold-start the process while the app is in the background.
+    private fun alarmIntent(): PendingIntent = PendingIntent.getForegroundService(
         context, REQUEST_ALARM,
         Intent(context, FocusService::class.java).setAction(FocusService.ACTION_ALARM),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -298,15 +323,17 @@ class FocusController @Inject constructor(
             FocusMusicSource.Silence -> Unit
             FocusMusicSource.Lofi -> runCatching {
                 val l = lofi.get()
+                // The session owns lofi: its service must not idle-stop while paused or on a break.
+                l.holdForFocus = true
                 if (!musicStarted) {
                     l.ensureLoaded()
                     val calm = l.settings.value.withMood(LofiMood.Dreamy)
-                    l.start(calm.copy(drumsVolume = (calm.drumsVolume * 0.7f)))
+                    if (!l.start(calm.copy(drumsVolume = (calm.drumsVolume * 0.7f)))) lofiRefused()
                     musicStarted = true
                 } else {
                     // Back to full level after a break (lowered without saving), or restart if stopped.
                     runCatching { lofiEngine.get().update(l.settings.value) }
-                    if (!l.state.value.isPlaying) l.resume()
+                    if (!l.state.value.isPlaying && !l.resume()) lofiRefused()
                 }
             }.onFailure { Timber.tag(TAG).w(it, "Lofi failed") }
             FocusMusicSource.Smart, FocusMusicSource.Library -> {
@@ -366,9 +393,9 @@ class FocusController @Inject constructor(
             // Lofi keeps playing softly through breaks (pausing it would let its service time out).
             FocusMusicSource.Lofi -> if (musicStarted) runCatching {
                 val l = lofi.get()
-                if (timer.state.isPaused) l.pause()
+                if (timer.state.isPaused) l.pause() // service stays up: holdForFocus
                 else {
-                    if (!l.state.value.isPlaying) l.resume()
+                    if (!l.state.value.isPlaying && !l.resume()) lofiRefused()
                     lofiEngine.get().update(l.settings.value.let { it.copy(masterVolume = it.masterVolume * BREAK_LOFI_LEVEL) })
                 }
             }
@@ -383,13 +410,22 @@ class FocusController @Inject constructor(
         musicJob?.cancel()
         if (!musicStarted) return
         when (_music.value) {
-            FocusMusicSource.Lofi -> runCatching { lofi.get().stop() }
+            FocusMusicSource.Lofi -> runCatching {
+                val l = lofi.get()
+                l.holdForFocus = false
+                l.stop()
+            }
             FocusMusicSource.Smart, FocusMusicSource.Library -> runCatching {
                 playbackStateHolder.get().mediaController?.let { if (it.isPlaying) it.pause() }
             }
             FocusMusicSource.Silence -> Unit
         }
         musicStarted = false
+    }
+
+    /** Android refused to (re)start lofi from the background; the timer keeps running. */
+    private fun lofiRefused() {
+        _notice.value = "Lofi couldn't start in the background. Open Focus and press play to bring it back"
     }
 
     private companion object {

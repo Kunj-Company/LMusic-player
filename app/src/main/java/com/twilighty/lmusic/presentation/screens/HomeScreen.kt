@@ -313,9 +313,9 @@ fun HomeScreen(
 
     // Drawer state for sidebar
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val shouldShowCleanInstallDisclaimer =
-        settingsUiState.beta05CleanInstallDisclaimerDismissed == false &&
-            !cleanInstallDisclaimerDismissedThisSession
+    // The old "Beta 0.5.0 clean install" notice was for the upstream app; LMusic never shows it.
+    @Suppress("UNUSED_VARIABLE") val unusedDisclaimerState = cleanInstallDisclaimerDismissedThisSession
+    val shouldShowCleanInstallDisclaimer = false
 
     Box(
         modifier = Modifier.fillMaxSize()

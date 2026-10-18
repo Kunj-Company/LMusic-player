@@ -13,6 +13,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.twilighty.lmusic.R
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.text.DateFormat
 import java.util.Date
@@ -35,6 +40,7 @@ class FocusService : Service() {
     @Inject lateinit var controller: FocusController
 
     private var inForeground = false
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val handle = object : FocusServiceHandle {
         override fun refresh() = updateNotification()
@@ -50,29 +56,42 @@ class FocusService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        goForeground()
-        when (intent?.action) {
-            ACTION_TOGGLE -> controller.togglePause()
-            ACTION_SKIP -> controller.skip()
-            ACTION_STOP -> controller.stop()
-            ACTION_ALARM -> controller.onAlarm()
-            else -> Unit
+        // Satisfy the startForegroundService() contract first; without the foreground, stop.
+        if (!goForeground()) {
+            stopSelf()
+            return START_NOT_STICKY
         }
-        if (!controller.state.value.phase.isActive) finishSession(null)
+        val action = intent?.action
+        scope.launch {
+            // A cold-started process (alarm / notification action) restores the saved session
+            // before acting on it; a no-op once restored.
+            runCatching { controller.restore() }.onFailure { Timber.tag(TAG).w(it, "Focus restore failed") }
+            when (action) {
+                ACTION_TOGGLE -> controller.togglePause()
+                ACTION_SKIP -> controller.skip()
+                ACTION_STOP -> controller.stop()
+                ACTION_ALARM -> controller.onAlarm()
+                else -> Unit
+            }
+            if (!controller.state.value.phase.isActive) finishSession(null)
+        }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         if (controller.service === handle) controller.service = null
+        scope.cancel()
         super.onDestroy()
     }
 
-    private fun goForeground() {
-        if (inForeground) return
+    /** Returns false when the service couldn't enter the foreground (the caller then stops). */
+    private fun goForeground(): Boolean {
+        if (inForeground) return true
         runCatching {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             inForeground = true
-        }.onFailure { Timber.tag(TAG).w(it, "startForeground failed") }
+        }.onFailure { Timber.tag(TAG).w(it, "startForeground failed, stopping") }
+        return inForeground
     }
 
     private fun updateNotification() {

@@ -21,7 +21,9 @@ def shot(name):
         f.write(subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True).stdout)
 
 def dump():
-    adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+    out = adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+    if "dumped" not in out:
+        print("uiautomator:", out.strip()[:200])
     xml = adb("shell", "cat", "/sdcard/ui.xml")
     try:
         return ET.fromstring(xml[xml.find("<"):])
@@ -82,6 +84,15 @@ def step(name, fn):
 def back():
     adb("shell", "input", "keyevent", "KEYCODE_BACK"); time.sleep(1.5)
 
+def launch(*extra):
+    adb("shell", "am", "start", "-W", "-n", ACT, "--ez", "is_benchmark", "true", *extra)
+    time.sleep(6)
+
+def tap_xy(fx, fy):
+    adb("shell", "input", "tap", str(int(W * fx)), str(int(H * fy)))
+    time.sleep(2.5)
+    return True
+
 def main():
     global W, H
     W, H = size()
@@ -91,40 +102,29 @@ def main():
     step("01-first-launch-setup", lambda: True)
     # 2) Skip setup (benchmark flag) and walk the app.
     adb("shell", "am", "force-stop", PKG); time.sleep(1)
-    adb("shell", "am", "start", "-W", "-n", ACT, "--ez", "is_benchmark", "true"); time.sleep(10)
+    launch(); time.sleep(4)
     step("02-home", lambda: True)
-    for tab in ["Library", "Search", "Stats", "Home"]:
-        step(f"03-tab-{tab.lower()}", lambda t=tab: tap(t))
-    # Swipe between pages.
-    step("04-swipe-to-library", lambda: (adb("shell", "input", "swipe", str(int(W*0.85)), str(H//2), str(int(W*0.1)), str(H//2), "200"), True)[1])
-    step("04b-back-home", lambda: tap("Home"))
-    # Spaces.
-    for label, name in [("Lofi", "lofi"), ("Focus", "focus"), ("Garden", "garden"), ("Party", "party"),
-                        ("Taste match", "taste"), ("Cover studio", "covers")]:
-        if step(f"05-space-{name}", lambda l=label: tap(l, scroll=3)):
-            back()
-        tap("Home")
-    step("06-settings", lambda: tap("Settings"))
-    back()
-    # Play a song from Library if there is one.
-    tap("Library")
-    step("07-library-songs", lambda: tap("Songs") or True)
-    def play_first():
-        root = dump()
-        if root is None: return False
-        for node in root.iter("node"):
-            if (node.get("text") or "").startswith("LMusic Test"):
-                m = list(map(int, re.findall(r"\d+", node.get("bounds"))))
-                adb("shell", "input", "tap", str((m[0]+m[2])//2), str((m[1]+m[3])//2)); time.sleep(4)
-                return True
-        return False
-    if step("08-play-song", play_first):
-        # Open the full player by tapping the mini player area near the bottom.
-        step("09-mini-player-swipe-next", lambda: (adb("shell", "input", "swipe", str(int(W*0.8)), str(int(H*0.86)), str(int(W*0.2)), str(int(H*0.86)), "200"), True)[1])
-        step("10-open-player", lambda: (adb("shell", "input", "tap", str(W//2), str(int(H*0.86))), True)[1])
-        time.sleep(3)
-        step("11-now-playing", lambda: True)
+    # Bottom nav: tap by label when the accessibility tree is readable, else by position.
+    for k, tab in enumerate(["Library", "Search", "Stats", "Home"]):
+        x = [0.4, 0.6, 0.8, 0.2][k]
+        step(f"03-tab-{tab.lower()}", lambda t=tab, x=x: tap(t) or tap_xy(x, 0.905))
+    step("04-swipe-to-library", lambda: (adb("shell", "input", "swipe", str(int(W*0.85)), str(int(H*0.5)), str(int(W*0.1)), str(int(H*0.5)), "180"), True)[1])
+    step("04b-swipe-back-home", lambda: (adb("shell", "input", "swipe", str(int(W*0.1)), str(int(H*0.5)), str(int(W*0.85)), str(int(H*0.5)), "180"), True)[1])
+    # Screens opened directly (benchmark-only "smoke_route" extra handled in MainActivity).
+    for route in ["lofi", "focus", "garden", "party", "taste_match", "cover_studio", "settings",
+                  "smart_features_settings", "library_health", "recap/week"]:
+        step(f"05-route-{route.replace('/', '-')}", lambda r=route: (launch("--es", "smoke_route", r), True)[1])
         back()
+    # Playback: shuffle all (app shortcut action), then the mini player and the full player.
+    def shuffle_all():
+        adb("shell", "am", "start", "-W", "-a", "com.twilighty.lmusic.ACTION_SHUFFLE_ALL", "-n", ACT, "--ez", "is_benchmark", "true")
+        time.sleep(8); return True
+    step("06-shuffle-all", shuffle_all)
+    step("07-mini-player-swipe-next", lambda: (adb("shell", "input", "swipe", str(int(W*0.8)), str(int(H*0.82)), str(int(W*0.2)), str(int(H*0.82)), "200"), True)[1])
+    time.sleep(2)
+    step("08-open-player", lambda: (adb("shell", "am", "start", "-W", "-n", ACT, "--ez", "is_benchmark", "true", "--ez", "ACTION_SHOW_PLAYER", "true"), time.sleep(5), True)[2])
+    step("09-now-playing-double-tap", lambda: (tap_xy(0.5, 0.33), tap_xy(0.5, 0.33), True)[2])
+    back()
 
 try:
     main()

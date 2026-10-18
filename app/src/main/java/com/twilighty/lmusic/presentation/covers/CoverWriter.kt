@@ -3,7 +3,6 @@ package com.twilighty.lmusic.presentation.covers
 import com.twilighty.lmusic.data.media.AudioMetadataReader
 import com.twilighty.lmusic.data.media.CoverArtUpdate
 import com.twilighty.lmusic.data.media.ExtendedTagReader
-import com.twilighty.lmusic.data.media.ExtendedTagUpdate
 import com.twilighty.lmusic.data.model.Song
 import com.twilighty.lmusic.presentation.health.LibraryHealthAnalyzer
 import com.twilighty.lmusic.presentation.viewmodel.LibraryStateHolder
@@ -29,9 +28,9 @@ sealed interface CoverWriteOutcome {
 }
 
 /**
- * Embeds a made cover into a song file through the same save path the tag editor and
- * Library health use. Only the artwork changes: every other tag is read from the file
- * itself and written back as is. If the file's tags can't be read, the file is skipped.
+ * Embeds a made cover into a song file through the artwork-only save path
+ * ([MetadataEditStateHolder.saveArtworkOnly]). Only the pictures change; no other tag is
+ * written. If the file's tags can't be read, the file is skipped.
  */
 class CoverWriter @Inject constructor(
     private val metadataEditStateHolder: MetadataEditStateHolder,
@@ -90,21 +89,10 @@ class CoverWriter @Inject constructor(
         if (keepExisting && tags.hasEmbeddedArtwork) return CoverWriteOutcome.Skipped(CoverSkipReason.HAS_ARTWORK)
 
         val result = try {
-            metadataEditStateHolder.saveMetadata(
+            // Artwork-only path: text tags (title, artist, album, track…) are never rewritten.
+            metadataEditStateHolder.saveArtworkOnly(
                 song = song,
-                // The editor refuses an empty title; fall back the same way Library health does.
-                newTitle = tags.title.ifBlank { song.title.ifBlank { File(song.path).nameWithoutExtension } },
-                newArtist = tags.artist,
-                newAlbum = tags.album,
-                newGenre = tags.genre,
-                newLyrics = tags.lyrics,
-                newTrackNumber = tags.trackNumber,
-                newDiscNumber = tags.discNumber,
-                newReplayGainTrackGainDb = null, // null = keep
-                newReplayGainAlbumGainDb = null,
                 coverArtUpdate = CoverArtUpdate(bytes = jpeg, mimeType = "image/jpeg"),
-                // Album artist always passed (null would copy the artist into it); year/composer null = keep.
-                extendedTags = ExtendedTagUpdate(albumArtist = tags.albumArtist),
             )
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

@@ -149,7 +149,12 @@ class GestureController @Inject constructor(
             if (couldUseSensors) registerScreenReceiver() else unregisterScreenReceiver()
 
             val wantShake = couldUseSensors && screenOn && settings.shakeToShuffle && isPlaying
-            val wantFace = couldUseSensors && screenOn && settings.faceDownToPause && (isPlaying || waiting)
+            // While a face-down pause waits to resume, the (non-wake-up) gravity sensor stays
+            // registered even with the screen off, for at most RESUME_WINDOW_MS (10 min). Its
+            // events only arrive while the CPU is awake (batched otherwise), so a flip may be
+            // noticed late, but picking the phone up (screen on) delivers them right away.
+            val wantFace = couldUseSensors && settings.faceDownToPause &&
+                ((screenOn && isPlaying) || waiting)
 
             if (wantShake) registerShake() else unregisterShake()
             if (wantFace) registerFace() else unregisterFace(keepFaceDown = waiting)

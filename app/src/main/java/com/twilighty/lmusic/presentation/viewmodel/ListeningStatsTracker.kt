@@ -33,8 +33,29 @@ class ListeningStatsTracker @Inject constructor(
     private val dailyMixManager: DailyMixManager,
     private val playbackStatsRepository: PlaybackStatsRepository,
     // LMusic garden: refreshes the Garden widget when today becomes a listening day.
-    private val gardenWidgetRefresher: com.twilighty.lmusic.data.garden.GardenWidgetRefresher? = null
+    // Lazy (null in tests): resolved on the main thread on first use, never at injection time.
+    private val gardenWidgetRefresher: dagger.Lazy<com.twilighty.lmusic.data.garden.GardenWidgetRefresher>? = null
 ) {
+    @Volatile
+    private var resolvedGardenRefresher: com.twilighty.lmusic.data.garden.GardenWidgetRefresher? = null
+
+    /** The refresher once resolved; resolves it only on the main thread (posts there otherwise). */
+    private fun gardenRefresher(): com.twilighty.lmusic.data.garden.GardenWidgetRefresher? {
+        val lazy = gardenWidgetRefresher ?: return null
+        resolvedGardenRefresher?.let { return it }
+        val main = android.os.Looper.getMainLooper()
+        if (android.os.Looper.myLooper() == main) {
+            resolvedGardenRefresher = runCatching { lazy.get() }.getOrNull()
+        } else {
+            runCatching {
+                android.os.Handler(main).post {
+                    if (resolvedGardenRefresher == null) resolvedGardenRefresher = runCatching { lazy.get() }.getOrNull()
+                }
+            }
+        }
+        return resolvedGardenRefresher
+    }
+
     private var currentSession: ActiveSession? = null
     private var pendingVoluntarySongId: String? = null
     private var scope: CoroutineScope? = null
@@ -295,16 +316,22 @@ class ListeningStatsTracker @Inject constructor(
         timestamp: Long,
         forceSynchronous: Boolean
     ) {
+        val refresher = gardenRefresher() // on the caller's thread (main), before going to IO
         persistenceScope.launch {
             runCatching {
-                persistPlaybackInternal(songId = songId, listened = listened, timestamp = timestamp)
+                persistPlaybackInternal(songId = songId, listened = listened, timestamp = timestamp, refresher = refresher)
             }.onFailure { throwable ->
                 Timber.e(throwable, "Failed to persist listening session for song=%s", songId)
             }
         }
     }
 
-    private suspend fun persistPlaybackInternal(songId: String, listened: Long, timestamp: Long) {
+    private suspend fun persistPlaybackInternal(
+        songId: String,
+        listened: Long,
+        timestamp: Long,
+        refresher: com.twilighty.lmusic.data.garden.GardenWidgetRefresher?,
+    ) {
         dailyMixManager.recordPlay(
             songId = songId,
             songDurationMs = listened,
@@ -315,7 +342,7 @@ class ListeningStatsTracker @Inject constructor(
             durationMs = listened,
             timestamp = timestamp
         )
-        gardenWidgetRefresher?.onListeningRecorded()
+        refresher?.onListeningRecorded()
     }
 
     private fun accumulateRealtimeListening(session: ActiveSession, nowRealtime: Long) {

@@ -1,11 +1,15 @@
 package com.twilighty.lmusic.data.crash
 
 import android.content.Context
+import android.os.Process
+import android.os.SystemClock
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Safe mode: entered automatically after two launches in a row that crashed (or died) before
- * becoming stable. While active, optional / experimental features must stay off.
+ * Safe mode: entered automatically after two launches in a row that crashed early (an uncaught
+ * exception recorded by [com.twilighty.lmusic.utils.CrashHandler] within [EARLY_CRASH_WINDOW_MS]
+ * of process start). Processes that are simply killed (widget / worker / alarm / receiver starts)
+ * never count. While active, optional / experimental features must stay off.
  *
  * How a feature checks it (synchronous, cheap after the first call, safe on any thread):
  *
@@ -13,22 +17,24 @@ import java.util.concurrent.CopyOnWriteArrayList
  * if (SafeMode.isActive(context)) return   // don't autostart / schedule / attach listeners
  * ```
  *
- * Features that start at app launch (or autostart from a screen) should skip their autostart
- * while it is active. They do not need to change their own saved setting: the app already turned
- * Smart features off when safe mode began; the user turns things back on in Settings after
- * tapping "Turn features back on". To react to that tap without a restart, register with
- * [addExitListener].
+ * Features skip their autostart / scheduling while it is active. Saved settings are never
+ * changed by safe mode: everything comes back as it was after "Turn features back on". To react
+ * to that tap without a restart, register with [addExitListener].
  *
- * Storage: SharedPreferences "lmusic_safe_mode" (key "active"), written with commit().
+ * Storage: SharedPreferences "lmusic_safe_mode" (keys "active", "early_crashes"), written with commit().
  */
 object SafeMode {
     private const val PREFS = "lmusic_safe_mode"
     private const val KEY_ACTIVE = "active"
-    private const val KEY_UNSTABLE_LAUNCHES = "unstable_launches"
+    private const val KEY_EARLY_CRASHES = "early_crashes"
+    private const val KEY_LEGACY_UNSTABLE_LAUNCHES = "unstable_launches"
     private const val KEY_ENTERED_AT = "entered_at"
 
-    /** Consecutive unstable launches (before this one) that trigger safe mode. */
+    /** Consecutive early crashes that trigger safe mode on the next start. */
     private const val THRESHOLD = 2
+
+    /** A crash this soon after process start counts as an early (launch) crash. */
+    private const val EARLY_CRASH_WINDOW_MS = 30_000L
 
     @Volatile
     private var cachedActive: Boolean? = null
@@ -52,40 +58,57 @@ object SafeMode {
     }
 
     /**
-     * Called first thing in Application.onCreate. Counts this launch as unstable (until
-     * [markStable]) and enters safe mode if the previous [THRESHOLD] launches never became stable.
+     * Called first thing in Application.onCreate. Enters safe mode if the previous [THRESHOLD]
+     * launches crashed early (see [recordCrash]). Does not count this launch as anything.
      * Returns whether safe mode is active for this launch.
      */
     fun onAppStart(context: Context): Boolean {
         val p = prefs(context)
-        val previous = p.getInt(KEY_UNSTABLE_LAUNCHES, 0)
+        val crashes = p.getInt(KEY_EARLY_CRASHES, 0)
         val alreadyActive = p.getBoolean(KEY_ACTIVE, false)
-        val enter = !alreadyActive && previous >= THRESHOLD
-        val editor = p.edit().putInt(KEY_UNSTABLE_LAUNCHES, if (enter) 1 else previous + 1)
-        if (enter) {
-            editor.putBoolean(KEY_ACTIVE, true).putLong(KEY_ENTERED_AT, System.currentTimeMillis())
+        val enter = !alreadyActive && crashes >= THRESHOLD
+        if (enter || p.contains(KEY_LEGACY_UNSTABLE_LAUNCHES)) {
+            val editor = p.edit().remove(KEY_LEGACY_UNSTABLE_LAUNCHES)
+            if (enter) {
+                editor.putBoolean(KEY_ACTIVE, true)
+                    .putLong(KEY_ENTERED_AT, System.currentTimeMillis())
+                    .putInt(KEY_EARLY_CRASHES, 0)
+            }
+            editor.commit()
         }
-        editor.commit()
         enteredThisLaunch = enter
         val active = alreadyActive || enter
         cachedActive = active
         return active
     }
 
-    /** This launch is stable (MainActivity resumed ~10 s, or the process lived long enough). */
-    fun markStable(context: Context) {
+    /**
+     * Called from the uncaught exception handler (synchronously, before the process dies). Counts
+     * the crash only when it happened within [EARLY_CRASH_WINDOW_MS] of process start. Never throws.
+     */
+    fun recordCrash(context: Context) {
         runCatching {
+            val sinceStart = SystemClock.uptimeMillis() - Process.getStartUptimeMillis()
+            if (sinceStart < 0 || sinceStart > EARLY_CRASH_WINDOW_MS) return
             val p = prefs(context)
-            if (p.getInt(KEY_UNSTABLE_LAUNCHES, 0) != 0) p.edit().putInt(KEY_UNSTABLE_LAUNCHES, 0).apply()
+            p.edit().putInt(KEY_EARLY_CRASHES, p.getInt(KEY_EARLY_CRASHES, 0) + 1).commit()
         }
     }
 
-    /** "Turn features back on": clears the flag. Features are re-enabled by the user in Settings. */
+    /** This launch is stable (MainActivity resumed ~10 s, or the process lived 60 s): resets the count. */
+    fun markStable(context: Context) {
+        runCatching {
+            val p = prefs(context)
+            if (p.getInt(KEY_EARLY_CRASHES, 0) != 0) p.edit().putInt(KEY_EARLY_CRASHES, 0).apply()
+        }
+    }
+
+    /** "Turn features back on": clears the flag; listeners restart the features that stayed off. */
     fun exit(context: Context) {
         runCatching {
             prefs(context).edit()
                 .putBoolean(KEY_ACTIVE, false)
-                .putInt(KEY_UNSTABLE_LAUNCHES, 0)
+                .putInt(KEY_EARLY_CRASHES, 0)
                 .remove(KEY_ENTERED_AT)
                 .commit()
         }

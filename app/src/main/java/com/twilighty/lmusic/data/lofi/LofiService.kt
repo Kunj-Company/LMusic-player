@@ -88,7 +88,11 @@ class LofiService : Service(), LofiServiceHandle {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Always satisfy the startForegroundService() contract first.
-        goForeground()
+        if (!goForeground()) {
+            controller.publish(LofiState(error = "Couldn't start lofi"))
+            stopSelf()
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_GENERATE -> playGenerator()
             ACTION_RADIO -> {
@@ -389,8 +393,13 @@ class LofiService : Service(), LofiServiceHandle {
         cancelIdle()
         idleJob = scope.launch {
             delay(IDLE_STOP_MS)
-            if (!playing) stopAll()
+            // A focus session owns lofi (paused / on a break): stay up; released -> onFocusHoldReleased.
+            if (!playing && !controller.holdForFocus) stopAll()
         }
+    }
+
+    override fun onFocusHoldReleased() {
+        if (source != null && !playing) scheduleIdleStop()
     }
 
     private fun cancelIdle() { idleJob?.cancel(); idleJob = null }
@@ -410,12 +419,14 @@ class LofiService : Service(), LofiServiceHandle {
         if (source != null) updateNotification()
     }
 
-    private fun goForeground() {
+    /** Returns false (and the caller stops) when the service couldn't enter the foreground. */
+    private fun goForeground(): Boolean {
         val notification = buildNotification()
         runCatching {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             inForeground = true
-        }.onFailure { Timber.tag(TAG).w(it, "startForeground failed") }
+        }.onFailure { Timber.tag(TAG).w(it, "startForeground failed, stopping") }
+        return inForeground
     }
 
     private fun updateNotification() {

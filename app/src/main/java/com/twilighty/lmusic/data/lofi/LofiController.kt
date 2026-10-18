@@ -43,6 +43,8 @@ internal interface LofiServiceHandle {
     fun resume()
     fun stopAll()
     fun setSleepTimer(minutes: Int?)
+    /** [LofiController.holdForFocus] was cleared: resume the normal idle stop if paused. */
+    fun onFocusHoldReleased()
 }
 
 /**
@@ -72,6 +74,19 @@ class LofiController @Inject constructor(
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     @Volatile internal var service: LofiServiceHandle? = null
+
+    /**
+     * Set by a running focus session that owns lofi: while true, [LofiService] skips its
+     * 10-minute idle self-stop (paused sessions, breaks), so lofi can come back without a
+     * background service start. Cleared when the session ends.
+     */
+    @Volatile
+    var holdForFocus: Boolean = false
+        set(value) {
+            val released = field && !value
+            field = value
+            if (released) service?.let { s -> runOnMain { s.onFocusHoldReleased() } }
+        }
     private var loaded = false
     private var userTouched = false
     private var saveJob: Job? = null
@@ -91,11 +106,14 @@ class LofiController @Inject constructor(
 
     // ---------------------------------------------------------------- generator
 
-    /** Starts the generator with [settings]; pauses the main player and takes audio focus. */
-    fun start(settings: LofiSettings = _settings.value) {
+    /**
+     * Starts the generator with [settings]; pauses the main player and takes audio focus.
+     * Returns false when Android refused to start the service (e.g. from the background).
+     */
+    fun start(settings: LofiSettings = _settings.value): Boolean {
         setSettings(settings)
         pauseMainPlayer()
-        startService(LofiService.ACTION_GENERATE)
+        return startService(LofiService.ACTION_GENERATE)
     }
 
     fun stop() {
@@ -105,11 +123,13 @@ class LofiController @Inject constructor(
 
     fun pause() { service?.let { s -> runOnMain { s.pause() } } }
 
-    fun resume() {
+    /** Returns false when lofi had to be restarted and Android refused the service start. */
+    fun resume(): Boolean {
         val s = service
-        if (s != null && _state.value.source != null) {
+        return if (s != null && _state.value.source != null) {
             pauseMainPlayer()
             runOnMain { s.resume() }
+            true
         } else {
             start()
         }
@@ -167,13 +187,14 @@ class LofiController @Inject constructor(
         }
     }
 
-    private fun startService(action: String, extras: Intent.() -> Unit = {}) {
+    private fun startService(action: String, extras: Intent.() -> Unit = {}): Boolean {
         val intent = Intent(context, LofiService::class.java).setAction(action).apply(extras)
-        runCatching { ContextCompat.startForegroundService(context, intent) }
+        return runCatching { ContextCompat.startForegroundService(context, intent) }
             .onFailure {
                 Timber.tag("LofiController").w(it, "Could not start lofi service")
                 publish(_state.value.copy(error = "Couldn't start lofi"))
             }
+            .isSuccess
     }
 
     /** Pauses the main music player if it is playing (audio focus would do it too). */

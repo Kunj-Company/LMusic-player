@@ -36,6 +36,7 @@ class FocusViewModel @Inject constructor(
     val timer: StateFlow<FocusTimerState> = controller.state
     val sessionMusic: StateFlow<FocusMusicSource> = controller.music
     val notice: StateFlow<String?> = controller.notice
+    val exactAlarmNeeded: StateFlow<Boolean> = controller.exactAlarmNeeded
 
     val config: StateFlow<FocusConfig> =
         repository.config.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FocusConfig())
@@ -78,6 +79,7 @@ class FocusViewModel @Inject constructor(
     fun stop() = controller.stop()
     fun reset() = controller.reset()
     fun dismissNotice() = controller.dismissNotice()
+    fun dismissExactAlarmNotice() = controller.dismissExactAlarmNotice()
 
     /** The screen registers the main player while it is shown. */
     fun attachSongPlayer(player: ((List<Song>) -> Unit)?) {

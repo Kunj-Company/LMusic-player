@@ -530,6 +530,164 @@ class SongMetadataEditor(
     }
 
     /**
+     * Artwork-only write (Cover studio): replaces the embedded pictures and nothing else. Text
+     * tags (TITLE, ARTIST, ALBUM, TRACKNUMBER, …), ReplayGain and MediaStore text columns are
+     * never touched. Refreshes the library's art reference like [editSongMetadata] does for art.
+     */
+    suspend fun editSongArtwork(
+        songId: Long,
+        coverArtUpdate: CoverArtUpdate,
+    ): SongMetadataEditResult = withContext(Dispatchers.IO) {
+        try {
+            val filePath = if (songId < 0) {
+                musicDao.getSongById(songId).first()?.filePath
+            } else {
+                getFilePathFromMediaStore(songId)
+            }
+            if (filePath.isNullOrBlank() || !File(filePath).exists()) {
+                return@withContext SongMetadataEditResult(
+                    success = false,
+                    updatedAlbumArtUri = null,
+                    error = MetadataEditError.FILE_NOT_FOUND,
+                    errorMessage = "Could not find file in media library"
+                )
+            }
+            val extension = filePath.substringAfterLast('.', "").lowercase(Locale.ROOT)
+            val detectedContainer = detectContainerFormat(filePath)
+            val effectiveExtension = when {
+                detectedContainer == DetectedContainer.OGG_OPUS -> detectedContainer.canonicalExtension
+                detectedContainer != DetectedContainer.UNKNOWN &&
+                    detectedContainer.canonicalExtension != extension -> detectedContainer.canonicalExtension
+                else -> extension
+            }
+            val needsExtensionSwap =
+                effectiveExtension != extension && detectedContainer != DetectedContainer.OGG_OPUS
+            val isHighResFlac = isProblematicFlacFile(filePath) is FlacAnalysisResult.Problematic
+            val useVorbisJava = effectiveExtension == "opus"
+            val useJAudioTagger = effectiveExtension in setOf("wav", "ogg") || isHighResFlac
+
+            val runPipeline: (String) -> Boolean = { path ->
+                when {
+                    useVorbisJava -> updateFileMetadataWithVorbisJava(
+                        filePath = path,
+                        newTitle = "",
+                        newArtist = "",
+                        newAlbum = "",
+                        newGenre = "",
+                        newLyrics = "",
+                        newTrackNumber = 0,
+                        newDiscNumber = null,
+                        coverArtUpdate = coverArtUpdate,
+                        artworkOnly = true,
+                    )
+                    useJAudioTagger -> writeArtworkWithJAudioTagger(path, coverArtUpdate)
+                    else -> writeArtworkWithTagLib(path, coverArtUpdate) ||
+                        writeArtworkWithJAudioTagger(path, coverArtUpdate)
+                }
+            }
+            val ok = if (needsExtensionSwap) {
+                writeMetadataViaExtensionSwap(filePath, effectiveExtension, runPipeline)
+            } else {
+                runPipeline(filePath)
+            }
+            if (!ok) {
+                return@withContext SongMetadataEditResult(
+                    success = false,
+                    updatedAlbumArtUri = null,
+                    error = MetadataEditError.TAGLIB_ERROR,
+                    errorMessage = "Failed to write artwork to file"
+                )
+            }
+
+            AlbumArtUtils.clearCacheForSong(context, songId)
+            val storedCoverArtUri =
+                if (coverArtUpdate.isDeletion) null else LocalArtworkUri.buildSongUriWithTimestamp(songId)
+            musicDao.updateSongAlbumArt(songId, storedCoverArtUri)
+            forceMediaRescan(filePath)
+            SongMetadataEditResult(success = true, updatedAlbumArtUri = storedCoverArtUri)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: SecurityException) {
+            Timber.e(e, "Security exception writing artwork for songId: $songId")
+            SongMetadataEditResult(
+                success = false,
+                updatedAlbumArtUri = null,
+                error = MetadataEditError.NO_WRITE_PERMISSION,
+                errorMessage = "Permission denied: ${e.localizedMessage}"
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to write artwork for songId: $songId")
+            SongMetadataEditResult(
+                success = false,
+                updatedAlbumArtUri = null,
+                error = MetadataEditError.UNKNOWN,
+                errorMessage = e.localizedMessage ?: "Unknown error occurred"
+            )
+        }
+    }
+
+    /** TagLib: replaces only the pictures; the property map (text tags) is left as it is in the file. */
+    private fun writeArtworkWithTagLib(filePath: String, update: CoverArtUpdate): Boolean {
+        val pictures = when {
+            update.isDeletion -> emptyArray<Picture>()
+            update.bytes != null -> arrayOf(
+                Picture(
+                    data = update.bytes,
+                    description = "Front Cover",
+                    pictureType = "Front Cover",
+                    mimeType = update.mimeType
+                )
+            )
+            else -> return false
+        }
+        return try {
+            val audioFile = File(filePath)
+            val saved = ParcelFileDescriptor.open(audioFile, ParcelFileDescriptor.MODE_READ_WRITE).use { fd ->
+                TagLib.savePictures(fd.dup().detachFd(), pictures)
+            }
+            if (saved) {
+                runCatching { java.io.RandomAccessFile(audioFile, "rw").use { it.fd.sync() } }
+            } else {
+                Timber.tag(TAG).w("TAGLIB: savePictures failed for $filePath")
+            }
+            saved
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "TAGLIB: artwork-only write failed for $filePath")
+            false
+        }
+    }
+
+    /** JAudioTagger: deleteArtworkField + setField(artwork) + commit; other fields untouched. */
+    private fun writeArtworkWithJAudioTagger(filePath: String, update: CoverArtUpdate): Boolean {
+        return try {
+            java.util.logging.Logger.getLogger("org.jaudiotagger").level = java.util.logging.Level.OFF
+            val audioFile = AudioFileIO.read(File(filePath))
+            val tag = audioFile.tag ?: audioFile.createDefaultTag()
+            if (update.isDeletion) {
+                tag.deleteArtworkField()
+            } else {
+                val bytes = update.bytes ?: return false
+                val artwork = AndroidArtwork()
+                artwork.binaryData = bytes
+                artwork.mimeType = update.mimeType
+                artwork.pictureType = 3 // Front cover
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                artwork.width = options.outWidth
+                artwork.height = options.outHeight
+                tag.deleteArtworkField()
+                tag.setField(artwork)
+            }
+            audioFile.tag = tag
+            audioFile.commit()
+            true
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "JAUDIOTAGGER: artwork-only write failed for $filePath")
+            false
+        }
+    }
+
+    /**
      * Copies [originalPath] to a temp file with [correctExtension], runs [writer] on the temp
      * path (so JAudioTagger/TagLib pick the correct parser by extension), and streams the edited
      * bytes back into the original location. The original filename/extension are preserved so
@@ -987,7 +1145,9 @@ class SongMetadataEditor(
         newDiscNumber: Int?,
         replayGainTrackUpdate: ReplayGainUpdate = ReplayGainUpdate.Keep,
         replayGainAlbumUpdate: ReplayGainUpdate = ReplayGainUpdate.Keep,
-        coverArtUpdate: CoverArtUpdate? = null
+        coverArtUpdate: CoverArtUpdate? = null,
+        /** True: only the picture comment changes; every text comment stays as it is. */
+        artworkOnly: Boolean = false
     ): Boolean {
         val audioFile = File(filePath)
         val originalExtension = audioFile.extension.ifBlank { "opus" }
@@ -1009,16 +1169,18 @@ class SongMetadataEditor(
 
             Timber.tag(TAG).e("VORBISJAVA: Existing tags: ${tags.allComments}")
             
-            tags.replaceSingleComment("TITLE", newTitle)
-            tags.replaceSingleComment("ARTIST", newArtist)
-            tags.replaceSingleComment("ALBUMARTIST", newArtist)
-            tags.replaceSingleComment("ALBUM", newAlbum)
-            tags.replaceSingleComment("GENRE", newGenre)
-            tags.replaceSingleComment("LYRICS", newLyrics)
-            tags.replaceSingleComment("TRACKNUMBER", newTrackNumber.takeIf { it > 0 }?.toString())
-            tags.replaceSingleComment("DISCNUMBER", newDiscNumber?.takeIf { it > 0 }?.toString())
-            tags.applyReplayGainUpdate(REPLAYGAIN_TRACK_GAIN_KEY, replayGainTrackUpdate)
-            tags.applyReplayGainUpdate(REPLAYGAIN_ALBUM_GAIN_KEY, replayGainAlbumUpdate)
+            if (!artworkOnly) {
+                tags.replaceSingleComment("TITLE", newTitle)
+                tags.replaceSingleComment("ARTIST", newArtist)
+                tags.replaceSingleComment("ALBUMARTIST", newArtist)
+                tags.replaceSingleComment("ALBUM", newAlbum)
+                tags.replaceSingleComment("GENRE", newGenre)
+                tags.replaceSingleComment("LYRICS", newLyrics)
+                tags.replaceSingleComment("TRACKNUMBER", newTrackNumber.takeIf { it > 0 }?.toString())
+                tags.replaceSingleComment("DISCNUMBER", newDiscNumber?.takeIf { it > 0 }?.toString())
+                tags.applyReplayGainUpdate(REPLAYGAIN_TRACK_GAIN_KEY, replayGainTrackUpdate)
+                tags.applyReplayGainUpdate(REPLAYGAIN_ALBUM_GAIN_KEY, replayGainAlbumUpdate)
+            }
             coverArtUpdate?.let { update ->
                 tags.applyCoverArtUpdate(update)
             }

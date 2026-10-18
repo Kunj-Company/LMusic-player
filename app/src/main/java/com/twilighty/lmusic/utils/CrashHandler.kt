@@ -2,6 +2,7 @@ package com.twilighty.lmusic.utils
 
 import android.content.Context
 import com.twilighty.lmusic.data.crash.CrashReportStore
+import com.twilighty.lmusic.data.crash.SafeMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,6 +68,8 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
             } catch (_: Throwable) {
                 // Never let saving the report get in the way of the crash itself.
             }
+            // Counts towards safe mode only when the crash happened soon after process start.
+            if (::appContext.isInitialized) SafeMode.recordCrash(appContext)
         }
         defaultHandler?.uncaughtException(thread, throwable)
     }

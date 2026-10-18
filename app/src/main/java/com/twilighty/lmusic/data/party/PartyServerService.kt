@@ -84,7 +84,9 @@ class PartyServerService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val json = Json { encodeDefaults = true; explicitNulls = false }
 
-    private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
+    /** Guards [server] + [stopping] together, so a server that finishes starting after stop is stopped too. */
+    private val serverLock = Any()
+    @Volatile private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -177,8 +179,8 @@ class PartyServerService : Service() {
         scope.launch {
             val ip = wifi.second
             val port = pickPort(ip)
-            try {
-                server = embeddedServer(CIO, port = port, host = ip) { routing { partyRoutes() } }
+            val created = try {
+                embeddedServer(CIO, port = port, host = ip) { routing { partyRoutes() } }
                     .start(wait = false)
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Party server failed to start")
@@ -186,6 +188,14 @@ class PartyServerService : Service() {
                     manager.onServerFailed("Couldn't start the party server")
                     stopSelfQuietly()
                 }
+                return@launch
+            }
+            // Party ended while the server was starting: stop it right away instead of leaking it.
+            val kept = synchronized(serverLock) {
+                if (stopping) false else { server = created; true }
+            }
+            if (!kept) {
+                runCatching { created.stop(200, 800) }
                 return@launch
             }
             val now = System.currentTimeMillis()
@@ -213,16 +223,17 @@ class PartyServerService : Service() {
     }
 
     private fun stopParty(reason: String?) {
-        if (stopping) return
-        stopping = true
+        val s = synchronized(serverLock) {
+            if (stopping) return
+            stopping = true
+            server.also { server = null }
+        }
         manager.queueListener = null
         main.removeCallbacks(endRunnable)
         networkCallback?.let { cb ->
             runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(cb) }
         }
         networkCallback = null
-        val s = server
-        server = null
         if (s != null) Thread({ runCatching { s.stop(200, 800) } }, "party-server-stop").start()
         releaseController()
         artCache.evictAll()
@@ -247,7 +258,7 @@ class PartyServerService : Service() {
                     .apply { description = "Shown while friends can add songs from your library" }
             )
         }
-        startForeground(NOTIFICATION_ID, buildNotification(guests), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        startForeground(NOTIFICATION_ID, buildNotification(guests), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         true
     }.getOrElse {
         Timber.tag(TAG).e(it, "Party service couldn't enter foreground")

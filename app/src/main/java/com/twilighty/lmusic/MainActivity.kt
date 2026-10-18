@@ -179,6 +179,8 @@ class MainActivity : ComponentActivity() {
     // For handling shortcut navigation - using StateFlow so composables can observe changes
     private val _pendingPlaylistNavigation = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     private val _pendingShuffleAll = kotlinx.coroutines.flow.MutableStateFlow(false)
+    // Benchmark / emulator smoke test only: route to open after launch (extra "smoke_route").
+    private val _pendingSmokeRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
     private val requestAllFilesAccessLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
         // Handle the result in onResume
@@ -340,6 +342,9 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        if (intent.getBooleanExtra("is_benchmark", false)) {
+            intent.getStringExtra("smoke_route")?.let { _pendingSmokeRoute.value = it }
+        }
 
         when {
             // Handle shuffle all shortcut / tile
@@ -493,6 +498,18 @@ class MainActivity : ComponentActivity() {
         // isMediaControllerReady used below for playlist navigation gate
         val isMediaControllerReady by playerViewModel.isMediaControllerReady.collectAsStateWithLifecycle()
         
+        // Smoke test navigation (benchmark launches only).
+        val pendingSmokeRoute by _pendingSmokeRoute.collectAsStateWithLifecycle()
+        LaunchedEffect(pendingSmokeRoute) {
+            val route = pendingSmokeRoute ?: return@LaunchedEffect
+            repeat(50) {
+                val ok = runCatching { navController.navigateSafely(route) }.getOrDefault(false)
+                if (ok) { _pendingSmokeRoute.value = null; return@LaunchedEffect }
+                delay(100)
+            }
+            _pendingSmokeRoute.value = null
+        }
+
         // Observe pending playlist navigation
         val pendingPlaylistNav by _pendingPlaylistNavigation.collectAsStateWithLifecycle()
         var processedPlaylistId by remember { mutableStateOf<String?>(null) }

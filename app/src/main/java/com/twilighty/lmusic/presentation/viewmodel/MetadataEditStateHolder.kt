@@ -193,6 +193,39 @@ class MetadataEditStateHolder @Inject constructor(
         }
     }
 
+    /**
+     * Cover studio: writes only the embedded artwork (no text tags) and refreshes the art caches
+     * the same way [saveMetadata] does.
+     */
+    suspend fun saveArtworkOnly(song: Song, coverArtUpdate: CoverArtUpdate): MetadataEditResult =
+        withContext(Dispatchers.IO) {
+            val resolvedSongId = resolveSongIdForMetadataEdit(song)
+                ?: return@withContext MetadataEditResult(
+                    success = false,
+                    error = MetadataEditError.INVALID_INPUT,
+                    errorMessage = "This song source does not support metadata editing."
+                )
+            val result = songMetadataEditor.editSongArtwork(resolvedSongId, coverArtUpdate)
+            if (!result.success) {
+                return@withContext MetadataEditResult(
+                    success = false,
+                    error = result.error,
+                    errorMessage = result.errorMessage
+                )
+            }
+            val refreshedAlbumArtUri = if (coverArtUpdate.isDeletion) null
+            else result.updatedAlbumArtUri ?: song.albumArtUriString
+            val uriToInvalidate = if (coverArtUpdate.isDeletion) song.albumArtUriString else refreshedAlbumArtUri
+            if (uriToInvalidate != null) imageCacheManager.invalidateCoverArtCaches(uriToInvalidate)
+            themeStateHolder.forceRegenerateColorScheme(refreshedAlbumArtUri)
+            val updatedSong = song.copy(albumArtUriString = refreshedAlbumArtUri)
+            MetadataEditResult(
+                success = true,
+                updatedSong = updatedSong,
+                updatedAlbumArtUri = refreshedAlbumArtUri,
+            )
+        }
+
     suspend fun deleteSong(song: Song): Boolean = withContext(Dispatchers.IO) {
         val fileInfo = FileDeletionUtils.getFileInfo(song.path)
         if (fileInfo.exists && fileInfo.canWrite) {

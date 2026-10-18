@@ -325,7 +325,7 @@ fun SafeModeBanner(modifier: Modifier = Modifier) {
                 onClick = {
                     SafeMode.exit(context.applicationContext)
                     active = false
-                    Toast.makeText(context, "Turn features back on in Settings", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Features are back on", Toast.LENGTH_SHORT).show()
                 },
                 style = YuyuButtonStyle.Primary,
                 size = YuyuButtonSize.Small,

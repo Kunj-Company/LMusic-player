@@ -105,6 +105,8 @@ fun FocusScreen(
     val sessionMusic by viewModel.sessionMusic.collectAsStateWithLifecycle()
     val smartEnabled by viewModel.smartEnabled.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
+    val exactAlarmNeeded by viewModel.exactAlarmNeeded.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val todayMinutes by viewModel.todayMinutes.collectAsStateWithLifecycle()
     val todayRounds by viewModel.todayRounds.collectAsStateWithLifecycle()
     val week by viewModel.week.collectAsStateWithLifecycle()
@@ -154,6 +156,27 @@ fun FocusScreen(
                         text = text,
                         actionLabel = "OK",
                         onAction = viewModel::dismissNotice,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
+            if (exactAlarmNeeded && active) {
+                item(key = "exact_alarm") {
+                    YuyuCallout(
+                        boldText = "Breaks may start late.",
+                        text = "Allow precise alarms so breaks start on time",
+                        actionLabel = "Allow",
+                        onAction = {
+                            runCatching {
+                                context.startActivity(
+                                    android.content.Intent(
+                                        android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                        android.net.Uri.parse("package:${context.packageName}")
+                                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                            }
+                            viewModel.dismissExactAlarmNotice()
+                        },
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
