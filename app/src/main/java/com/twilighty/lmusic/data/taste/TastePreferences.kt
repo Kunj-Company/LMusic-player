@@ -71,3 +71,6 @@ class TastePreferences @Inject constructor(
         const val MAX_HISTORY = 20
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupTasteDataStore: DataStore<Preferences> get() = tasteDataStore

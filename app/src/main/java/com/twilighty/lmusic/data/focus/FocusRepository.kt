@@ -132,3 +132,6 @@ internal data class ActiveFocusSession(
     val music: FocusMusicSource,
     val savedAt: Long = 0L,
 )
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupFocusDataStore: DataStore<Preferences> get() = focusDataStore

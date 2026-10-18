@@ -87,3 +87,6 @@ class LofiPreferences @Inject constructor(
         val stationsSerializer = ListSerializer(RadioStation.serializer())
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupLofiDataStore: DataStore<Preferences> get() = lofiDataStore

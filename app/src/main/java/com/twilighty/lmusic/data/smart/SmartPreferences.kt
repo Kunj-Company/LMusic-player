@@ -69,3 +69,6 @@ class SmartPreferences @Inject constructor(
         }
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupSmartDataStore: DataStore<Preferences> get() = smartDataStore

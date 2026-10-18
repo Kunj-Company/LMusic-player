@@ -274,3 +274,6 @@ fun HeartPopOverlay(state: HeartPopState, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupLivingArtworkDataStore: DataStore<Preferences> get() = livingArtworkDataStore

@@ -529,3 +529,6 @@ private val THUD: Int get() = VibrationEffect.Composition.PRIMITIVE_THUD
 private val QUICK_RISE: Int get() = VibrationEffect.Composition.PRIMITIVE_QUICK_RISE
 private val QUICK_FALL: Int get() = VibrationEffect.Composition.PRIMITIVE_QUICK_FALL
 private val SLOW_RISE: Int get() = VibrationEffect.Composition.PRIMITIVE_SLOW_RISE
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupHapticsDataStore: DataStore<Preferences> get() = hapticsDataStore
