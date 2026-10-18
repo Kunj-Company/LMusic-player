@@ -42,7 +42,7 @@ class ControlWidget4x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
-            val playerInfo = currentState<PlayerInfo>()
+            val playerInfo = currentState<PlayerInfo>().forDisplay()
             GlanceTheme(colors = YuyuGlanceColors) {
                 ControlWidget4x2Content(playerInfo = playerInfo, context = context)
             }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Live focus countdown for the Lofi & focus widget (ticks in the launcher, no app wakeups). -->
+<Chronometer xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/focus_chronometer"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:countDown="true"
+    android:fontFamily="sans-serif-black"
+    android:includeFontPadding="false"
+    android:maxLines="1"
+    android:textColor="@color/yuyu_widget_text"
+    android:textSize="30sp" />

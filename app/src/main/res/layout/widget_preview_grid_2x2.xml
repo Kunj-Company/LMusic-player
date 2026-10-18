@@ -36,7 +36,7 @@
                 android:contentDescription="Play/Pause"
                 android:padding="10dp"
                 android:src="@drawable/rounded_pause_24"
-                app:tint="@color/yuyu_widget_on_accent" />
+                android:tint="@color/yuyu_widget_on_accent" />
         </LinearLayout>
 
         <LinearLayout
@@ -53,7 +53,7 @@
                 android:contentDescription="Previous"
                 android:padding="10dp"
                 android:src="@drawable/rounded_skip_previous_24"
-                app:tint="@color/yuyu_widget_text" />
+                android:tint="@color/yuyu_widget_text" />
 
             <ImageView
                 android:layout_width="44dp"
@@ -64,7 +64,7 @@
                 android:contentDescription="Next"
                 android:padding="10dp"
                 android:src="@drawable/rounded_skip_next_24"
-                app:tint="@color/yuyu_widget_text" />
+                android:tint="@color/yuyu_widget_text" />
         </LinearLayout>
 
     </LinearLayout>

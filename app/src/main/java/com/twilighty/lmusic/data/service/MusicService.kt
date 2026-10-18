@@ -187,6 +187,8 @@ class MusicService : MediaLibraryService() {
     private var activeCastStatsOccurrenceId: String? = null
     private var playbackSnapshotPersistJob: Job? = null
     private var isRestoringPlaybackSnapshot = false
+    /** The cold-start queue restore; widget commands that arrive meanwhile wait for it. */
+    private var playbackRestoreJob: Job? = null
     private var isPlaybackUnloadInProgress = false
     private val audioManager by lazy {
         getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -236,6 +238,7 @@ class MusicService : MediaLibraryService() {
         private const val DEFAULT_STREAM_BUFFER_SIZE = 8 * 1024
         private const val WIDGET_ART_FAILURE_RETRY_MS = 30_000L
         private const val WIDGET_QUEUE_PREVIEW_LIMIT = 4
+        private const val COLD_WIDGET_COMMAND_SETTLE_MS = 1_500L
         private const val HEADSET_RECONNECT_RESUME_WINDOW_MS = 15_000L
 
         fun markPendingMediaButtonForegroundStart() {
@@ -391,6 +394,7 @@ class MusicService : MediaLibraryService() {
         }
 
         super.onCreate()
+        com.twilighty.lmusic.ui.glancewidget.WidgetPlaybackLiveness.serviceAlive = true
         listeningStatsTracker.initialize(appScope)
         
         // Ensure engine is ready (re-initialize if service was restarted)
@@ -408,7 +412,7 @@ class MusicService : MediaLibraryService() {
         controller.initialize()
         initializeCastWearSync()
         registerHeadsetReconnectMonitor()
-        // Shake to shuffle / face-down to pause. Sensors only run while enabled + playing + screen on.
+        // Shake to shuffle / face-down to pause. Sensors only run while enabled + playing (screen on or off).
         runCatching {
             gestureController.attach(object : com.twilighty.lmusic.data.gestures.GestureController.Host {
                 override fun currentPlayer(): Player = mediaSession?.player ?: engine.masterPlayer
@@ -836,7 +840,7 @@ class MusicService : MediaLibraryService() {
             it.setSmallIcon(R.drawable.ic_stat_lmusic)
         }
         setMediaNotificationProvider(localOnlyProvider)
-        serviceScope.launch {
+        playbackRestoreJob = serviceScope.launch {
             restorePlaybackQueueSnapshotIfNeeded()
             mediaSession?.let { refreshMediaSessionUi(it) }
             requestWidgetFullUpdate(force = true)
@@ -1005,7 +1009,10 @@ class MusicService : MediaLibraryService() {
         val forcedForegroundStart =
             intent?.getBooleanExtra(EXTRA_FORCE_FOREGROUND_ON_START, false) == true
         val isMediaButtonIntent = intent?.action == Intent.ACTION_MEDIA_BUTTON
-        val needsTemporaryForeground = forcedForegroundStart ||
+        // A widget tap is a foreground-service start; when Media3 already holds the service in
+        // the foreground there is nothing to satisfy, and a second "processing" notification
+        // would replace the media one.
+        val needsTemporaryForeground = (forcedForegroundStart && !isServiceAlreadyForeground()) ||
             pendingMediaButtonForegroundStart ||
             (isMediaButtonIntent &&
                 !startedTemporaryForegroundInOnCreate &&
@@ -1014,68 +1021,40 @@ class MusicService : MediaLibraryService() {
             startTemporaryForegroundForCommand()
         }
 
-        intent?.action?.let { action ->
-            val player = mediaSession?.player ?: return@let
-            when (action) {
-                PlayerActions.PLAY_PAUSE -> player.playWhenReady = !player.playWhenReady
-                PlayerActions.NEXT -> player.seekToNext()
-                PlayerActions.PREVIOUS -> player.seekToPrevious()
-                PlayerActions.FAVORITE -> {
-                    val songId = player.currentMediaItem?.mediaId
-                    if (!songId.isNullOrBlank()) {
-                        serviceScope.launch {
-                            val updatedFavorite = musicRepository.toggleFavoriteStatus(songId)
-                            favoriteSongIds = if (updatedFavorite) {
-                                favoriteSongIds + songId
-                            } else {
-                                favoriteSongIds - songId
-                            }
-                            mediaSession?.let { refreshMediaSessionUi(it) }
-                            requestWidgetFullUpdate(force = true)
-                        }
-                    }
-                }
-                PlayerActions.PLAY_FROM_QUEUE -> {
-                    val songId = intent.getLongExtra("song_id", -1L)
-                    if (songId != -1L) {
-                        val timeline = player.currentTimeline
-                        if (!timeline.isEmpty) {
-                            val window = Timeline.Window()
-                            for (i in 0 until timeline.windowCount) {
-                                timeline.getWindow(i, window)
-                                if (window.mediaItem.mediaId.toLongOrNull() == songId) {
-                                    player.seekTo(i, C.TIME_UNSET)
-                                    player.play()
-                                    break
-                                }
+        val action = intent?.action
+        var deferredWidgetCommand = false
+        if (action != null) {
+            val player = mediaSession?.player
+            if (player != null) {
+                val isWidgetCommand = action in PlayerActions.ALL
+                if (isWidgetCommand && (player.mediaItemCount == 0 || playbackRestoreJob?.isActive == true)) {
+                    // Cold start from a widget (app was killed): the queue restore is still
+                    // running. Wait for it, then act — "Play" must resume the last queue.
+                    deferredWidgetCommand = true
+                    val commandIntent = Intent(intent)
+                    serviceScope.launch {
+                        runCatching { playbackRestoreJob?.join() }
+                        runCatching { restorePlaybackQueueSnapshotIfNeeded() }
+                        val current = mediaSession?.player
+                        if (current != null) handleStartCommandAction(current, action, commandIntent, coldStart = true)
+                        if (needsTemporaryForeground) {
+                            delay(COLD_WIDGET_COMMAND_SETTLE_MS)
+                            val p = mediaSession?.player
+                            val playing = p != null && p.playWhenReady &&
+                                p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED
+                            if (!playing) {
+                                stopForeground(STOP_FOREGROUND_REMOVE)
+                                stopSelfResult(startId)
                             }
                         }
                     }
-                }
-                PlayerActions.SHUFFLE -> {
-                    val newState = !isManualShuffleEnabled
-                    mediaSession?.let { session ->
-                        updateManualShuffleState(session, enabled = newState, broadcast = true)
-                    }
-                }
-                PlayerActions.REPEAT -> {
-                    val newMode = when (player.repeatMode) {
-                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
-                        Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
-                        else -> Player.REPEAT_MODE_OFF
-                    }
-                    player.repeatMode = newMode
-                    requestWidgetFullUpdate(force = true)
-                }
-                ACTION_SLEEP_TIMER_EXPIRED -> {
-                    Timber.tag(TAG).d("Sleep timer expired action received. Pausing player.")
-                    cancelDurationSleepTimerInternal()
-                    player.pause()
+                } else {
+                    handleStartCommandAction(player, action, intent, coldStart = false)
                 }
             }
         }
         val startCommandResult = super.onStartCommand(intent, flags, startId)
-        if (needsTemporaryForeground) {
+        if (needsTemporaryForeground && !deferredWidgetCommand) {
             val player = mediaSession?.player
             val isActivelyPlaying = player?.let {
                 it.playWhenReady &&
@@ -1088,6 +1067,126 @@ class MusicService : MediaLibraryService() {
             }
         }
         return startCommandResult
+    }
+
+    /** Widget / internal commands sent with startService. [coldStart]: the service was just started for it. */
+    private fun handleStartCommandAction(player: Player, action: String, intent: Intent, coldStart: Boolean) {
+        when (action) {
+            PlayerActions.PLAY_PAUSE -> {
+                if (coldStart || !player.playWhenReady) {
+                    // From a killed app the restored queue may already be set to play; "play"
+                    // must never turn into a pause there.
+                    preparePlayerForPlayback(player)
+                    player.play()
+                } else {
+                    player.pause()
+                }
+            }
+            PlayerActions.PLAY_SONG -> {
+                val songId = intent.getLongExtra(PlayerActions.EXTRA_SONG_ID, -1L)
+                if (songId != -1L) playSongFromWidget(player, songId)
+            }
+            PlayerActions.NEXT -> player.seekToNext()
+            PlayerActions.PREVIOUS -> player.seekToPrevious()
+            PlayerActions.FAVORITE -> {
+                val songId = player.currentMediaItem?.mediaId
+                if (!songId.isNullOrBlank()) {
+                    serviceScope.launch {
+                        val updatedFavorite = musicRepository.toggleFavoriteStatus(songId)
+                        favoriteSongIds = if (updatedFavorite) {
+                            favoriteSongIds + songId
+                        } else {
+                            favoriteSongIds - songId
+                        }
+                        mediaSession?.let { refreshMediaSessionUi(it) }
+                        requestWidgetFullUpdate(force = true)
+                    }
+                }
+            }
+            PlayerActions.PLAY_FROM_QUEUE -> {
+                val songId = intent.getLongExtra("song_id", -1L)
+                if (songId != -1L) {
+                    val timeline = player.currentTimeline
+                    if (!timeline.isEmpty) {
+                        val window = Timeline.Window()
+                        for (i in 0 until timeline.windowCount) {
+                            timeline.getWindow(i, window)
+                            if (window.mediaItem.mediaId.toLongOrNull() == songId) {
+                                player.seekTo(i, C.TIME_UNSET)
+                                preparePlayerForPlayback(player)
+                                player.play()
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+            PlayerActions.SHUFFLE -> {
+                val newState = !isManualShuffleEnabled
+                mediaSession?.let { session ->
+                    updateManualShuffleState(session, enabled = newState, broadcast = true)
+                }
+            }
+            PlayerActions.REPEAT -> {
+                val newMode = when (player.repeatMode) {
+                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+                    Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+                    else -> Player.REPEAT_MODE_OFF
+                }
+                player.repeatMode = newMode
+                requestWidgetFullUpdate(force = true)
+            }
+            ACTION_SLEEP_TIMER_EXPIRED -> {
+                Timber.tag(TAG).d("Sleep timer expired action received. Pausing player.")
+                cancelDurationSleepTimerInternal()
+                player.pause()
+            }
+        }
+    }
+
+    /** Ensures the player can actually start: re-prepares after an error/stop, rewinds at the end. */
+    private fun preparePlayerForPlayback(player: Player) {
+        if (player.mediaItemCount == 0) return
+        when (player.playbackState) {
+            Player.STATE_IDLE -> player.prepare()
+            Player.STATE_ENDED -> player.seekToDefaultPosition(player.currentMediaItemIndex)
+            else -> Unit
+        }
+    }
+
+    /** Widget "play this song": jump to it in the queue, or play it next. */
+    private fun playSongFromWidget(player: Player, songId: Long) {
+        val timeline = player.currentTimeline
+        if (!timeline.isEmpty) {
+            val window = Timeline.Window()
+            for (i in 0 until timeline.windowCount) {
+                timeline.getWindow(i, window)
+                if (window.mediaItem.mediaId.toLongOrNull() == songId) {
+                    player.seekTo(i, C.TIME_UNSET)
+                    preparePlayerForPlayback(player)
+                    player.play()
+                    return
+                }
+            }
+        }
+        serviceScope.launch {
+            val song = runCatching {
+                musicRepository.getSongsByIds(listOf(songId.toString())).first().firstOrNull()
+            }.getOrNull() ?: return@launch
+            val item = runCatching { engine.resolveMediaItem(MediaItemBuilder.build(song)) }
+                .getOrElse { MediaItemBuilder.build(song) }
+            val p = mediaSession?.player ?: return@launch
+            if (p.mediaItemCount == 0) {
+                p.setMediaItems(listOf(item))
+                p.prepare()
+            } else {
+                val index = (p.currentMediaItemIndex + 1).coerceAtMost(p.mediaItemCount)
+                p.addMediaItem(index, item)
+                p.seekTo(index, C.TIME_UNSET)
+                preparePlayerForPlayback(p)
+            }
+            p.play()
+        }
     }
 
     private fun getNavidromeId(mediaItem: MediaItem?): String? {
@@ -1656,6 +1755,10 @@ class MusicService : MediaLibraryService() {
         unregisterHeadsetReconnectMonitor()
         runCatching { gestureController.detach() }
         wearStatePublisher.clearState()
+        // Widgets keep their last state on disk; mark it "not playing" so they don't show a
+        // playing song after the service (or later the process) is gone.
+        com.twilighty.lmusic.ui.glancewidget.WidgetPlaybackLiveness.serviceAlive = false
+        com.twilighty.lmusic.ui.glancewidget.PlayerWidgetUpdater.markStopped(applicationContext)
         replayGainJob?.cancel()
 
         engine.removePlayerSwapListener(playerSwapListener)
@@ -2397,8 +2500,12 @@ class MusicService : MediaLibraryService() {
         if (!snapshotTimeline.isEmpty) {
             val window = Timeline.Window()
 
-            // Empezar desde la siguiente canción en la cola
-            val startIndex = if (snapshotWindowIndex + 1 < snapshotTimeline.windowCount) snapshotWindowIndex + 1 else 0
+            // Up next: the songs after the current one (wrap to the start only with repeat all).
+            val startIndex = when {
+                snapshotWindowIndex + 1 < snapshotTimeline.windowCount -> snapshotWindowIndex + 1
+                repeatMode == Player.REPEAT_MODE_ALL -> 0
+                else -> snapshotTimeline.windowCount
+            }
 
             // Limitar el número de elementos de la cola a 4
             val endIndex = (startIndex + 4).coerceAtMost(snapshotTimeline.windowCount)
@@ -2419,7 +2526,9 @@ class MusicService : MediaLibraryService() {
                     queueItems.add(
                         com.twilighty.lmusic.data.model.QueueItem(
                             id = songId,
-                            albumArtUri = queueArtworkUri?.toString()
+                            albumArtUri = queueArtworkUri?.toString(),
+                            title = mediaItem.mediaMetadata.title?.toString().orEmpty(),
+                            artist = mediaItem.mediaMetadata.artist?.toString().orEmpty(),
                         )
                     )
                 }
@@ -2733,44 +2842,12 @@ class MusicService : MediaLibraryService() {
         return output.toByteArray().takeIf { it.isNotEmpty() }
     }
 
-    private suspend fun updateGlanceWidgets(playerInfo: PlayerInfo) = withContext(Dispatchers.IO) {
-        try {
-            val glanceManager = GlanceAppWidgetManager(applicationContext)
-            val widgetPlayerInfo = playerInfo.toWidgetTransportState()
-
-            val glanceIds = glanceManager.getGlanceIds(LMusicGlanceWidget::class.java)
-            glanceIds.forEach { id ->
-                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { widgetPlayerInfo }
-                LMusicGlanceWidget().update(applicationContext, id)
-            }
-
-            val barGlanceIds = glanceManager.getGlanceIds(BarWidget4x1::class.java)
-            barGlanceIds.forEach { id ->
-                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { widgetPlayerInfo }
-                BarWidget4x1().update(applicationContext, id)
-            }
-
-            val controlGlanceIds = glanceManager.getGlanceIds(ControlWidget4x2::class.java)
-            controlGlanceIds.forEach { id ->
-                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { widgetPlayerInfo }
-                ControlWidget4x2().update(applicationContext, id)
-            }
-
-            val gridGlanceIds = glanceManager.getGlanceIds(GridWidget2x2::class.java)
-            gridGlanceIds.forEach { id ->
-                updateAppWidgetState(applicationContext, PlayerInfoStateDefinition, id) { widgetPlayerInfo }
-                GridWidget2x2().update(applicationContext, id)
-            }
-            
-            if (glanceIds.isNotEmpty() || barGlanceIds.isNotEmpty() || controlGlanceIds.isNotEmpty() || gridGlanceIds.isNotEmpty()) {
-                Timber.tag(TAG)
-                    .d("Widgets actualizados: ${playerInfo.songTitle} (Original: ${glanceIds.size}, Bar: ${barGlanceIds.size}, Control: ${controlGlanceIds.size})")
-            } else {
-                Timber.tag(TAG).w("No se encontraron widgets para actualizar")
-            }
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Error al actualizar el widget")
-        }
+    private fun updateGlanceWidgets(playerInfo: PlayerInfo) {
+        // One shared state write for all player widgets, throttled to <= 1 push per second.
+        com.twilighty.lmusic.ui.glancewidget.PlayerWidgetUpdater.submit(
+            applicationContext,
+            playerInfo.toWidgetTransportState()
+        )
     }
 
     private fun PlayerInfo.toWidgetTransportState(): PlayerInfo {
@@ -3161,7 +3238,8 @@ class MusicService : MediaLibraryService() {
         val likeButton = CommandButton.Builder(
             if (isFavorite) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED
         )
-            .setDisplayName("Like")
+            // First custom button, so it shows in the lock-screen media controls / Now Bar.
+            .setDisplayName(if (isFavorite) "Unlike" else "Like")
             .setSessionCommand(SessionCommand(MusicNotificationProvider.CUSTOM_COMMAND_LIKE, Bundle.EMPTY))
             .setSlots(CommandButton.SLOT_OVERFLOW)
             .build()

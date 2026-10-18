@@ -36,55 +36,9 @@ fun AlbumArtImage(
     context: Context,
     cornerRadius: Dp
 ) {
-    val imageProvider = bitmapData?.let { data ->
-        val cacheKey = AlbumArtBitmapCache.getKey(data)
-        var bitmap = AlbumArtBitmapCache.getBitmap(cacheKey)
-
-        if (bitmap == null) {
-            try {
-                val options = BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                BitmapFactory.decodeByteArray(data, 0, data.size, options)
-
-                var inSampleSize = 1
-                // Calculate target size in pixels
-                val targetSizePx = (size.value * context.resources.displayMetrics.density).toInt()
-
-                if (options.outHeight > targetSizePx || options.outWidth > targetSizePx) {
-                    val halfHeight = options.outHeight / 2
-                    val halfWidth = options.outWidth / 2
-                    while (halfHeight / inSampleSize >= targetSizePx &&
-                        halfWidth / inSampleSize >= targetSizePx
-                    ) {
-                        inSampleSize *= 2
-                    }
-                }
-
-                options.inSampleSize = inSampleSize
-                options.inJustDecodeBounds = false
-                bitmap = BitmapFactory.decodeByteArray(data, 0, data.size, options)
-
-                bitmap?.let { AlbumArtBitmapCache.putBitmap(cacheKey, it) }
-            } catch (e: Exception) {
-                Timber.tag("WidgetImage").e(e, "Error decoding bitmap")
-                bitmap = null
-            }
-        }
-        bitmap?.let { ImageProvider(it) }
-    } ?: albumArtUri?.let { rawUri ->
-        val cacheKey = "uri:$rawUri"
-        var bitmap = AlbumArtBitmapCache.getBitmap(cacheKey)
-        if (bitmap == null) {
-            bitmap = decodeAlbumArtFromUri(
-                context = context,
-                rawUri = rawUri,
-                requestedSize = size
-            )
-            bitmap?.let { AlbumArtBitmapCache.putBitmap(cacheKey, it) }
-        }
-        bitmap?.let { ImageProvider(it) }
-    }
+    val requestedPx = (size.value * context.resources.displayMetrics.density).toInt()
+    val imageProvider = WidgetBitmaps.load(context, bitmapData, albumArtUri, requestedPx)
+        ?.let { ImageProvider(it) }
 
     val cdAlbumArt = context.getString(R.string.widget_album_art)
     val cdPlaceholder = context.getString(R.string.widget_album_art_placeholder)
@@ -119,22 +73,6 @@ fun AlbumArtImage(
             }
         }
     }
-}
-
-private fun decodeAlbumArtFromUri(
-    context: Context,
-    rawUri: String,
-    requestedSize: Dp,
-): Bitmap? {
-    val targetPx = (requestedSize.value * context.resources.displayMetrics.density)
-        .toInt()
-        .coerceAtLeast(64)
-    return decodeWidgetAlbumArtBitmap(
-        context = context,
-        rawUri = rawUri,
-        targetWidthPx = targetPx,
-        targetHeightPx = targetPx,
-    )
 }
 
 @Composable
@@ -177,7 +115,7 @@ fun PreviousButton(
     val params = actionParametersOf(PlayerActions.key to PlayerActions.PREVIOUS)
     WidgetIconButton(
         modifier = modifier,
-        action = actionRunCallback<PlayerControlActionCallback>(params),
+        action = playerControlAction(params),
         backgroundColor = backgroundColor,
         iconColor = iconColor,
         imageProvider = ImageProvider(R.drawable.rounded_skip_previous_24),
@@ -199,7 +137,7 @@ fun NextButton(
     val params = actionParametersOf(PlayerActions.key to PlayerActions.NEXT)
     WidgetIconButton(
         modifier = modifier,
-        action = actionRunCallback<PlayerControlActionCallback>(params),
+        action = playerControlAction(params),
         backgroundColor = backgroundColor,
         iconColor = iconColor,
         imageProvider = ImageProvider(R.drawable.rounded_skip_next_24),
@@ -222,7 +160,7 @@ fun PlayPauseButton(
     val params = actionParametersOf(PlayerActions.key to PlayerActions.PLAY_PAUSE)
     WidgetIconButton(
         modifier = modifier,
-        action = actionRunCallback<PlayerControlActionCallback>(params),
+        action = playerControlAction(params),
         backgroundColor = backgroundColor,
         iconColor = iconColor,
         imageProvider = ImageProvider(
@@ -248,7 +186,7 @@ fun ShuffleButton(
     val params = actionParametersOf(PlayerActions.key to PlayerActions.SHUFFLE)
     WidgetIconButton(
         modifier = modifier,
-        action = actionRunCallback<PlayerControlActionCallback>(params),
+        action = playerControlAction(params),
         backgroundColor = backgroundColor,
         iconColor = iconColor,
         imageProvider = ImageProvider(R.drawable.rounded_shuffle_24),
@@ -269,7 +207,7 @@ fun RepeatButton(
     val params = actionParametersOf(PlayerActions.key to PlayerActions.REPEAT)
     WidgetIconButton(
         modifier = modifier,
-        action = actionRunCallback<PlayerControlActionCallback>(params),
+        action = playerControlAction(params),
         backgroundColor = backgroundColor,
         iconColor = iconColor,
         imageProvider = ImageProvider(iconRes),

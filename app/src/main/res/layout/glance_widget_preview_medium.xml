@@ -47,5 +47,5 @@
         android:layout_height="36dp"
         android:src="@drawable/rounded_play_arrow_24"
         android:layout_marginStart="8dp"
-        app:tint="@color/yuyu_widget_accent" />
+        android:tint="@color/yuyu_widget_accent" />
 </LinearLayout>

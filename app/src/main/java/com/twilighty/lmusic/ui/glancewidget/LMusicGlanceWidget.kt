@@ -76,7 +76,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
-            val playerInfo = currentState<PlayerInfo>()
+            val playerInfo = currentState<PlayerInfo>().forDisplay()
             val currentSize = LocalSize.current
 
             Timber.tag("LMusicGlanceWidget")
@@ -848,7 +848,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                         contentDescription = context.getString(R.string.cd_favorite),
                         modifier = GlanceModifier
                             .size(28.dp)
-                            .clickable(actionRunCallback<PlayerControlActionCallback>(actionParametersOf(PlayerActions.key to PlayerActions.FAVORITE)))
+                            .clickable(playerControlAction(actionParametersOf(PlayerActions.key to PlayerActions.FAVORITE)))
                             .padding(2.dp),
                         colorFilter = ColorFilter.tint(textColor)
                     )
@@ -1040,7 +1040,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
                                 val queueItem = items[i]
                                 AlbumArtImageGlance(
                                     modifier = GlanceModifier.clickable(
-                                        actionRunCallback<PlayerControlActionCallback>(
+                                        playerControlAction(
                                             actionParametersOf(
                                                 PlayerActions.key to PlayerActions.PLAY_FROM_QUEUE,
                                                 PlayerActions.songIdKey to queueItem.id
@@ -1087,91 +1087,14 @@ class LMusicGlanceWidget : GlanceAppWidget() {
         val sizingModifier = if (size != null) modifier.size(size) else modifier
         val widgetDpSize = LocalSize.current // Get the actual size of the composable
 
-        val imageProvider = bitmapData?.let { data ->
-            val cacheKey = AlbumArtBitmapCache.getKey(data)
-            var bitmap = AlbumArtBitmapCache.getBitmap(cacheKey)
-
-            if (bitmap != null) {
-                Timber.tag(TAG_AAIG).d("Bitmap cache HIT for key: $cacheKey. Using cached bitmap.")
-            } else {
-                Timber.tag(TAG_AAIG).d("Bitmap cache MISS for key: $cacheKey. Decoding new bitmap.")
-                try {
-                    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeByteArray(data, 0, data.size, options)
-                    Timber.tag(TAG_AAIG)
-                        .d("Initial bounds: ${options.outWidth}x${options.outHeight}")
-
-                    val imageHeight = options.outHeight
-                    val imageWidth = options.outWidth
-                    var inSampleSize = 1
-
-                    // Determine target size in pixels
-                    val targetWidthPx: Int
-                    val targetHeightPx: Int
-                    with(context.resources.displayMetrics) {
-                        if (size != null) {
-                            // If size is provided, use it for both width and height (maintains square logic)
-                            val targetSizePx = (size.value * density).toInt()
-                            targetWidthPx = targetSizePx
-                            targetHeightPx = targetSizePx
-                            Timber.tag(TAG_AAIG).d("Target Px size for Dp $size: $targetSizePx")
-                        } else {
-                            // If size is not provided, use the actual widget size
-                            targetWidthPx = (widgetDpSize.width.value * density).toInt()
-                            targetHeightPx = (widgetDpSize.height.value * density).toInt()
-                            Timber.tag(TAG_AAIG).d("Target Px size from widget DpSize ${widgetDpSize}: ${targetWidthPx}x${targetHeightPx}")
-                        }
-                    }
-
-                    if (imageHeight > targetHeightPx || imageWidth > targetWidthPx) {
-                        val halfHeight: Int = imageHeight / 2
-                        val halfWidth: Int = imageWidth / 2
-                        // Calculate the largest inSampleSize value that is a power of 2 and keeps both
-                        // height and width larger than the requested height and width.
-                        while (halfHeight / inSampleSize >= targetHeightPx && halfWidth / inSampleSize >= targetWidthPx) {
-                            inSampleSize *= 2
-                        }
-                    }
-                    Timber.tag(TAG_AAIG).d("Calculated inSampleSize: $inSampleSize")
-
-                    options.inSampleSize = inSampleSize
-                    options.inJustDecodeBounds = false
-                    val sampledBitmap = BitmapFactory.decodeByteArray(data, 0, data.size, options)
-
-                    if (sampledBitmap == null) {
-                        Timber.tag(TAG_AAIG)
-                            .e("BitmapFactory.decodeByteArray returned null after sampling.")
-                        return@let null
-                    }
-                    Timber.tag(TAG_AAIG)
-                        .d("Sampled bitmap size: ${sampledBitmap.width}x${sampledBitmap.height}")
-
-                    bitmap = sampledBitmap
-
-                    Timber.tag(TAG_AAIG)
-                        .d("Final bitmap size: ${bitmap.width}x${bitmap.height}. Putting into cache with key: $cacheKey")
-                    bitmap.let { AlbumArtBitmapCache.putBitmap(cacheKey, it) }
-
-                } catch (e: Exception) {
-                    Timber.tag(TAG_AAIG).e(e, "Error decoding or scaling bitmap: ${e.message}")
-                    bitmap = null
-                }
-            }
-            bitmap?.let { ImageProvider(it) }
-        } ?: albumArtUri?.let { rawUri ->
-            val cacheKey = "uri:$rawUri"
-            var bitmap = AlbumArtBitmapCache.getBitmap(cacheKey)
-            if (bitmap == null) {
-                bitmap = decodeAlbumArtFromUri(
-                    context = context,
-                    rawUri = rawUri,
-                    requestedSize = size,
-                    widgetDpSize = widgetDpSize
-                )
-                bitmap?.let { AlbumArtBitmapCache.putBitmap(cacheKey, it) }
-            }
-            bitmap?.let { ImageProvider(it) }
+        val requestedPx = with(context.resources.displayMetrics) {
+            val dp = size ?: minOf(widgetDpSize.width, widgetDpSize.height)
+            if (dp == Dp.Unspecified || dp <= 0.dp) 0 else (dp.value * density).toInt()
         }
+        // Capped at WidgetBitmaps.COVER_PX: full-widget-size bitmaps overflowed the RemoteViews
+        // transaction limit and made the widget stop updating.
+        val imageProvider = WidgetBitmaps.load(context, bitmapData, albumArtUri, requestedPx)
+            ?.let { ImageProvider(it) }
 
         Box(
             modifier = sizingModifier
@@ -1213,30 +1136,6 @@ class LMusicGlanceWidget : GlanceAppWidget() {
         }
     }
 
-    private fun decodeAlbumArtFromUri(
-        context: Context,
-        rawUri: String,
-        requestedSize: Dp?,
-        widgetDpSize: DpSize
-    ): Bitmap? {
-        val (targetWidthPx, targetHeightPx) = with(context.resources.displayMetrics) {
-            if (requestedSize != null) {
-                val target = (requestedSize.value * density).toInt().coerceAtLeast(1)
-                target to target
-            } else {
-                val width = (widgetDpSize.width.value * density).toInt().coerceAtLeast(1)
-                val height = (widgetDpSize.height.value * density).toInt().coerceAtLeast(1)
-                width to height
-            }
-        }
-        return decodeWidgetAlbumArtBitmap(
-            context = context,
-            rawUri = rawUri,
-            targetWidthPx = targetWidthPx,
-            targetHeightPx = targetHeightPx,
-        )
-    }
-
     @Composable
     fun PlayPauseButtonGlance(
         modifier: GlanceModifier = GlanceModifier,
@@ -1252,7 +1151,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
             modifier = modifier
                 .background(backgroundColor)
                 .cornerRadius(cornerRadius)
-                .clickable(actionRunCallback<PlayerControlActionCallback>(params)),
+                .clickable(playerControlAction(params)),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -1305,7 +1204,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
         Box(
             modifier = sizeModifier
                 .background(ImageProvider(backgroundBitmap))
-                .clickable(actionRunCallback<PlayerControlActionCallback>(params)),
+                .clickable(playerControlAction(params)),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -1331,7 +1230,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
             modifier = modifier
                 .background(backgroundColor)
                 .cornerRadius(cornerRadius)
-                .clickable(actionRunCallback<PlayerControlActionCallback>(params)),
+                .clickable(playerControlAction(params)),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -1357,7 +1256,7 @@ class LMusicGlanceWidget : GlanceAppWidget() {
             modifier = modifier
                 .background(backgroundColor)
                 .cornerRadius(cornerRadius)
-                .clickable(actionRunCallback<PlayerControlActionCallback>(params)),
+                .clickable(playerControlAction(params)),
             contentAlignment = Alignment.Center
         ) {
             Image(

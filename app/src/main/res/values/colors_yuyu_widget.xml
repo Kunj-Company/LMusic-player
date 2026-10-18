@@ -7,4 +7,6 @@
     <color name="yuyu_widget_text_muted">#FF5F5E5A</color>
     <color name="yuyu_widget_accent">#FFC2410C</color>
     <color name="yuyu_widget_on_accent">#FFFFFFFF</color>
+    <color name="yuyu_widget_accent_soft">#FFFAF0EC</color>
+    <color name="yuyu_widget_accent_text">#FFC2410C</color>
 </resources>
