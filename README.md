@@ -47,6 +47,13 @@ from **Artifacts**.
   artists** discovered in the period.
 - History is kept for life (PixelPlayer trimmed it to two years).
 
+### New in 1.3
+
+- Spaces: on-device lofi generator, lofi radio and ambience; focus timer; listening garden (with widget);
+  party queue over local Wi-Fi; taste match by QR code; cover studio for songs without artwork.
+- Living artwork, double-tap to like, artist story, mini-player swipes, swipe between pages, stronger
+  haptics, optional shake / face-down gestures, crash reports and safe mode.
+
 ### New in 1.2
 
 - New Home, Yuyu redesign of every screen and widget, smaller now-playing layout with sleep timer and song menu.

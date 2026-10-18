@@ -186,7 +186,23 @@ def main():
     after = sorted(t for t in texts() if t.startswith("Test Artist") or t.startswith("LMusic Test"))
     print("mini player before:", before, "after:", after)
     expect("mini player swipe changes the song", bool(before) and bool(after) and before != after)
-    step("08-open-player", lambda: (adb("shell", "am", "start", "-W", "-n", ACT, "--ez", "is_benchmark", "true", "--ez", "ACTION_SHOW_PLAYER", "true"), time.sleep(5), True)[2])
+    def open_player():
+        # Tap the mini player (the lowest song title on screen), like a user would.
+        root = dump(); best = None
+        if root is not None:
+            for node in root.iter("node"):
+                v = (node.get("text") or "").strip()
+                m = re.findall(r"\d+", node.get("bounds", ""))
+                if v.startswith("LMusic Test") and len(m) == 4:
+                    x1, y1, x2, y2 = map(int, m)
+                    if best is None or y1 > best[1]:
+                        best = ((x1 + x2) // 2, (y1 + y2) // 2)
+        if not best:
+            return False
+        adb("shell", "input", "tap", str(best[0]), str(best[1])); time.sleep(4)
+        return True
+    step("08-open-player", open_player)
+    expect("full player opens (song options button)", has_text("Song options", tries=3))
     expect("now playing shows the song", has_text("Test Artist", tries=3))
     step("09-now-playing-double-tap", lambda: (tap_xy(0.5, 0.33), tap_xy(0.5, 0.33), True)[2])
     back()
