@@ -12,7 +12,6 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
-import com.twilighty.lmusic.data.screensaver.OpenMeteo
 import com.twilighty.lmusic.data.screensaver.ScreensaverPreferences
 import com.twilighty.lmusic.data.screensaver.ScreensaverSettings
 import com.twilighty.lmusic.data.screensaver.ScreensaverWeatherRepository
@@ -131,12 +130,14 @@ class ScreensaverSession(
                 .map { it.showWeather to it.location }
                 .distinctUntilChanged()
                 .collectLatest {
-                    // Weather refresh while visible: on open, on setting change, then every 30 min.
+                    // Weather refresh while visible: on open, on setting change, then every 30 min
+                    // (about 5 min after a failure). A cancelled refresh keeps the last value.
                     while (true) {
                         val s = preferences.current()
-                        _weather.value = if (s.showWeather) weatherRepository.currentWeather(s) else null
-                        if (!s.showWeather) break
-                        delay(OpenMeteo.CACHE_MS)
+                        if (!s.showWeather) { _weather.value = null; break }
+                        val result = weatherRepository.refresh(s)
+                        _weather.value = result.snapshot
+                        delay(result.nextRefreshMs)
                     }
                 }
         }

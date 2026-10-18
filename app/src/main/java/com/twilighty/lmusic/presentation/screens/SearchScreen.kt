@@ -200,7 +200,8 @@ fun SearchScreen(
     // Search debouncing is centralized in SearchStateHolder.
     val searchSourceFilter by remember(playerViewModel) {
         playerViewModel.playerUiState
-            .map { it.currentStorageFilter }
+            // Show the effective filter: "hide local media" means cloud only.
+            .map { com.twilighty.lmusic.data.model.LibrarySourceFilter.effective(it.currentStorageFilter, it.hideLocalMedia) }
             .distinctUntilChanged()
     }.collectAsStateWithLifecycle(initialValue = com.twilighty.lmusic.data.model.StorageFilter.ALL)
 

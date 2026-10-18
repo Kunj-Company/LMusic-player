@@ -37,12 +37,15 @@ import timber.log.Timber
  * short [PAUSE_GRACE_MS] after it stops, or while a face-down pause waits to resume) and are
  * unregistered otherwise. Only the plain accelerometer is used with the screen off (no gyro
  * fusion sensors), at a low rate with hardware batching:
- * - shake, screen on: linear acceleration (or accelerometer) at SENSOR_DELAY_UI;
- * - shake, screen off: accelerometer at ~50 Hz. The wake-up variant (batched, [SHAKE_OFF_LATENCY_US])
- *   is used when it has a FIFO, because with audio offload the CPU sleeps during playback and a
- *   non-wake-up sensor would deliver nothing. A non-wake-up proximity sensor runs alongside so
- *   shakes are ignored in a pocket or bag, and a firmer double shake is required;
- * - face-down: accelerometer at SENSOR_DELAY_NORMAL, batched ~1 s with the screen off.
+ * - screen on: shake uses linear acceleration (or accelerometer), face-down the accelerometer,
+ *   both at SENSOR_DELAY_UI;
+ * - screen off: ONE accelerometer registration feeds both detectors: ~50 Hz batched ~1.2 s while
+ *   shake is armed, else ~5 Hz batched ~1 s for face-down. The wake-up variant is used when its
+ *   FIFO can batch (with audio offload the CPU sleeps during playback, so a non-wake-up sensor
+ *   would deliver nothing); it wakes the CPU about once per batch. Detectors use event
+ *   timestamps, so batching only delays detection. A cheap proximity sensor runs alongside:
+ *   while it reads near (pocket / bag) shake drops the accelerometer entirely until it reads far.
+ *   A firmer double shake is required with the screen off.
  * Nothing runs in safe mode. MusicService is a mediaPlayback foreground service while playing,
  * so background sensor access is allowed.
  *
@@ -64,8 +67,20 @@ class GestureController @Inject constructor(
         fun setShuffleEnabled(enabled: Boolean)
     }
 
-    /** How a sensor is registered; a change means unregister + register again. */
-    private data class Registration(val sensor: Sensor, val screenOn: Boolean)
+    /** Screen-on registration of one sensor; a change means unregister + register again. */
+    private data class Registration(val sensor: Sensor)
+
+    /**
+     * The single screen-off accelerometer registration shared by shake and face-down. [shake] /
+     * [face] say which detectors its samples feed; any change re-registers it.
+     */
+    private data class OffRegistration(
+        val sensor: Sensor,
+        val samplingUs: Int,
+        val latencyUs: Int,
+        val shake: Boolean,
+        val face: Boolean,
+    )
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var scope: CoroutineScope? = null
@@ -86,6 +101,11 @@ class GestureController @Inject constructor(
 
     private var shakeRegistration: Registration? = null
     private var faceRegistration: Registration? = null
+    private var offRegistration: OffRegistration? = null
+
+    /** Whether each detector currently receives samples (from any registration). */
+    private var shakeListening = false
+    private var faceListening = false
     private var proximityRegistered = false
     private var screenReceiverRegistered = false
     private var screenOn = true
@@ -127,8 +147,7 @@ class GestureController @Inject constructor(
         pausedByFaceDownAtMs = null
         stoppedAtMs = null
         settings = GestureSettings()
-        unregisterShake()
-        unregisterFace(keepFaceDown = false)
+        applySensors(wantShake = false, wantFace = false, keepFaceDown = false)
         unregisterProximity()
         unregisterScreenReceiver()
     }
@@ -189,10 +208,9 @@ class GestureController @Inject constructor(
             // with the screen off) for at most RESUME_WINDOW_MS.
             val wantFace = couldUseSensors && settings.faceDownToPause && (active || waiting)
 
-            if (wantShake) registerShake() else unregisterShake()
-            if (wantFace) registerFace() else unregisterFace(keepFaceDown = waiting)
             // Proximity: pocket check for screen-off shakes; "screen against something" for face-down.
             if (wantFace || (wantShake && !screenOn)) registerProximity() else unregisterProximity()
+            applySensors(wantShake, wantFace, keepFaceDown = waiting)
 
             mainHandler.removeCallbacks(evaluateRunnable)
             val recheckIn = buildList {
@@ -242,82 +260,156 @@ class GestureController @Inject constructor(
     // ------------------------------------------------------------------------------ sensors
 
     /**
-     * The accelerometer for screen-off use: the wake-up variant when it can batch at least
-     * [minFifoEvents] (so it wakes the CPU a few times a second, not per sample), else the
-     * normal one (delivers only while the CPU is awake).
+     * Matches the sensor registrations to what is wanted.
+     * - Screen on: shake uses linear acceleration (or accelerometer) and face-down the
+     *   accelerometer, each at SENSOR_DELAY_UI (the screen is on, the CPU is awake anyway).
+     * - Screen off: ONE accelerometer registration feeds both detectors, batched ~1.2 s. While
+     *   proximity reads near (pocket / bag) shake does not need it at all, so the accelerometer is
+     *   dropped (or slowed to the face-down rate) until proximity reads far again.
+     * Detectors are reset only when they start or stop listening, never on a rate/mode change, so
+     * a face-down placement in progress (proximity turns near as it touches the table) still counts.
      */
-    private fun screenOffAccelerometer(sm: SensorManager, minFifoEvents: Int): Pair<Sensor, Boolean>? {
+    private fun applySensors(wantShake: Boolean, wantFace: Boolean, keepFaceDown: Boolean) {
+        val sm = sensorManager
+        var shakeNow = false
+        var faceNow = false
+        if (sm != null && screenOn) {
+            unregisterOff()
+            if (wantShake) shakeNow = registerShakeOn(sm) else unregisterShakeOn()
+            if (wantFace) faceNow = registerFaceOn(sm) else unregisterFaceOn()
+        } else {
+            unregisterShakeOn()
+            unregisterFaceOn()
+            val shakeOff = wantShake && proximityNear != true
+            if (sm != null && (shakeOff || wantFace)) {
+                val ok = registerOff(sm, shake = shakeOff, face = wantFace)
+                shakeNow = ok && shakeOff
+                faceNow = ok && wantFace
+            } else {
+                unregisterOff()
+            }
+        }
+
+        if (shakeNow != shakeListening) {
+            shakeGravityFilter.reset()
+            shakeDetector.reset()
+            pocketShakeDetector.reset()
+            shakeListening = shakeNow
+        }
+        if (faceNow != faceListening) {
+            faceDownDetector.reset(keepFaceDown = keepFaceDown)
+            faceListening = faceNow
+        }
+    }
+
+    private fun safeRegister(sm: SensorManager, listener: SensorEventListener, sensor: Sensor, samplingUs: Int, latencyUs: Int) =
+        runCatching { sm.registerListener(listener, sensor, samplingUs, latencyUs) }.getOrDefault(false)
+
+    private fun registerShakeOn(sm: SensorManager): Boolean {
+        val linear = sm.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        val sensor = linear ?: sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return false
+        val wanted = Registration(sensor)
+        if (shakeRegistration == wanted) return true
+        unregisterShakeOn()
+        if (shakeUsesLinear != (linear != null)) shakeGravityFilter.reset()
+        shakeUsesLinear = linear != null
+        val ok = safeRegister(sm, shakeListener, sensor, SensorManager.SENSOR_DELAY_UI, 0)
+        shakeRegistration = if (ok) wanted else null
+        return ok
+    }
+
+    private fun unregisterShakeOn() {
+        if (shakeRegistration == null) return
+        runCatching { sensorManager?.unregisterListener(shakeListener) }
+        shakeRegistration = null
+    }
+
+    private fun registerFaceOn(sm: SensorManager): Boolean {
+        val sensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return false
+        val wanted = Registration(sensor)
+        if (faceRegistration == wanted) return true
+        unregisterFaceOn()
+        val ok = safeRegister(sm, faceListener, sensor, SensorManager.SENSOR_DELAY_UI, FACE_ON_LATENCY_US)
+        faceRegistration = if (ok) wanted else null
+        return ok
+    }
+
+    private fun unregisterFaceOn() {
+        if (faceRegistration == null) return
+        runCatching { sensorManager?.unregisterListener(faceListener) }
+        faceRegistration = null
+    }
+
+    /**
+     * Screen off. The wake-up accelerometer is used when its FIFO can hold at least half the
+     * wanted batch (with audio offload the CPU sleeps during playback, so a non-wake-up sensor
+     * would deliver nothing); it then wakes the CPU about once per batch, never per sample.
+     * Otherwise the normal accelerometer (delivers only while the CPU is awake).
+     */
+    private fun registerOff(sm: SensorManager, shake: Boolean, face: Boolean): Boolean {
+        val samplingUs = if (shake) SHAKE_OFF_SAMPLING_US else FACE_OFF_SAMPLING_US
+        val desiredLatencyUs = if (shake) SHAKE_OFF_LATENCY_US else FACE_OFF_LATENCY_US
         val wakeUp = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER, true)
-        if (wakeUp != null && wakeUp.fifoMaxEventCount >= minFifoEvents) return wakeUp to true
-        val normal = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return null
-        return normal to false
+        val wakeUpMaxLatencyUs = wakeUp?.let { (it.fifoMaxEventCount - FIFO_MARGIN_EVENTS).toLong() * samplingUs } ?: 0L
+        val sensor: Sensor
+        val latencyUs: Int
+        if (wakeUp != null && wakeUpMaxLatencyUs >= desiredLatencyUs / 2) {
+            sensor = wakeUp
+            latencyUs = minOf(desiredLatencyUs.toLong(), wakeUpMaxLatencyUs).toInt()
+        } else {
+            sensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return false
+            latencyUs = desiredLatencyUs
+        }
+        val wanted = OffRegistration(sensor, samplingUs, latencyUs, shake, face)
+        if (offRegistration == wanted) return true
+        unregisterOff()
+        val ok = safeRegister(sm, offListener, sensor, samplingUs, latencyUs)
+        offRegistration = if (ok) wanted else null
+        return ok
+    }
+
+    private fun unregisterOff() {
+        if (offRegistration == null) return
+        runCatching { sensorManager?.unregisterListener(offListener) }
+        offRegistration = null
+    }
+
+    /** Screen-off samples (possibly a whole batch at once; times come from event.timestamp). */
+    private val offListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent) {
+            val v = event.values
+            if (v.size < 3) return
+            val registration = offRegistration ?: return
+            val timeMs = event.timestamp / 1_000_000L
+            if (registration.shake) {
+                val magnitude = shakeGravityFilter.update(v[0], v[1], v[2])
+                if (pocketShakeDetector.onSample(magnitude, timeMs, proximityNear)) onShake(screenOffShake = true)
+            }
+            if (registration.face) onFaceSample(v[0], v[1], v[2], timeMs)
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     }
 
     // ------------------------------------------------------------------------------ shake
 
     private var shakeUsesLinear = true
 
+    /** Screen-on shake samples. */
     private val shakeListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
             val v = event.values
             if (v.size < 3) return
-            val registration = shakeRegistration ?: return
+            if (shakeRegistration == null) return
             val magnitude = if (shakeUsesLinear) {
                 sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
             } else {
                 shakeGravityFilter.update(v[0], v[1], v[2])
             }
-            val timeMs = event.timestamp / 1_000_000L
-            val fired = if (registration.screenOn) {
-                shakeDetector.onSample(magnitude, timeMs)
-            } else {
-                pocketShakeDetector.onSample(magnitude, timeMs, proximityNear)
-            }
-            if (fired) onShake(screenOffShake = !registration.screenOn)
+            if (shakeDetector.onSample(magnitude, event.timestamp / 1_000_000L)) onShake(screenOffShake = false)
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-    }
-
-    private fun registerShake() {
-        val sm = sensorManager ?: return
-        val wanted: Registration
-        val samplingUs: Int
-        val latencyUs: Int
-        val linear: Boolean
-        if (screenOn) {
-            val linearSensor = sm.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
-            val sensor = linearSensor ?: sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
-            wanted = Registration(sensor, screenOn = true)
-            samplingUs = SensorManager.SENSOR_DELAY_UI
-            latencyUs = 0
-            linear = linearSensor != null
-        } else {
-            val minFifo = SHAKE_OFF_LATENCY_US / SHAKE_OFF_SAMPLING_US + 5
-            val (sensor, wakeUp) = screenOffAccelerometer(sm, minFifo) ?: return
-            wanted = Registration(sensor, screenOn = false)
-            samplingUs = SHAKE_OFF_SAMPLING_US
-            // Non-wake-up: no batching, the CPU is awake whenever its events arrive anyway.
-            latencyUs = if (wakeUp) SHAKE_OFF_LATENCY_US else 0
-            linear = false
-        }
-        if (shakeRegistration == wanted) return
-        unregisterShake()
-        shakeUsesLinear = linear
-        shakeGravityFilter.reset()
-        shakeDetector.reset()
-        pocketShakeDetector.reset()
-        val ok = runCatching { sm.registerListener(shakeListener, wanted.sensor, samplingUs, latencyUs) }
-            .getOrDefault(false)
-        shakeRegistration = if (ok) wanted else null
-    }
-
-    private fun unregisterShake() {
-        if (shakeRegistration == null) return
-        runCatching { sensorManager?.unregisterListener(shakeListener) }
-        shakeRegistration = null
-        shakeDetector.reset()
-        pocketShakeDetector.reset()
     }
 
     private fun onShake(screenOffShake: Boolean) {
@@ -356,55 +448,25 @@ class GestureController @Inject constructor(
 
     // ------------------------------------------------------------------------------ face-down
 
+    /** Screen-on face-down samples. */
     private val faceListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
             val v = event.values
             if (v.size < 3) return
-            // Raw accelerometer: the detector itself requires the vector to be still (≈ gravity).
-            when (faceDownDetector.onSample(v[0], v[1], v[2], event.timestamp / 1_000_000L, proximityNear)) {
-                FaceDownDetector.Event.FACE_DOWN -> onFaceDown()
-                FaceDownDetector.Event.FACE_UP -> onFaceUp()
-                null -> Unit
-            }
+            if (faceRegistration == null) return
+            onFaceSample(v[0], v[1], v[2], event.timestamp / 1_000_000L)
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     }
 
-    private fun registerFace() {
-        val sm = sensorManager ?: return
-        val sensor: Sensor
-        val samplingUs: Int
-        val latencyUs: Int
-        if (screenOn) {
-            sensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
-            samplingUs = SensorManager.SENSOR_DELAY_UI
-            latencyUs = FACE_ON_LATENCY_US
-        } else {
-            // SENSOR_DELAY_NORMAL is ~5 Hz: ~5 events per 1 s batch.
-            sensor = screenOffAccelerometer(sm, minFifoEvents = 10)?.first ?: return
-            samplingUs = SensorManager.SENSOR_DELAY_NORMAL
-            latencyUs = FACE_OFF_LATENCY_US
+    /** Raw accelerometer: the detector itself requires the vector to be still (≈ gravity). */
+    private fun onFaceSample(x: Float, y: Float, z: Float, timeMs: Long) {
+        when (faceDownDetector.onSample(x, y, z, timeMs, proximityNear)) {
+            FaceDownDetector.Event.FACE_DOWN -> onFaceDown()
+            FaceDownDetector.Event.FACE_UP -> onFaceUp()
+            null -> Unit
         }
-        val wanted = Registration(sensor, screenOn)
-        if (faceRegistration == wanted) return
-        val keep = faceDownDetector.isFaceDown && waitingToResume()
-        if (faceRegistration != null) {
-            runCatching { sm.unregisterListener(faceListener) }
-            faceRegistration = null
-        }
-        // A mode switch (screen on/off) must not lose a pending "resume when face-up".
-        faceDownDetector.reset(keepFaceDown = keep)
-        val ok = runCatching { sm.registerListener(faceListener, sensor, samplingUs, latencyUs) }
-            .getOrDefault(false)
-        faceRegistration = if (ok) wanted else null
-    }
-
-    private fun unregisterFace(keepFaceDown: Boolean) {
-        if (faceRegistration == null) return
-        runCatching { sensorManager?.unregisterListener(faceListener) }
-        faceRegistration = null
-        faceDownDetector.reset(keepFaceDown = keepFaceDown)
     }
 
     private fun onFaceDown() {
@@ -437,7 +499,10 @@ class GestureController @Inject constructor(
             val range = event.sensor.maximumRange
             val near = distance < range && distance < PROXIMITY_NEAR_CM
             if (near) pocketShakeDetector.reset()
+            val changed = proximityNear != near
             proximityNear = near
+            // Screen off: near drops the shake accelerometer, far brings it back.
+            if (changed && !screenOn) evaluate()
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -481,8 +546,11 @@ class GestureController @Inject constructor(
         const val PAUSE_GRACE_MS = 3_000L
         const val PROXIMITY_NEAR_CM = 5f
         const val FACE_ON_LATENCY_US = 100_000
+        const val FACE_OFF_SAMPLING_US = 200_000 // ~5 Hz, like SENSOR_DELAY_NORMAL
         const val FACE_OFF_LATENCY_US = 1_000_000
         const val SHAKE_OFF_SAMPLING_US = 20_000 // 50 Hz
-        const val SHAKE_OFF_LATENCY_US = 250_000
+        // ~1 CPU wake-up per 1.2 s; a double shake is noticed up to this late.
+        const val SHAKE_OFF_LATENCY_US = 1_200_000
+        const val FIFO_MARGIN_EVENTS = 10
     }
 }

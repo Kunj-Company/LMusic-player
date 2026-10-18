@@ -362,6 +362,73 @@ class GestureDetectorsTest {
             assertTrue(d.shake(3_500))
         }
 
+        /**
+         * Raw 50 Hz accelerometer samples (phone resting screen-up) with a one-sample jolt on x at
+         * each of [peaksAtMs], like a batch the sensor hub delivers in one go.
+         */
+        private fun batch(fromMs: Long, toMs: Long, peaksAtMs: Set<Long>, peak: Float = 45f): List<Pair<Long, FloatArray>> =
+            (fromMs..toMs step 20).map { t ->
+                t to floatArrayOf(if (t in peaksAtMs) peak else 0f, 0f, g)
+            }
+
+        /** Runs samples through the same pipeline as the screen-off listener; returns firing times. */
+        private fun PocketShakeDetector.process(
+            filter: GravityFilter,
+            samples: List<Pair<Long, FloatArray>>,
+            near: Boolean? = null,
+        ): List<Long> = samples.mapNotNull { (t, v) ->
+            val magnitude = filter.update(v[0], v[1], v[2])
+            if (onSample(magnitude, t, near)) t else null
+        }
+
+        @Test
+        fun `a double shake inside one 1_2 s batch fires once at the sample time`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet())) // settle the gravity estimate
+            val fired = d.process(f, batch(1_000, 2_180, setOf(1_100L, 1_300L, 1_600L, 1_800L)))
+            assertEquals(listOf(1_800L), fired)
+        }
+
+        @Test
+        fun `a double shake split across two batches still fires`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()))
+            assertTrue(d.process(f, batch(1_000, 1_380, setOf(1_100L, 1_300L))).isEmpty())
+            // The next batch arrives ~1.2 s later in wall time; only sample timestamps matter.
+            assertEquals(listOf(1_600L), d.process(f, batch(1_400, 2_580, setOf(1_400L, 1_600L))))
+        }
+
+        @Test
+        fun `shakes further apart than the window do not fire even when delivered together`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()))
+            // One batch, but the two shakes are 1.6 s apart in sample time.
+            val fired = d.process(f, batch(1_000, 4_000, setOf(1_100L, 1_300L, 2_900L, 3_100L)))
+            assertTrue(fired.isEmpty())
+        }
+
+        @Test
+        fun `a batched double shake while near does not fire`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()), near = true)
+            val fired = d.process(f, batch(1_000, 2_180, setOf(1_100L, 1_300L, 1_600L, 1_800L)), near = true)
+            assertTrue(fired.isEmpty())
+        }
+
+        @Test
+        fun `walking-strength bumps in a batch do not fire`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()))
+            // ~2 steps per second at about 2.5 g of linear acceleration.
+            val steps = (1_000L..6_000L step 500).toSet()
+            assertTrue(d.process(f, batch(1_000, 6_000, steps, peak = 31f)).isEmpty())
+        }
+
         @Test
         fun `NaN is ignored`() {
             assertFalse(detector().onSample(Float.NaN, 0))

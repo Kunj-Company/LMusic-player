@@ -86,3 +86,6 @@ class NoisePreferences @Inject constructor(
         val presetsSerializer = ListSerializer(NoisePreset.serializer())
     }
 }
+
+/** For backup/restore (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupNoiseDataStore: DataStore<Preferences> get() = noiseDataStore

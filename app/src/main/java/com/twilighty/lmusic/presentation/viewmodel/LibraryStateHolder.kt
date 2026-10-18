@@ -91,6 +91,16 @@ class LibraryStateHolder @Inject constructor(
             com.twilighty.lmusic.data.model.LibrarySourceFilter.effective(filter, hideLocal)
         }
 
+    /** Public view of the effective filter (selected filter + "hide local media"). */
+    val effectiveStorageFilterFlow: kotlinx.coroutines.flow.Flow<com.twilighty.lmusic.data.model.StorageFilter>
+        get() = effectiveStorageFilter
+
+    // Which effective filter the current [albums] / [artists] lists were built for (null = not yet).
+    private val _albumsStorageFilter = MutableStateFlow<com.twilighty.lmusic.data.model.StorageFilter?>(null)
+    val albumsStorageFilter = _albumsStorageFilter.asStateFlow()
+    private val _artistsStorageFilter = MutableStateFlow<com.twilighty.lmusic.data.model.StorageFilter?>(null)
+    val artistsStorageFilter = _artistsStorageFilter.asStateFlow()
+
     /** True once the persisted filter was restored or the user picked one in this process. */
     @Volatile
     private var storageFilterResolved = false
@@ -300,12 +310,13 @@ class LibraryStateHolder @Inject constructor(
             ) { filter, minTracks ->
                 filter to minTracks
             }.flatMapLatest { (filter, minTracks) ->
-                musicRepository.getAlbums(filter, minTracks)
-            }.conflate().collect { albums ->
+                musicRepository.getAlbums(filter, minTracks).map { filter to it }
+            }.conflate().collect { (albumsFilter, albums) ->
                 val sortedAlbums = withContext(Dispatchers.Default) {
                     sortAlbumsList(albums, _currentAlbumSortOption.value).toImmutableList()
                 }
                 _albums.value = sortedAlbums
+                _albumsStorageFilter.value = albumsFilter
                 _isLoadingCategories.value = false
             }
         }
@@ -314,12 +325,13 @@ class LibraryStateHolder @Inject constructor(
             _isLoadingCategories.value = true
             @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
             effectiveStorageFilter.flatMapLatest { filter ->
-                musicRepository.getArtists(filter)
-            }.conflate().collect { artists ->
+                musicRepository.getArtists(filter).map { filter to it }
+            }.conflate().collect { (artistsFilter, artists) ->
                 val sortedArtists = withContext(Dispatchers.Default) {
                     sortArtistsList(artists, _currentArtistSortOption.value).toImmutableList()
                 }
                 _artists.value = sortedArtists
+                _artistsStorageFilter.value = artistsFilter
                 _isLoadingCategories.value = false
             }
         }

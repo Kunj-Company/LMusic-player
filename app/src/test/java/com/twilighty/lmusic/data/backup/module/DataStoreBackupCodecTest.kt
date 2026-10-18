@@ -69,4 +69,13 @@ class DataStoreBackupCodecTest {
         assertTrue(focus.count { it.includeKey("history") } == 1)
         assertTrue(focus.none { it.includeKey("active_session") })
     }
+
+    @Test
+    fun `screensaver settings are backed up but not the weather cache`() {
+        val spec = FeatureDataStores.specs.single { it.name == "lmusic_screensaver" }
+        assertEquals(BackupSection.FEATURE_SETTINGS, spec.section)
+        listOf("offer_when_charging", "show_weather", "clock_style", "shift_interval_sec", "show_artwork",
+            "use_device_location", "city_name", "city_lat", "city_lon").forEach { assertTrue(spec.includeKey(it), it) }
+        listOf("w_temp", "w_code", "w_is_day", "w_city", "w_at", "w_lat", "w_lon").forEach { assertFalse(spec.includeKey(it), it) }
+    }
 }

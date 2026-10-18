@@ -11,7 +11,10 @@ import com.twilighty.lmusic.data.focus.backupFocusDataStore
 import com.twilighty.lmusic.data.garden.backupGardenDataStore
 import com.twilighty.lmusic.data.gestures.backupGesturesDataStore
 import com.twilighty.lmusic.data.lofi.backupLofiDataStore
+import com.twilighty.lmusic.data.noise.backupNoiseDataStore
 import com.twilighty.lmusic.data.playback.backupSmartShuffleDataStore
+import com.twilighty.lmusic.data.screensaver.backupScreensaverDataStore
+import com.twilighty.lmusic.data.sleep.backupSleepDataStore
 import com.twilighty.lmusic.data.smart.backupSmartDataStore
 import com.twilighty.lmusic.data.taste.backupTasteDataStore
 import com.twilighty.lmusic.data.update.backupUpdateDataStore
@@ -39,8 +42,10 @@ class FeatureStoreSpec(
  *
  * Backed up:
  * - FEATURE_SETTINGS: haptics, gestures, Focus timer + music settings, lofi settings / presets /
- *   favourite stations / ambience levels, smart shuffle, Home preferences, update check switch and
- *   skipped version, living artwork, smart layer switch, Taste match display name.
+ *   favourite stations / ambience levels, noise settings / presets / focus options, Sleep space
+ *   choices (sound, timer, fade), smart shuffle, Home preferences, update check switch and
+ *   skipped version, living artwork, smart layer switch, Taste match display name, screensaver
+ *   settings (clock style, weather switch, city, artwork, burn-in shift, offer when charging).
  * - ACTIVITY_HISTORY: finished Focus rounds, Garden milestones already shown, Taste match history.
  *   (Garden growth itself is computed from playback history + Focus rounds.)
  *
@@ -50,7 +55,9 @@ class FeatureStoreSpec(
  * - Party: no persisted settings (sessions are in-memory only).
  * - Running state and caches: Focus `active_session`, Garden `widget_listening_day`, update check
  *   results (`latest_*`, `checked_at`, `banner_dismissed_version`), smart index/mix caches.
- * - lmusic_nav_gestures and lmusic_screensaver: still being built; add them here once they settle.
+ * - Screensaver weather cache (`w_*` keys); the screensaver settings themselves are backed up.
+ * - lmusic_nav_gestures: still being built; add it here once it settles.
+ * - lmusic_tips (one-time hints such as the battery tip).
  * - Crash reports, safe mode, and cloud account credentials (SharedPreferences) — device-specific
  *   or secret.
  */
@@ -64,12 +71,16 @@ object FeatureDataStores {
         FeatureStoreSpec("lmusic_gestures", BackupSection.FEATURE_SETTINGS, all()) { it.backupGesturesDataStore },
         FeatureStoreSpec("lmusic_focus", BackupSection.FEATURE_SETTINGS, only("config", "music_source")) { it.backupFocusDataStore },
         FeatureStoreSpec("lmusic_lofi", BackupSection.FEATURE_SETTINGS, all()) { it.backupLofiDataStore },
+        FeatureStoreSpec("lmusic_noise", BackupSection.FEATURE_SETTINGS, all()) { it.backupNoiseDataStore },
+        FeatureStoreSpec("lmusic_sleep", BackupSection.FEATURE_SETTINGS, all()) { it.backupSleepDataStore },
         FeatureStoreSpec("lmusic_smart_shuffle", BackupSection.FEATURE_SETTINGS, all()) { it.backupSmartShuffleDataStore },
         FeatureStoreSpec("lmusic_home", BackupSection.FEATURE_SETTINGS, all()) { it.backupHomeDataStore },
         FeatureStoreSpec("lmusic_updates", BackupSection.FEATURE_SETTINGS, only("weekly_check_enabled", "skipped_version")) { it.backupUpdateDataStore },
         FeatureStoreSpec("lmusic_living_artwork", BackupSection.FEATURE_SETTINGS, all()) { it.backupLivingArtworkDataStore },
         FeatureStoreSpec("lmusic_smart", BackupSection.FEATURE_SETTINGS, only("enabled")) { it.backupSmartDataStore },
         FeatureStoreSpec("lmusic_taste", BackupSection.FEATURE_SETTINGS, only("display_name")) { it.backupTasteDataStore },
+        // Weather cache keys all start with "w_"; everything else is a user setting.
+        FeatureStoreSpec("lmusic_screensaver", BackupSection.FEATURE_SETTINGS, { !it.startsWith("w_") }) { it.backupScreensaverDataStore },
 
         FeatureStoreSpec("lmusic_focus", BackupSection.ACTIVITY_HISTORY, only("history")) { it.backupFocusDataStore },
         FeatureStoreSpec("lmusic_garden", BackupSection.ACTIVITY_HISTORY, except("widget_listening_day")) { it.backupGardenDataStore },

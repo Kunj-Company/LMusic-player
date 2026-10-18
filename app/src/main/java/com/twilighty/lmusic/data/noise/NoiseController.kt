@@ -91,10 +91,16 @@ class NoiseController @Inject constructor(
 
     val isSoloPlaying: Boolean get() = lofi.state.value.source == LofiSource.Noise && lofi.state.value.isPlaying
 
+    /** Paused on its own, with the media service still up. */
+    val isPausedSolo: Boolean get() = lofi.state.value.source == LofiSource.Noise && !lofi.state.value.isPlaying
+
     // ---------------------------------------------------------------- playback
 
-    /** Starts noise as set (on its own, or under music). Returns false when Android refused the service. */
-    fun play(): Boolean = if (_settings.value.underMusic) {
+    /**
+     * Starts noise as set: under music when that's chosen and music is playing right now,
+     * otherwise on its own. Returns false when Android refused the service.
+     */
+    fun play(): Boolean = if (_settings.value.underMusic && isMusicPlaying()) {
         startUnderMusic()
         true
     } else {
@@ -141,7 +147,12 @@ class NoiseController @Inject constructor(
         scheduleSave()
         if (old.underMusic != n.underMusic && state.value.active) {
             // Switch modes while playing.
-            if (n.underMusic) { if (lofi.state.value.source == LofiSource.Noise) lofi.stopWithFade(600L); startUnderMusic() }
+            if (n.underMusic) {
+                if (isMusicPlaying()) {
+                    if (lofi.state.value.source == LofiSource.Noise) lofi.stopWithFade(600L)
+                    startUnderMusic()
+                } // else: keeps playing on its own until music starts and takes over
+            }
             else { stopUnderMusic(); lofi.startNoise() }
         }
     }
@@ -185,6 +196,9 @@ class NoiseController @Inject constructor(
     }
 
     // ---------------------------------------------------------------- internals
+
+    private fun isMusicPlaying(): Boolean =
+        runCatching { playbackStateHolder.get().stablePlayerState.value.isPlaying }.getOrDefault(false)
 
     private fun pushToEngine() {
         val s = _settings.value

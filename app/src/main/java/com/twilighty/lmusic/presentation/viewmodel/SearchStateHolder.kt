@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -93,19 +95,30 @@ class SearchStateHolder @Inject constructor(
 
                     try {
                         val currentFilter = _selectedSearchFilter.value
-                        // Search follows the Library source filter (phone / cloud / all).
-                        val sourceFilter = libraryStateHolder.effectiveStorageFilterNow()
-                        val allowedAlbumIds = libraryStateHolder.albums.value
-                            .takeIf { it.isNotEmpty() }?.mapTo(HashSet()) { it.id }
-                        val allowedArtistIds = libraryStateHolder.artists.value
-                            .takeIf { it.isNotEmpty() }?.mapTo(HashSet()) { it.id }
-                        musicRepository.searchAll(normalizedQuery, currentFilter).collect { rawResults ->
-                            val resultsList = com.twilighty.lmusic.data.model.LibrarySourceFilter.filterSearchResults(
+                        // Search follows the Library source filter (phone / cloud / all). The
+                        // album/artist id sets follow the filter live: a set built for another
+                        // filter (still recomputing after a chip change) is ignored until it catches up.
+                        val albumIdsFlow = combine(
+                            libraryStateHolder.albums,
+                            libraryStateHolder.albumsStorageFilter
+                        ) { albums, builtFor -> builtFor to albums.mapTo(HashSet()) { it.id } as Set<Long> }
+                        val artistIdsFlow = combine(
+                            libraryStateHolder.artists,
+                            libraryStateHolder.artistsStorageFilter
+                        ) { artists, builtFor -> builtFor to artists.mapTo(HashSet()) { it.id } as Set<Long> }
+                        combine(
+                            musicRepository.searchAll(normalizedQuery, currentFilter),
+                            libraryStateHolder.effectiveStorageFilterFlow.distinctUntilChanged(),
+                            albumIdsFlow,
+                            artistIdsFlow
+                        ) { rawResults, sourceFilter, albumIds, artistIds ->
+                            com.twilighty.lmusic.data.model.LibrarySourceFilter.filterSearchResults(
                                 filter = sourceFilter,
                                 results = rawResults,
-                                allowedAlbumIds = allowedAlbumIds,
-                                allowedArtistIds = allowedArtistIds
+                                allowedAlbumIds = albumIds.second.takeIf { albumIds.first == sourceFilter },
+                                allowedArtistIds = artistIds.second.takeIf { artistIds.first == sourceFilter }
                             )
+                        }.collect { resultsList ->
                             // Sort: prioritize Song/Album matches over Artist/Playlist matches
                             val sortedResults = resultsList.sortedWith(
                                 compareBy { result ->

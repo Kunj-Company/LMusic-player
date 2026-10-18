@@ -29,7 +29,13 @@ import javax.inject.Inject
 // Settings panel shows it (onStartListening … onStopListening), so they cost nothing otherwise.
 // A tile click is a user action: the foreground service is started right from onClick.
 
-/** Shared plumbing: a main-thread scope for listening and for clicks. */
+/**
+ * Process-level scope for click work: SystemUI may unbind (destroy) the tile right after a click,
+ * which must not cancel a start that is still loading settings.
+ */
+internal object TileClickScope : CoroutineScope by CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+/** Shared plumbing: a main-thread scope for listening (cancelled with the tile). */
 abstract class LMusicSoundTile : TileService() {
     protected val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var listenJob: Job? = null
@@ -121,7 +127,7 @@ class FocusTileService : LMusicSoundTile() {
                 controller.stop()
                 return@runClick
             }
-            scope.launch {
+            TileClickScope.launch {
                 val config = runCatching { repository.config.first() }.getOrNull() ?: return@launch
                 var source = runCatching { repository.musicSource.first() }.getOrDefault(FocusMusicSource.Lofi)
                 if (source == FocusMusicSource.Smart && !runCatching { smart.isEnabled.first() }.getOrDefault(false)) {
@@ -157,7 +163,7 @@ class LofiTileService : LMusicSoundTile() {
             when {
                 st.source == LofiSource.Generator && st.isPlaying -> controller.pause()
                 st.source == LofiSource.Generator -> if (!controller.resume()) openApp(REQUEST_LOFI)
-                else -> scope.launch {
+                else -> TileClickScope.launch {
                     val saved = runCatching { preferences.loadSettings() }.getOrNull()
                     controller.ensureLoaded()
                     if (!controller.start(saved ?: controller.settings.value)) openApp(REQUEST_LOFI)
@@ -177,7 +183,12 @@ class NoiseTileService : LMusicSoundTile() {
     override suspend fun listen() {
         controller.state.collect { st ->
             val s = controller.settings.value
-            render(st.active, if (st.active) (s.presetName ?: s.summary) else null)
+            val label = s.presetName ?: s.summary
+            render(st.active, when {
+                st.active && !st.sounding -> "Waits for music"
+                st.active -> label
+                else -> null
+            })
         }
     }
 
@@ -188,9 +199,11 @@ class NoiseTileService : LMusicSoundTile() {
                 controller.pause()
                 return@runClick
             }
-            scope.launch {
+            TileClickScope.launch {
                 controller.loadNow()
-                if (!controller.resume()) openApp(REQUEST_NOISE)
+                // Always on its own from the tile: "under music" with no music would stay silent.
+                val ok = if (controller.isPausedSolo) controller.resume() else controller.playSolo()
+                if (!ok) openApp(REQUEST_NOISE)
             }
         }
     }

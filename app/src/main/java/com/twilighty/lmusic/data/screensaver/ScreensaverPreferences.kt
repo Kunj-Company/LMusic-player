@@ -131,3 +131,7 @@ class ScreensaverPreferences @Inject constructor(
         it[Keys.wLon] = s.longitude
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupScreensaverDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>
+    get() = screensaverDataStore
