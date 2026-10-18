@@ -7,6 +7,15 @@
         <item name="windowNoTitle">true</item>
     </style>
 
+    <!-- Screensaver: pure black from the first frame (OLED). -->
+    <style name="Theme.LMusic.Screensaver" parent="Theme.Material3.DynamicColors.Dark">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
+
     <style name="Theme.LMusic.ExternalPlayer" parent="Theme.Material3.DynamicColors.DayNight">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowNoTitle">true</item>
