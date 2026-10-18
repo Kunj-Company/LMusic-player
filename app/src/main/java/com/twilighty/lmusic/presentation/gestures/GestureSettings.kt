@@ -104,7 +104,7 @@ fun GestureSettingsSection(viewModel: GestureSettingsViewModel = hiltViewModel()
         )
         SwitchSettingItem(
             title = "Resume when face-up",
-            subtitle = "Turn it back over within 10 minutes to keep listening",
+            subtitle = "Turn it back over within 2 minutes to keep listening",
             checked = settings.resumeWhenFaceUp && settings.faceDownToPause && hasMotionSensor,
             enabled = settings.faceDownToPause && hasMotionSensor,
             onCheckedChange = { viewModel.setResumeWhenFaceUp(it) },

@@ -239,6 +239,8 @@ class GestureController @Inject constructor(
     }
 
     private fun onShake() {
+        // The listener is only registered while the screen is on; also drop a late sample after screen-off.
+        if (!screenOn) return
         val player = host?.currentPlayer() ?: return
         if (!player.isPlaying || player.mediaItemCount < 2) return
         haptics().celebration()
@@ -367,7 +369,8 @@ class GestureController @Inject constructor(
     private companion object {
         const val TAG = "GestureController"
         const val SHUFFLE_SETTLE_MS = 650L
-        const val RESUME_WINDOW_MS = 10 * 60 * 1000L
+        // Only resume if flipped back soon; after this the user presses play themselves.
+        const val RESUME_WINDOW_MS = 2 * 60 * 1000L
         const val PROXIMITY_NEAR_CM = 5f
         const val FACE_MAX_REPORT_LATENCY_US = 100_000
     }

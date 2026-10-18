@@ -35,7 +35,7 @@ data class CrashLogData(
  * Default uncaught exception handler. Writes the crash synchronously to
  * `filesDir/crash/last_crash.txt` (see [CrashReportStore.writeCrash]) and then hands the crash to
  * the previous default handler, so the normal crash behaviour is unchanged.
- * Installed first thing in Application.onCreate().
+ * Installed in Application.attachBaseContext (before Hilt), so it needs no injection.
  */
 object CrashHandler : Thread.UncaughtExceptionHandler {
 
@@ -52,7 +52,8 @@ object CrashHandler : Thread.UncaughtExceptionHandler {
      * Should be called in Application.onCreate().
      */
     fun install(context: Context) {
-        appContext = context.applicationContext
+        // From Application.attachBaseContext the application context isn't set yet: use the app itself.
+        appContext = context.applicationContext ?: context
         val current = Thread.getDefaultUncaughtExceptionHandler()
         if (current === this) return
         defaultHandler = current

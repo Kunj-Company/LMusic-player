@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -100,10 +101,15 @@ class ArtistDetailViewModel @Inject constructor(
     val story: StateFlow<ArtistStoryState> = _story.asStateFlow()
     private var storyJob: Job? = null
     private var storyInputs: Pair<Artist, List<Song>>? = null
+    /** Whole library, loaded once per view model for name-only credits (story refreshes reuse it). */
+    @Volatile private var librarySongsCache: List<Song>? = null
 
     init {
-        // Recompute the story when new plays are recorded (event-driven, no polling).
+        // Recompute the story when new plays are recorded (event-driven, no polling), debounced so
+        // a burst of play events causes one recompute.
+        @OptIn(kotlinx.coroutines.FlowPreview::class)
         playbackStatsRepository.refreshFlow
+            .debounce(STORY_REFRESH_DEBOUNCE_MS)
             .onEach { storyInputs?.let { (artist, songs) -> loadStory(artist, songs) } }
             .launchIn(viewModelScope)
 
@@ -332,7 +338,8 @@ class ArtistDetailViewModel @Inject constructor(
             val unmatchedIds = events.asSequence().map { it.songId }.filter { it !in songsById }.toHashSet()
             if (unmatchedIds.isNotEmpty()) {
                 // Songs credited to the artist by name only (e.g. features in the artist string).
-                val library = withContext(Dispatchers.IO) { musicRepository.getAllSongsOnce() }
+                val library = librarySongsCache
+                    ?: withContext(Dispatchers.IO) { musicRepository.getAllSongsOnce() }.also { librarySongsCache = it }
                 library.forEach { song ->
                     if (song.id in unmatchedIds && ArtistStoryCalculator.songMatchesArtist(
                             songArtistId = song.artistId,
@@ -381,6 +388,7 @@ class ArtistDetailViewModel @Inject constructor(
 private data class StoryCacheKey(val artistId: Long, val statsVersion: Long, val songCount: Int)
 
 private const val STORY_CACHE_SIZE = 16
+private const val STORY_REFRESH_DEBOUNCE_MS = 2_000L
 
 /** Process-wide per-artist cache, so revisiting an artist page shows the story instantly. */
 private val storyCache = LinkedHashMap<StoryCacheKey, ArtistStoryState>()

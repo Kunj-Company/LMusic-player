@@ -93,7 +93,12 @@ class FocusController @Inject constructor(
 
     /** Restores a session saved before process death (once), in the background. */
     fun ensureRestored() {
-        if (restored) return
+        if (restored) {
+            // A session carried on without the service after a background alarm: bring it back now
+            // that the app is in the foreground.
+            if (service == null && timer.state.phase.isActive) startService()
+            return
+        }
         scope.launch { restore() }
     }
 
@@ -102,8 +107,17 @@ class FocusController @Inject constructor(
      * finish). Never auto-resumes in safe mode. Main thread. Called by [FocusService] before it
      * handles an alarm or notification action, so a cold-started process acts on the real session.
      */
-    internal suspend fun restore() = restoreMutex.withLock {
-        if (restored) return@withLock
+    internal suspend fun restore() {
+        restore(fromAlarm = false)
+    }
+
+    /**
+     * [fromAlarm]: called for a phase-end alarm in a background process. The catch-up advance then
+     * chimes (that phase change is what the alarm was for) and no foreground service is started.
+     * Returns true when this call did the restore (so the caller must not advance again).
+     */
+    private suspend fun restore(fromAlarm: Boolean): Boolean = restoreMutex.withLock {
+        if (restored) return@withLock false
         restored = true
         run {
             val saved = runCatching { repository.loadActive() }.getOrNull() ?: return@run
@@ -121,16 +135,17 @@ class FocusController @Inject constructor(
                 _notice.value = "Safe mode is on, so your session is paused"
             } else {
                 // Catch up on phase ends missed while the process was gone; music stays off until the user resumes it.
-                handle(timer.advance(now), playChime = false, applyMusicChange = false)
+                handle(timer.advance(now), playChime = fromAlarm, applyMusicChange = false)
             }
             if (timer.state.phase.isActive) {
                 publish()
-                startService()
+                if (!fromAlarm) startService()
                 scheduleNext()
             } else {
                 publish()
             }
         }
+        true
     }
 
     fun start(config: FocusConfig, source: FocusMusicSource) {
@@ -215,6 +230,42 @@ class FocusController @Inject constructor(
         if (wl == null) Timber.tag(TAG).d("No wake lock for focus alarm")
     }
 
+    /**
+     * A phase-end alarm broadcast ([FocusAlarmReceiver]). With the service running this is the same
+     * as [onAlarm]; otherwise the saved session is restored, advanced (with the chime), the alarm
+     * re-armed and the notification posted directly, without starting a foreground service.
+     * [onDone] finishes the broadcast.
+     */
+    internal fun onAlarmBroadcast(onDone: () -> Unit) {
+        scope.launch {
+            try {
+                if (service != null) {
+                    onAlarm()
+                    return@launch
+                }
+                val wl = runCatching {
+                    context.getSystemService(PowerManager::class.java)
+                        ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LMusic:FocusChime")
+                        ?.apply { setReferenceCounted(false); acquire(8_000L) }
+                }.getOrNull()
+                val didRestore = runCatching { restore(fromAlarm = true) }
+                    .onFailure { Timber.tag(TAG).w(it, "Focus restore failed") }
+                    .getOrDefault(true)
+                // Process was alive (already restored): advance now. tick() is a no-op when the
+                // in-process timer already handled this phase end, so nothing chimes twice.
+                if (!didRestore) tick()
+                val s = timer.state
+                // A finished session already posted its "done" note in handle().
+                if (service == null && s.phase.isActive) FocusService.notifyWithoutService(context, s, null)
+                // Let the chime (its own short AudioTrack) finish before the process may be frozen.
+                delay(CHIME_GRACE_MS)
+                runCatching { if (wl?.isHeld == true) wl.release() }
+            } finally {
+                onDone()
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- internals
 
     private fun tick() {
@@ -249,10 +300,11 @@ class FocusController @Inject constructor(
             scope.launch { runCatching { repository.saveActive(null) } }
             val rounds = finished.completedRounds
             val minutes = rounds * timer.state.config.focusMinutes
-            service?.finish(
-                if (rounds == 0) null
+            val summary = if (rounds == 0) null
                 else "Session done · $rounds ${if (rounds == 1) "round" else "rounds"}, $minutes min focused"
-            )
+            val svc = service
+            if (svc != null) svc.finish(summary)
+            else FocusService.notifyWithoutService(context, timer.state, summary)
         }
     }
 
@@ -301,10 +353,10 @@ class FocusController @Inject constructor(
         runCatching { context.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent()) }
     }
 
-    // A foreground-service PendingIntent: the alarm may cold-start the process while the app is in the background.
-    private fun alarmIntent(): PendingIntent = PendingIntent.getForegroundService(
+    // A broadcast: delivered in the background / to a killed process, where a foreground service can't be started.
+    private fun alarmIntent(): PendingIntent = PendingIntent.getBroadcast(
         context, REQUEST_ALARM,
-        Intent(context, FocusService::class.java).setAction(FocusService.ACTION_ALARM),
+        Intent(context, FocusAlarmReceiver::class.java).setAction(FocusAlarmReceiver.ACTION_PHASE_ALARM),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
 
@@ -435,5 +487,6 @@ class FocusController @Inject constructor(
         const val MAX_SONGS = 120
         const val BREAK_LOFI_LEVEL = 0.3f
         const val STALE_MS = 12 * 60 * 60 * 1000L
+        const val CHIME_GRACE_MS = 2_500L
     }
 }

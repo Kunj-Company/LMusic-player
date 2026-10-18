@@ -81,6 +81,7 @@ class LofiRadioRepository @Inject constructor(
                 val stations = json.decodeFromString(ListSerializer(ApiStation.serializer()), body)
                     .mapNotNull { it.toStation() }
                     .distinctBy { it.url }
+                    .distinctBy { it.id }
                 memory[key] = now to stations
                 runCatching { cacheFile(key).writeText(json.encodeToString(ListSerializer(RadioStation.serializer()), stations)) }
                 return@withContext Result.success(stations)

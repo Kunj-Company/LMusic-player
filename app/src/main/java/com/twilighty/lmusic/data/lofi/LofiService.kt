@@ -459,7 +459,8 @@ class LofiService : Service(), LofiServiceHandle {
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(contentIntent)
-            .setDeleteIntent(action(ACTION_STOP, 4))
+        // Swiping away stops lofi only while paused; while playing the notification is ongoing.
+        if (!playing) builder.setDeleteIntent(action(ACTION_STOP, 4))
         builder.addAction(
             if (playing) R.drawable.rounded_pause_24 else R.drawable.rounded_play_arrow_24,
             if (playing) "Pause" else "Play",

@@ -181,6 +181,9 @@ class MainActivity : ComponentActivity() {
     private val _pendingShuffleAll = kotlinx.coroutines.flow.MutableStateFlow(false)
     // Benchmark / emulator smoke test only: route to open after launch (extra "smoke_route").
     private val _pendingSmokeRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    // Test-only intent extras (is_benchmark, smoke_route) are honoured only in benchmark / smoke-test builds.
+    private val testHooksAllowed: Boolean
+        get() = BuildConfig.BUILD_TYPE == "benchmark" || BuildConfig.SMOKE_TEST
 
     private val requestAllFilesAccessLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
         // Handle the result in onResume
@@ -215,7 +218,7 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { false }
 
         // LEER SEÑAL DE BENCHMARK
-        val isBenchmarkMode = intent.getBooleanExtra("is_benchmark", false)
+        val isBenchmarkMode = testHooksAllowed && intent.getBooleanExtra("is_benchmark", false)
         val shouldBenchmarkRebuildDatabase =
             isBenchmarkMode && intent.getBooleanExtra("benchmark_rebuild_database", false)
         Log.i(
@@ -342,7 +345,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
-        if (intent.getBooleanExtra("is_benchmark", false)) {
+        if (testHooksAllowed && intent.getBooleanExtra("is_benchmark", false)) {
             intent.getStringExtra("smoke_route")?.let { _pendingSmokeRoute.value = it }
         }
 

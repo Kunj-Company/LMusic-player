@@ -264,6 +264,8 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="focus_timer: a user-started focus (Pomodoro) timer with a live countdown notification, pause/skip/stop controls and chimes at each phase change; sessions run for up to several hours, often without audio" />
         </service>
+        <!-- Focus phase-end alarms (works from the background; never starts a foreground service). -->
+        <receiver android:name=".data.focus.FocusAlarmReceiver" android:exported="false" />
         <service
             android:name=".data.party.PartyServerService"
             android:foregroundServiceType="connectedDevice"

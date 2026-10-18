@@ -66,6 +66,11 @@ android {
         versionName = (project.findProperty("APP_VERSION_NAME") as? String) ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Emulator smoke test only (-Plmusic.smokeTest=true): lets a release build honour the
+        // is_benchmark / smoke_route launch extras. Never set for published releases.
+        val smokeTest = (project.findProperty("lmusic.smokeTest") as? String)?.toBoolean() ?: false
+        buildConfigField("boolean", "SMOKE_TEST", smokeTest.toString())
     }
 
     signingConfigs {

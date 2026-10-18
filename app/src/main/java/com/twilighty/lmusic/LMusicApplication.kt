@@ -97,6 +97,10 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(AppLocaleManager.wrapContext(base))
+        // Crash capture as early as possible (before super.onCreate / Hilt), so early crashes are
+        // recorded too. Writes filesDir/crash/last_crash.txt, then the default handler runs.
+        // Benchmark runs intentionally kill/restart the process: don't record those as crashes.
+        if (BuildConfig.BUILD_TYPE != "benchmark") runCatching { CrashHandler.install(this) }
     }
 
     override fun onCreate() {
@@ -105,10 +109,6 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
         // Benchmark variant intentionally restarts/kills app process during tests.
         // Avoid persisting those events as user-facing crash reports.
         val isBenchmarkBuild = BuildConfig.BUILD_TYPE == "benchmark"
-        if (!isBenchmarkBuild) {
-            // Crash capture first (writes filesDir/crash/last_crash.txt, then the default handler runs).
-            runCatching { CrashHandler.install(this) }
-        }
         // Safe mode after two early crashes in a row (counted by CrashHandler; see data/crash/SafeMode.kt).
         val safeMode = !isBenchmarkBuild &&
             runCatching { com.twilighty.lmusic.data.crash.SafeMode.onAppStart(this) }.getOrDefault(false)

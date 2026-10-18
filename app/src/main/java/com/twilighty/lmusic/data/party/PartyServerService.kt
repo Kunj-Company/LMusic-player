@@ -1,5 +1,6 @@
 package com.twilighty.lmusic.data.party
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -17,9 +18,11 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.WifiManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.util.LruCache
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -110,6 +113,11 @@ class PartyServerService : Service() {
 
     private val endRunnable = Runnable { stopParty("Party time is up") }
 
+    /** Wall-clock end of the party (0 = not running). Uptime timers stall in deep sleep, so this is the source of truth. */
+    @Volatile private var endsAt = 0L
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
             transitionCount++
@@ -147,6 +155,12 @@ class PartyServerService : Service() {
                 }
             }
             ACTION_END -> stopParty(null)
+            ACTION_TIME_UP -> if (started) {
+                if (!checkExpired()) scheduleEndAlarm() // fired early (inexact): re-arm
+            } else {
+                enterForeground(0)
+                stopParty(null)
+            }
             else -> {
                 // Restarted without a session (process death) — nothing to resume.
                 enterForeground(0)
@@ -201,8 +215,11 @@ class PartyServerService : Service() {
             val now = System.currentTimeMillis()
             main.post {
                 if (stopping) return@post
-                manager.onServerStarted(ip, port, now, now + durationMs)
+                endsAt = now + durationMs
+                manager.onServerStarted(ip, port, now, endsAt)
                 main.postDelayed(endRunnable, durationMs)
+                scheduleEndAlarm()
+                acquireLocks(durationMs + LOCK_MARGIN_MS)
                 registerWifiWatch()
                 connectController()
                 manager.queueListener = { main.post { reconcile() } }
@@ -230,6 +247,9 @@ class PartyServerService : Service() {
         }
         manager.queueListener = null
         main.removeCallbacks(endRunnable)
+        endsAt = 0L
+        cancelEndAlarm()
+        releaseLocks()
         networkCallback?.let { cb ->
             runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(cb) }
         }
@@ -241,6 +261,55 @@ class PartyServerService : Service() {
         librarySongs = emptyMap()
         manager.onStopped(reason)
         stopSelfQuietly()
+    }
+
+    /** True (and ends the party) once the wall-clock [endsAt] has passed. Any thread. */
+    private fun checkExpired(): Boolean {
+        val e = endsAt
+        if (e <= 0L || System.currentTimeMillis() < e) return false
+        main.post { stopParty("Party time is up") }
+        return true
+    }
+
+    /** Wakes the device at [endsAt] even in deep sleep, where the postDelayed uptime timer doesn't advance. */
+    private fun scheduleEndAlarm() {
+        val at = endsAt.takeIf { it > 0L } ?: return
+        runCatching {
+            val am = getSystemService(AlarmManager::class.java) ?: return
+            if (am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, endAlarmIntent())
+            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, endAlarmIntent())
+        }.onFailure { Timber.tag(TAG).w(it, "Could not schedule party end alarm") }
+    }
+
+    private fun cancelEndAlarm() {
+        runCatching { getSystemService(AlarmManager::class.java)?.cancel(endAlarmIntent()) }
+    }
+
+    private fun endAlarmIntent(): PendingIntent = PendingIntent.getService(
+        this, REQUEST_END_ALARM,
+        Intent(this, PartyServerService::class.java).setAction(ACTION_TIME_UP),
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    )
+
+    /** Keeps Wi-Fi responsive and the CPU awake for guests' requests while the party runs. */
+    private fun acquireLocks(timeoutMs: Long) {
+        runCatching {
+            wifiLock = getSystemService(WifiManager::class.java)
+                ?.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "LMusic:Party")
+                ?.apply { setReferenceCounted(false); acquire() }
+        }.onFailure { Timber.tag(TAG).w(it, "No Wi-Fi lock for party") }
+        runCatching {
+            wakeLock = getSystemService(PowerManager::class.java)
+                ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LMusic:Party")
+                ?.apply { setReferenceCounted(false); acquire(timeoutMs) }
+        }.onFailure { Timber.tag(TAG).w(it, "No wake lock for party") }
+    }
+
+    private fun releaseLocks() {
+        wifiLock?.let { l -> runCatching { if (l.isHeld) l.release() } }
+        wifiLock = null
+        wakeLock?.let { l -> runCatching { if (l.isHeld) l.release() } }
+        wakeLock = null
     }
 
     private fun stopSelfQuietly() {
@@ -555,6 +624,9 @@ class PartyServerService : Service() {
         get("/tv") { call.respondPage() }
 
         post("/api/pin") {
+            if (checkExpired()) {
+                call.respondError(HttpStatusCode.Unauthorized, "ended", "The party has ended"); return@post
+            }
             val params = runCatching { call.receiveParameters() }.getOrNull()
             when (val r = manager.exchangePin(params?.get("pin"), call.request.origin.remoteHost)) {
                 is PartyManager.PinResult.Ok -> call.respondJson(json.encodeToString(TokenDto.serializer(), TokenDto(r.token)))
@@ -736,6 +808,11 @@ class PartyServerService : Service() {
     }
 
     private suspend fun ApplicationCall.checkToken(): Boolean {
+        // Every API call (incl. the state poll) checks the wall-clock end first.
+        if (checkExpired()) {
+            respondError(HttpStatusCode.Unauthorized, "ended", "The party has ended")
+            return false
+        }
         val t = request.headers["X-Party-Token"] ?: request.queryParameters["t"]
         if (manager.checkToken(t)) return true
         respondError(HttpStatusCode.Unauthorized, if (manager.isRunning) "bad_token" else "ended",
@@ -774,6 +851,9 @@ class PartyServerService : Service() {
         private const val TAG = "PartyServer"
         const val ACTION_START = "com.twilighty.lmusic.party.START"
         const val ACTION_END = "com.twilighty.lmusic.party.END"
+        private const val ACTION_TIME_UP = "com.twilighty.lmusic.party.TIME_UP"
+        private const val REQUEST_END_ALARM = 0x9A47
+        private const val LOCK_MARGIN_MS = 5 * 60_000L
         const val EXTRA_DURATION_MS = "duration_ms"
         private const val DEFAULT_DURATION_MS = 2 * 3_600_000L
         private const val CHANNEL_ID = "lmusic_party"

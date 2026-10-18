@@ -70,7 +70,7 @@ class FocusService : Service() {
                 ACTION_TOGGLE -> controller.togglePause()
                 ACTION_SKIP -> controller.skip()
                 ACTION_STOP -> controller.stop()
-                ACTION_ALARM -> controller.onAlarm()
+                ACTION_ALARM -> controller.onAlarm() // alarms armed by older versions
                 else -> Unit
             }
             if (!controller.state.value.phase.isActive) finishSession(null)
@@ -110,81 +110,13 @@ class FocusService : Service() {
         stopSelf()
     }
 
-    private fun buildNotification(): Notification {
-        val s = controller.state.value
-        val now = System.currentTimeMillis()
-        val title = when (s.phase) {
-            FocusPhase.Focus -> "Focus · round ${s.round} of ${s.config.rounds}"
-            FocusPhase.ShortBreak -> "Short break"
-            FocusPhase.LongBreak -> "Long break"
-            else -> "Focus"
-        }
-        val endsAt = s.phaseEndsAt
-        val text = when {
-            endsAt != null -> "Until ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))}"
-            s.isPaused -> "Paused · ${formatClock(s.remainingMs(now))} left"
-            else -> "Getting ready"
-        }
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_lmusic)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setOngoing(true)
-            .setSilent(true)
-            .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setContentIntent(launchIntent())
-        if (endsAt != null) {
-            builder.setWhen(endsAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
-        } else {
-            builder.setShowWhen(false).setUsesChronometer(false)
-        }
-        builder.addAction(
-            if (s.isRunning) R.drawable.rounded_pause_24 else R.drawable.rounded_play_arrow_24,
-            if (s.isRunning) "Pause" else "Resume",
-            action(ACTION_TOGGLE, 1)
-        )
-        builder.addAction(R.drawable.rounded_skip_next_24, if (s.phase.isBreak) "Skip break" else "Skip", action(ACTION_SKIP, 2))
-        builder.addAction(R.drawable.rounded_close_24, "Stop", action(ACTION_STOP, 3))
-        return builder.build()
-    }
+    private fun buildNotification(): Notification = buildSessionNotification(this, controller.state.value)
 
-    private fun buildDoneNotification(summary: String): Notification =
-        NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_lmusic)
-            .setContentTitle("Nice work")
-            .setContentText(summary)
-            .setAutoCancel(true)
-            .setSilent(true)
-            .setContentIntent(launchIntent())
-            .build()
-
-    private fun launchIntent(): PendingIntent? =
-        packageManager.getLaunchIntentForPackage(packageName)?.let {
-            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        }
-
-    private fun action(action: String, requestCode: Int): PendingIntent =
-        PendingIntent.getService(
-            this, requestCode,
-            Intent(this, FocusService::class.java).setAction(action),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+    private fun buildDoneNotification(summary: String): Notification = buildDoneNotification(this, summary)
 
     private fun nm() = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    private fun ensureChannel() {
-        val nm = nm()
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Focus sessions", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Focus timer countdown and controls"
-                setShowBadge(false)
-            }
-        )
-    }
+    private fun ensureChannel() = ensureChannel(nm())
 
     companion object {
         private const val TAG = "FocusService"
@@ -196,6 +128,96 @@ class FocusService : Service() {
         const val ACTION_SKIP = "com.twilighty.lmusic.focus.SKIP"
         const val ACTION_STOP = "com.twilighty.lmusic.focus.STOP"
         const val ACTION_ALARM = "com.twilighty.lmusic.focus.ALARM"
+
+        /** The session countdown notification (also posted without the service after a background alarm). */
+        internal fun buildSessionNotification(context: Context, s: FocusTimerState): Notification {
+            val now = System.currentTimeMillis()
+            val title = when (s.phase) {
+                FocusPhase.Focus -> "Focus · round ${s.round} of ${s.config.rounds}"
+                FocusPhase.ShortBreak -> "Short break"
+                FocusPhase.LongBreak -> "Long break"
+                else -> "Focus"
+            }
+            val endsAt = s.phaseEndsAt
+            val text = when {
+                endsAt != null -> "Until ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(endsAt))}"
+                s.isPaused -> "Paused · ${formatClock(s.remainingMs(now))} left"
+                else -> "Getting ready"
+            }
+            val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_lmusic)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setOngoing(true)
+                .setSilent(true)
+                .setOnlyAlertOnce(true)
+                .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setContentIntent(launchIntent(context))
+            if (endsAt != null) {
+                builder.setWhen(endsAt).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+            } else {
+                builder.setShowWhen(false).setUsesChronometer(false)
+            }
+            builder.addAction(
+                if (s.isRunning) R.drawable.rounded_pause_24 else R.drawable.rounded_play_arrow_24,
+                if (s.isRunning) "Pause" else "Resume",
+                action(context, ACTION_TOGGLE, 1)
+            )
+            builder.addAction(R.drawable.rounded_skip_next_24, if (s.phase.isBreak) "Skip break" else "Skip", action(context, ACTION_SKIP, 2))
+            builder.addAction(R.drawable.rounded_close_24, "Stop", action(context, ACTION_STOP, 3))
+            return builder.build()
+        }
+
+        internal fun buildDoneNotification(context: Context, summary: String): Notification =
+            NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_lmusic)
+                .setContentTitle("Nice work")
+                .setContentText(summary)
+                .setAutoCancel(true)
+                .setSilent(true)
+                .setContentIntent(launchIntent(context))
+                .build()
+
+        /**
+         * Posts the session (or "done") notification while [FocusService] isn't running, e.g. after a
+         * phase alarm in a cold-started process, where starting a foreground service isn't allowed.
+         */
+        internal fun notifyWithoutService(context: Context, s: FocusTimerState, summary: String?) {
+            val nm = context.getSystemService(NotificationManager::class.java) ?: return
+            runCatching {
+                ensureChannel(nm)
+                if (s.phase.isActive) {
+                    nm.notify(NOTIFICATION_ID, buildSessionNotification(context, s))
+                } else {
+                    nm.cancel(NOTIFICATION_ID)
+                    if (summary != null) nm.notify(DONE_NOTIFICATION_ID, buildDoneNotification(context, summary))
+                }
+            }.onFailure { Timber.tag(TAG).w(it, "Could not post focus notification") }
+        }
+
+        private fun launchIntent(context: Context): PendingIntent? =
+            context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+                PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            }
+
+        private fun action(context: Context, action: String, requestCode: Int): PendingIntent =
+            PendingIntent.getService(
+                context, requestCode,
+                Intent(context, FocusService::class.java).setAction(action),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+        private fun ensureChannel(nm: NotificationManager) {
+            if (nm.getNotificationChannel(CHANNEL_ID) != null) return
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Focus sessions", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Focus timer countdown and controls"
+                    setShowBadge(false)
+                }
+            )
+        }
 
         fun formatClock(ms: Long): String {
             val totalSec = (ms + 999) / 1000
