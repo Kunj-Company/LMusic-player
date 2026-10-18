@@ -346,7 +346,14 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         if (testHooksAllowed && intent.getBooleanExtra("is_benchmark", false)) {
-            intent.getStringExtra("smoke_route")?.let { _pendingSmokeRoute.value = it }
+            intent.getStringExtra("smoke_route")?.let { route ->
+                // "screensaver" is its own Activity, not a nav route.
+                if (route == "screensaver") {
+                    com.twilighty.lmusic.presentation.screensaver.ScreensaverActivity.start(this)
+                } else {
+                    _pendingSmokeRoute.value = route
+                }
+            }
         }
 
         when {
@@ -633,6 +640,7 @@ class MainActivity : ComponentActivity() {
                 Screen.LibraryHealth.route,
                 Screen.Lofi.route,
                 Screen.Focus.route,
+                Screen.Sleep.route,
                 Screen.Recap.route,
                 Screen.TasteMatch.route,
                 Screen.Garden.route
@@ -1001,6 +1009,12 @@ class MainActivity : ComponentActivity() {
                                 durationMillis = dismissUndoBarSlice.durationMillis
                             )
                         }
+
+                        // "Turn on screensaver?" when charging + playing + landscape (foreground only).
+                        com.twilighty.lmusic.presentation.screensaver.ScreensaverOfferHost(
+                            playerViewModel = playerViewModel,
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
 
                         if (showPlayStoreAnnouncement) {
                             PlayStoreAnnouncementDialog(

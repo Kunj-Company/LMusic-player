@@ -193,8 +193,8 @@ def main():
     step("04b-swipe-back-home", lambda: (adb("shell", "input", "swipe", str(int(W*0.1)), str(int(H*0.3)), str(int(W*0.85)), str(int(H*0.3)), "180"), True)[1])
     expect("swipe right on Library returns Home", has_text("Listen", tries=2))
     # Screens opened directly (benchmark-only "smoke_route" extra handled in MainActivity).
-    for route in ["lofi", "focus", "garden", "party", "taste_match", "cover_studio", "settings",
-                  "smart_features_settings", "library_health", "recap/week"]:
+    for route in ["lofi", "focus", "sleep", "garden", "party", "taste_match", "cover_studio", "settings",
+                  "smart_features_settings", "library_health", "recap/week", "screensaver"]:
         step(f"05-route-{route.replace('/', '-')}", lambda r=route: (launch("--es", "smoke_route", r), True)[1])
         back()
     # Playback: shuffle all (app shortcut action), then the mini player and the full player.

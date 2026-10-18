@@ -687,6 +687,10 @@ fun SettingsCategoryScreen(
                                 )
                             }
 
+                            SettingsSubsection(title = "Screensaver") {
+                                com.twilighty.lmusic.presentation.screensaver.ScreensaverSettingsSection()
+                            }
+
                             SettingsSubsection(title = stringResource(R.string.setcat_lyrics_screen)) {
                                 SwitchSettingItem(
                                     title = stringResource(R.string.setcat_immersive_lyrics_title),
