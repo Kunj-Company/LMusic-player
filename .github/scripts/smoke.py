@@ -69,6 +69,28 @@ def expect(name, ok):
     if not ok:
         problems.append(f"check failed: {name}")
 
+def find_where(pred):
+    root = dump()
+    if root is None:
+        return None
+    for node in root.iter("node"):
+        m = re.findall(r"\d+", node.get("bounds", ""))
+        if len(m) != 4:
+            continue
+        x1, y1, x2, y2 = map(int, m)
+        for attr in ("text", "content-desc"):
+            v = (node.get(attr) or "").strip()
+            if v and pred(v, (x1 + x2) // 2, (y1 + y2) // 2):
+                return ((x1 + x2) // 2, (y1 + y2) // 2)
+    return None
+
+def tap_tab(label):
+    """Taps the bottom-bar item, never a same-named button higher on the screen."""
+    p = find_where(lambda v, x, y: v.lower() == label.lower() and y > H * 0.85)
+    if p:
+        adb("shell", "input", "tap", str(p[0]), str(p[1])); time.sleep(2.5); return True
+    return False
+
 def size():
     m = re.search(r"(\d+)x(\d+)", adb("shell", "wm", "size"))
     return (int(m.group(1)), int(m.group(2))) if m else (1080, 2400)
@@ -132,14 +154,14 @@ def main():
     # Shuffle-all syncs the library when it is empty, so the test songs get indexed.
     adb("shell", "am", "start", "-W", "-a", "com.twilighty.lmusic.ACTION_SHUFFLE_ALL", "-n", ACT, "--ez", "is_benchmark", "true")
     time.sleep(12)
-    tap("Library") or tap_xy(0.4, 0.94)
+    tap_tab("Library") or tap_xy(0.4, 0.94)
     expect("test songs appear in Library", has_text("LMusic Test", tries=10, wait=4))
     shot("02b-library-with-songs")
-    tap("Home") or tap_xy(0.2, 0.94)
+    tap_tab("Home") or tap_xy(0.2, 0.94)
     # Bottom nav: tap by label when the accessibility tree is readable, else by position.
     for k, tab in enumerate(["Library", "Search", "Stats", "Home"]):
         x = [0.4, 0.6, 0.8, 0.2][k]
-        step(f"03-tab-{tab.lower()}", lambda t=tab, x=x: tap(t) or tap_xy(x, 0.905))
+        step(f"03-tab-{tab.lower()}", lambda t=tab, x=x: tap_tab(t) or tap_xy(x, 0.94))
     step("04-swipe-to-library", lambda: (adb("shell", "input", "swipe", str(int(W*0.85)), str(int(H*0.3)), str(int(W*0.1)), str(int(H*0.3)), "180"), True)[1])
     expect("swipe left on Home opens Library", has_text("SONGS", tries=2) and not has_text("Search…") and not has_text("Search..."))
     step("04b-swipe-back-home", lambda: (adb("shell", "input", "swipe", str(int(W*0.1)), str(int(H*0.3)), str(int(W*0.85)), str(int(H*0.3)), "180"), True)[1])
@@ -156,7 +178,10 @@ def main():
     step("06-shuffle-all", shuffle_all)
     expect("a test song is playing (mini player)", has_text("LMusic Test", tries=4))
     before = sorted(t for t in texts() if t.startswith("Test Artist") or t.startswith("LMusic Test"))
-    step("07-mini-player-swipe-next", lambda: (adb("shell", "input", "swipe", str(int(W*0.8)), str(int(H*0.82)), str(int(W*0.2)), str(int(H*0.82)), "200"), True)[1])
+    mini = find_where(lambda v, x, y: (v.startswith("LMusic Test") or v.startswith("Test Artist")) and y > H * 0.7)
+    mini_y = mini[1] if mini else int(H * 0.88)
+    print("mini player at y =", mini_y)
+    step("07-mini-player-swipe-next", lambda: (adb("shell", "input", "swipe", str(int(W*0.85)), str(mini_y), str(int(W*0.15)), str(mini_y), "220"), True)[1])
     time.sleep(2)
     after = sorted(t for t in texts() if t.startswith("Test Artist") or t.startswith("LMusic Test"))
     print("mini player before:", before, "after:", after)

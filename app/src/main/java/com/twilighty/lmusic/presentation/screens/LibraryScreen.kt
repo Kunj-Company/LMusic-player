@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
+import com.twilighty.lmusic.presentation.navigation.navigateToTopLevelSafely
 import com.twilighty.lmusic.presentation.navigation.navigateSafelyReplacing
 
 import android.os.Trace
@@ -929,7 +930,7 @@ fun LibraryScreen(
                     YuyuIconButton(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
-                        onClick = { navController.navigateSafely(Screen.Search.route) },
+                        onClick = { navController.navigateToTopLevelSafely(Screen.Search.route) },
                         style = YuyuIconButtonStyle.Tonal
                     )
                     YuyuIconButton(
