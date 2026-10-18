@@ -47,6 +47,13 @@ from **Artifacts**.
   artists** discovered in the period.
 - History is kept for life (PixelPlayer trimmed it to two years).
 
+### New in 1.4
+
+- Noise generator in Focus, Sleep space, charging screensaver (OLED-safe, Open-Meteo weather), Quick
+  Settings tiles, six new widgets plus a lock-screen player, drag-to-select bottom bar.
+- Screen-off gestures with pocket safeguards, source-filtered whole-library shuffle, reliable widgets,
+  wider backups.
+
 ### New in 1.3
 
 - Spaces: on-device lofi generator, lofi radio and ambience; focus timer; listening garden (with widget);
