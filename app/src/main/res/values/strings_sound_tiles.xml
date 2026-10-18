@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_focus">Focus</string>
+    <string name="tile_lofi">Lofi</string>
+    <string name="tile_noise">Noise</string>
+</resources>

@@ -468,6 +468,7 @@ fun HomeScreen(
                     com.twilighty.lmusic.presentation.yuyu.YuyuSpacesRow(
                         onLofi = { navController.navigateSafely(Screen.Lofi.route) },
                         onFocus = { navController.navigateSafely(Screen.Focus.route) },
+                        onSleep = { navController.navigateSafely(Screen.Sleep.route) },
                         onGarden = { navController.navigateSafely(Screen.Garden.route) },
                         onParty = { navController.navigateSafely(Screen.Party.route) },
                         onTasteMatch = { navController.navigateSafely(Screen.TasteMatch.route) },
