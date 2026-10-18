@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -82,6 +83,7 @@ fun LibraryHealthScreen(
     onBack: () -> Unit,
     bottomInset: Dp = 0.dp,
     viewModel: LibraryHealthViewModel = hiltViewModel(),
+    onMakeCovers: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val report by viewModel.report.collectAsStateWithLifecycle()
@@ -236,6 +238,19 @@ fun LibraryHealthScreen(
                                     },
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
+                            }
+                            if (section == HealthSection.MISSING_ARTWORK && songs.isNotEmpty() && onMakeCovers != null) {
+                                item(key = "make_covers") {
+                                    YuyuButton(
+                                        text = "Make covers…",
+                                        icon = rememberVectorPainter(Icons.Rounded.Palette),
+                                        onClick = onMakeCovers,
+                                        enabled = !running,
+                                        style = YuyuButtonStyle.Secondary,
+                                        size = YuyuButtonSize.Small,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+                                }
                             }
                             val limit = shownPerSection[section] ?: SECTION_PAGE
                             items(songs.take(limit), key = { "${section.name}_${it.id}" }) { song ->

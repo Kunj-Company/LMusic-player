@@ -31,7 +31,9 @@ import timber.log.Timber
 @Singleton
 class ListeningStatsTracker @Inject constructor(
     private val dailyMixManager: DailyMixManager,
-    private val playbackStatsRepository: PlaybackStatsRepository
+    private val playbackStatsRepository: PlaybackStatsRepository,
+    // LMusic garden: refreshes the Garden widget when today becomes a listening day.
+    private val gardenWidgetRefresher: com.twilighty.lmusic.data.garden.GardenWidgetRefresher? = null
 ) {
     private var currentSession: ActiveSession? = null
     private var pendingVoluntarySongId: String? = null
@@ -313,6 +315,7 @@ class ListeningStatsTracker @Inject constructor(
             durationMs = listened,
             timestamp = timestamp
         )
+        gardenWidgetRefresher?.onListeningRecorded()
     }
 
     private fun accumulateRealtimeListening(session: ActiveSession, nowRealtime: Long) {

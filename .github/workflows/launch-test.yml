@@ -1,12 +1,14 @@
 name: Launch test (emulator)
 
 # Builds the app, installs it on an Android emulator, launches it and saves logcat.
-# Catches crashes on startup. Runs on every push to main (next to the release build) and diag/** branches
-# and can be started by hand.
+# Walks the main screens with a smoke test (.github/scripts/smoke.py) and fails on any crash.
+# Runs on pushes to main, feature/** and diag/** branches, on pull requests, and by hand.
 
 on:
   push:
-    branches: [ main, 'diag/**' ]
+    branches: [ main, 'diag/**', 'feature/**' ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:

@@ -904,6 +904,9 @@ fun SettingsCategoryScreen(
                                     leadingIcon = { Icon(painterResource(R.drawable.rounded_touch_app_24), null, tint = MaterialTheme.colorScheme.secondary) }
                                 )
                             }
+                            SettingsSubsection(title = "Gestures") {
+                                com.twilighty.lmusic.presentation.gestures.GestureSettingsSection()
+                            }
                             SettingsSubsection(
                                 title = stringResource(R.string.setcat_haptics),
                                 addBottomSpace = false

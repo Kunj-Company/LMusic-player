@@ -342,9 +342,7 @@ fun HomeScreen(
                     YuyuHomeHeader(
                         onSettingsClick = { navController.navigateSafely(Screen.Settings.route) },
                         onWhatsNewClick = { showChangelogBottomSheet = true },
-                        onSourcesClick = { showStreamingProviderSheet = true },
-                        onPartyClick = { navController.navigateSafely(Screen.Party.route) },
-                        onLofiClick = { navController.navigateSafely(Screen.Lofi.route) }
+                        onSourcesClick = { showStreamingProviderSheet = true }
                     )
                 }
                 if (showUpdateBanner) item(key = "update_banner") { com.twilighty.lmusic.presentation.update.UpdateBanner() }
@@ -466,6 +464,16 @@ fun HomeScreen(
                     }
                 }
 
+                item(key = "spaces", contentType = "spaces") {
+                    com.twilighty.lmusic.presentation.yuyu.YuyuSpacesRow(
+                        onLofi = { navController.navigateSafely(Screen.Lofi.route) },
+                        onFocus = { navController.navigateSafely(Screen.Focus.route) },
+                        onGarden = { navController.navigateSafely(Screen.Garden.route) },
+                        onParty = { navController.navigateSafely(Screen.Party.route) },
+                        onTasteMatch = { navController.navigateSafely(Screen.TasteMatch.route) },
+                        onCovers = { navController.navigateSafely(Screen.CoverStudio.createRoute()) },
+                    )
+                }
                 if (madeForYouMixes.isNotEmpty() || smartMixes.isNotEmpty()) {
                     item(key = "made_for_you", contentType = "made_for_you") {
                         YuyuMadeForYouRow(

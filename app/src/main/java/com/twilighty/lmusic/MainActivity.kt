@@ -612,7 +612,10 @@ class MainActivity : ComponentActivity() {
                 Screen.WordDelimiterConfig.route,
                 Screen.LibraryHealth.route,
                 Screen.Lofi.route,
-                Screen.Recap.route
+                Screen.Focus.route,
+                Screen.Recap.route,
+                Screen.TasteMatch.route,
+                Screen.Garden.route
             )
         }
         val shouldHideNavigationBar by remember(currentRoute, isSearchBarActive) {

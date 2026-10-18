@@ -255,6 +255,11 @@ dependencies {
     implementation(libs.ktor.server.cio)
     // Party queue: local QR encoding for the join link
     implementation(libs.zxing.core)
+    // Taste match: offline QR scanning (bundled ML Kit model) + CameraX preview
+    implementation(libs.mlkit.barcode.scanning)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     // Smart features (on-device YAMNet audio tagging)
     implementation(libs.tensorflow.lite)

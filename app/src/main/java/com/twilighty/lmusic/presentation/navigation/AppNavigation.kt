@@ -643,6 +643,23 @@ fun AppNavigation(
                     com.twilighty.lmusic.presentation.health.LibraryHealthScreen(
                         playerViewModel = playerViewModel,
                         onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding(),
+                        onMakeCovers = { navController.navigate(Screen.CoverStudio.createRoute(batch = true)) }
+                    )
+                }
+            }
+            composable(
+                Screen.CoverStudio.route,
+                arguments = listOf(navArgument("mode") { type = NavType.StringType; nullable = true; defaultValue = null }),
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) { backStackEntry ->
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.covers.CoverStudioScreen(
+                        onBack = { navController.popBackStack() },
+                        mode = backStackEntry.arguments?.getString("mode"),
                         bottomInset = paddingValues.calculateBottomPadding()
                     )
                 }
@@ -657,6 +674,23 @@ fun AppNavigation(
                 ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
                     com.twilighty.lmusic.presentation.lofi.LofiScreen(
                         onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding()
+                    )
+                }
+            }
+            composable(
+                Screen.Focus.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.focus.FocusScreen(
+                        onBack = { navController.popBackStack() },
+                        onPlaySongs = { songs ->
+                            songs.firstOrNull()?.let { playerViewModel.playSongs(songs, it, "Focus") }
+                        },
                         bottomInset = paddingValues.calculateBottomPadding()
                     )
                 }
@@ -687,6 +721,35 @@ fun AppNavigation(
                 ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
                     com.twilighty.lmusic.presentation.party.PartyScreen(
                         onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding()
+                    )
+                }
+            }
+            composable(
+                Screen.Garden.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.garden.GardenScreen(
+                        onBack = { navController.popBackStack() },
+                        bottomInset = paddingValues.calculateBottomPadding()
+                    )
+                }
+            }
+            composable(
+                Screen.TasteMatch.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.taste.TasteMatchScreen(
+                        onBack = { navController.popBackStack() },
+                        playerViewModel = playerViewModel,
                         bottomInset = paddingValues.calculateBottomPadding()
                     )
                 }

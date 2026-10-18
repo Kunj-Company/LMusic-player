@@ -24,6 +24,8 @@
         android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Focus sessions: user-started timer that runs in the foreground (FocusService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- MANAGE_EXTERNAL_STORAGE removed for Google Play compliance.
          Write access to individual files is obtained via MediaStore.createWriteRequest(). -->
     <!-- Required only on Android 11 and below for legacy Bluetooth discovery and Wi-Fi SSID access. -->
@@ -32,6 +34,9 @@
     <!-- For disabling battery optimization -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Taste match: scan a friend's QR code (asked only when the user taps "Scan a friend") -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:name=".LMusicApplication"
@@ -200,6 +205,17 @@
                 android:resource="@xml/grid_widget_2x2_info" />
         </receiver>
 
+        <receiver
+            android:name=".ui.glancewidget.GardenWidget2x2Receiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/garden_widget_2x2_info" />
+        </receiver>
+
         <receiver android:name=".data.service.SleepTimerReceiver" android:exported="false" />
 
         <!-- Media Button Receiver for external media controls (headphones, car, etc.) -->
@@ -238,6 +254,14 @@
             android:name=".data.lofi.LofiService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
+        <service
+            android:name=".data.focus.FocusService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="focus_timer: a user-started focus (Pomodoro) timer with a live countdown notification, pause/skip/stop controls and chimes at each phase change; sessions run for up to several hours, often without audio" />
+        </service>
         <service
             android:name=".data.party.PartyServerService"
             android:foregroundServiceType="mediaPlayback"

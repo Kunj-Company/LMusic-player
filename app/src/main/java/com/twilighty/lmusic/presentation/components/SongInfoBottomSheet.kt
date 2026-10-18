@@ -445,6 +445,8 @@ fun SongInfoBottomSheet(
                         )
                     }
                 )
+                // Cover studio: "Make a cover" (only for local songs without artwork).
+                com.twilighty.lmusic.presentation.covers.CoverSongActions(song = song)
                 YuyuActionRow(
                     text = "Go to album",
                     icon = rememberVectorPainter(Icons.Rounded.Album),

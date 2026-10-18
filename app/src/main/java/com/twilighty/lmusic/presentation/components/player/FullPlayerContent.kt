@@ -1077,7 +1077,10 @@ private fun FullPlayerAlbumCoverSection(
         tempoBpm = livingArtworkTempo
     )
 
-    // Double-tap the cover to like.
+    // Double-tap the cover to like (Settings › Behavior › Gestures can turn it off).
+    val gestureSettings: com.twilighty.lmusic.presentation.gestures.GestureSettingsViewModel =
+        androidx.hilt.navigation.compose.hiltViewModel()
+    val doubleTapToLike by gestureSettings.doubleTapToLike.collectAsStateWithLifecycle()
     val haptics = LocalLMusicHaptics.current
     val heartPop = rememberHeartPopState()
     val onCoverDoubleTap: (Song) -> Unit = {
@@ -1168,7 +1171,7 @@ private fun FullPlayerAlbumCoverSection(
                     }
                 },
                 onAlbumClick = onAlbumClick,
-                onAlbumDoubleTap = onCoverDoubleTap,
+                onAlbumDoubleTap = if (doubleTapToLike) onCoverDoubleTap else null,
                 carouselStyle = carouselStyle,
                 modifier = Modifier
                     .then(carouselWidthModifier)
