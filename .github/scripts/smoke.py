@@ -20,7 +20,30 @@ def shot(name):
     with open(f"{OUT}/{name}.png", "wb") as f:
         f.write(subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True).stdout)
 
+def dismiss_system_dialogs(root):
+    """Emulator system dialogs ("Pixel Launcher isn't responding") cover the app; tap Wait."""
+    if root is None:
+        return False
+    for node in root.iter("node"):
+        if (node.get("text") or "").strip() in ("Wait", "Close app") and (node.get("package") or "") != PKG:
+            if (node.get("text") or "").strip() != "Wait":
+                continue
+            m = re.findall(r"\d+", node.get("bounds", ""))
+            if len(m) == 4:
+                x1, y1, x2, y2 = map(int, m)
+                subprocess.run(["adb", "shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2)])
+                print("dismissed a system dialog")
+                time.sleep(1.5)
+                return True
+    return False
+
 def dump():
+    root = _dump()
+    if dismiss_system_dialogs(root):
+        root = _dump()
+    return root
+
+def _dump():
     out = adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
     if "dumped" not in out:
         print("uiautomator:", out.strip()[:200])
@@ -143,6 +166,9 @@ def tap_xy(fx, fy):
 def main():
     global W, H
     W, H = size()
+    # Keep emulator "app isn't responding" dialogs from covering the screens under test.
+    adb("shell", "settings", "put", "global", "hide_error_dialogs", "1")
+    adb("shell", "settings", "put", "secure", "anr_show_background", "0")
     adb("logcat", "-c"); adb("logcat", "-b", "crash", "-c")
     # 1) First launch: setup / welcome screen.
     adb("shell", "am", "start", "-W", "-n", ACT); time.sleep(8)
