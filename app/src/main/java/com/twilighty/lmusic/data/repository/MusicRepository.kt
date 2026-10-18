@@ -91,6 +91,24 @@ interface MusicRepository {
      */
     suspend fun getRandomSongs(limit: Int): List<Song>
 
+    /** Random songs restricted to the Library source filter (phone / cloud / all). */
+    suspend fun getRandomSongs(
+        limit: Int,
+        storageFilter: com.twilighty.lmusic.data.model.StorageFilter
+    ): List<Song> = com.twilighty.lmusic.data.model.LibrarySourceFilter
+        .filterSongs(storageFilter, getRandomSongs(limit))
+
+    /**
+     * Every song id of the (source-filtered) library in random order. Ids only, so shuffling a
+     * 10k-song library stays cheap; resolve to songs in chunks off the main thread.
+     */
+    suspend fun getShuffledSongIds(
+        storageFilter: com.twilighty.lmusic.data.model.StorageFilter
+    ): List<Long> = getSongIdsSorted(
+        com.twilighty.lmusic.data.model.SortOption.SongTitleAZ,
+        storageFilter
+    ).shuffled()
+
     /**
      * Returns a bounded song page without materializing the full library.
      */

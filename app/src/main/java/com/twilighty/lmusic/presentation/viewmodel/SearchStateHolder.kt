@@ -37,6 +37,7 @@ import kotlinx.coroutines.FlowPreview
 @Singleton
 class SearchStateHolder @Inject constructor(
     private val musicRepository: MusicRepository,
+    private val libraryStateHolder: LibraryStateHolder,
 ) {
     private companion object {
         const val SEARCH_DEBOUNCE_MS = 300L
@@ -92,7 +93,19 @@ class SearchStateHolder @Inject constructor(
 
                     try {
                         val currentFilter = _selectedSearchFilter.value
-                        musicRepository.searchAll(normalizedQuery, currentFilter).collect { resultsList ->
+                        // Search follows the Library source filter (phone / cloud / all).
+                        val sourceFilter = libraryStateHolder.effectiveStorageFilterNow()
+                        val allowedAlbumIds = libraryStateHolder.albums.value
+                            .takeIf { it.isNotEmpty() }?.mapTo(HashSet()) { it.id }
+                        val allowedArtistIds = libraryStateHolder.artists.value
+                            .takeIf { it.isNotEmpty() }?.mapTo(HashSet()) { it.id }
+                        musicRepository.searchAll(normalizedQuery, currentFilter).collect { rawResults ->
+                            val resultsList = com.twilighty.lmusic.data.model.LibrarySourceFilter.filterSearchResults(
+                                filter = sourceFilter,
+                                results = rawResults,
+                                allowedAlbumIds = allowedAlbumIds,
+                                allowedArtistIds = allowedArtistIds
+                            )
                             // Sort: prioritize Song/Album matches over Artist/Playlist matches
                             val sortedResults = resultsList.sortedWith(
                                 compareBy { result ->

@@ -518,6 +518,46 @@ interface MusicDao {
         applyDirectoryFilter: Boolean = false
     ): List<SongEntity>
 
+    /**
+     * Random songs restricted to the Library source filter. Same predicate as the Library song
+     * list ([getSongsPaginated] / [getSongIdsSorted]): filterMode 0 = all, 1 = local
+     * (`source_type = 0`), 2 = cloud (`source_type != 0`).
+     */
+    @Query("""
+        SELECT * FROM songs
+        WHERE (:applyDirectoryFilter = 0 OR parent_directory_path IN (:allowedParentDirs))
+        AND (
+            :filterMode = 0
+            OR (:filterMode = 1 AND source_type = 0)
+            OR (:filterMode = 2 AND source_type != 0)
+        )
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """)
+    suspend fun getRandomSongsFiltered(
+        limit: Int,
+        allowedParentDirs: List<String>,
+        applyDirectoryFilter: Boolean,
+        filterMode: Int
+    ): List<SongEntity>
+
+    /** Every song id matching the Library source filter, in random order (ids only, cheap for 10k+ rows). */
+    @Query("""
+        SELECT id FROM songs
+        WHERE (:applyDirectoryFilter = 0 OR parent_directory_path IN (:allowedParentDirs))
+        AND (
+            :filterMode = 0
+            OR (:filterMode = 1 AND source_type = 0)
+            OR (:filterMode = 2 AND source_type != 0)
+        )
+        ORDER BY RANDOM()
+    """)
+    suspend fun getShuffledSongIdsFiltered(
+        allowedParentDirs: List<String>,
+        applyDirectoryFilter: Boolean,
+        filterMode: Int
+    ): List<Long>
+
     @Query("""
         SELECT """ + SONG_LIST_PROJECTION + """
         FROM songs

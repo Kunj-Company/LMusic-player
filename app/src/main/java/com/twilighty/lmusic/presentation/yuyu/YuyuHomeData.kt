@@ -87,7 +87,19 @@ class YuyuHomeViewModel @Inject constructor(
     private val playbackStatsRepository: PlaybackStatsRepository,
     preferences: YuyuHomePreferences,
     private val smartRepository: com.twilighty.lmusic.data.smart.SmartRepository,
+    private val libraryStateHolder: com.twilighty.lmusic.presentation.viewmodel.LibraryStateHolder,
 ) : ViewModel() {
+
+    /** Library source filter used for the last refresh; a change forces a refresh. */
+    private var lastSourceFilter: com.twilighty.lmusic.data.model.StorageFilter? = null
+
+    init {
+        viewModelScope.launch {
+            libraryStateHolder.currentStorageFilter.collect { filter ->
+                if (lastSourceFilter != null && lastSourceFilter != filter) refreshIfStale(force = true)
+            }
+        }
+    }
 
     /** On-device smart mixes (empty while the experimental smart layer is off). */
     private val _smartMixes = MutableStateFlow<List<MadeForYouMix>>(emptyList())
@@ -116,15 +128,22 @@ class YuyuHomeViewModel @Inject constructor(
     /** Called when Home becomes visible; throttled so returning to Home is free. */
     fun refreshIfStale(force: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (refreshJob?.isActive == true) return
+        if (refreshJob?.isActive == true) {
+            if (!force) return
+            refreshJob?.cancel()
+        }
         if (!force && lastRefreshAt != 0L && now - lastRefreshAt < REFRESH_INTERVAL_MS) return
         lastRefreshAt = now
         refreshJob = viewModelScope.launch(Dispatchers.IO) {
             runCatching {
+                // "Recently added" follows the Library source filter (phone / cloud / all).
+                val sourceFilter = libraryStateHolder.effectiveStorageFilterNow()
+                lastSourceFilter = libraryStateHolder.currentStorageFilter.value
                 _recentlyAdded.value = musicRepository.getSongsPage(
                     limit = MIX_SIZE,
                     offset = 0,
-                    sortOption = SortOption.SongDateAdded
+                    sortOption = SortOption.SongDateAdded,
+                    storageFilter = sourceFilter
                 )
             }.onFailure { Timber.w(it, "Home: recently added failed") }
             runCatching {
@@ -203,3 +222,6 @@ class YuyuHomeViewModel @Inject constructor(
         private const val REFRESH_INTERVAL_MS = 10L * 60 * 1000
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupHomeDataStore: DataStore<Preferences> get() = yuyuHomeDataStore
