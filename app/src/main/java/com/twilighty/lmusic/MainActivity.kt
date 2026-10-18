@@ -640,14 +640,11 @@ class MainActivity : ComponentActivity() {
                 if (currentRoute == Screen.Search.route && isSearchBarActive) {
                     true
                 } else {
+                    // The bottom bar belongs to the four main tabs only; every other screen
+                    // (settings, detail pages, Lofi, Party, Cover studio, …) hides it.
                     currentRoute?.let { route ->
-                        routesWithHiddenNavigationBar.any { hiddenRoute ->
-                            if (hiddenRoute.contains("{")) {
-                                route.startsWith(hiddenRoute.substringBefore("{"))
-                            } else {
-                                route == hiddenRoute
-                            }
-                        }
+                        !com.twilighty.lmusic.presentation.navigation.isMainRootRoute(route) ||
+                            routesWithHiddenNavigationBar.any { hiddenRoute -> route == hiddenRoute }
                     } ?: false
                 }
             }

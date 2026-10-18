@@ -70,8 +70,9 @@ class ListeningStatsTrackerTest {
             playbackStatsRepository = playbackStatsRepository
         )
         val song = song(songId = "song-1")
-        val firstChunkMs = 7_000L
-        val secondChunkMs = 8_000L
+        // LMusic counts a play after 30 s, so the two chunks add up past that.
+        val firstChunkMs = 17_000L
+        val secondChunkMs = 18_000L
         val expectedDurationMs = firstChunkMs + secondChunkMs
 
         every { SystemClock.elapsedRealtime() } returnsMany listOf(
@@ -92,7 +93,7 @@ class ListeningStatsTrackerTest {
         coVerify(timeout = 2_000) {
             playbackStatsRepository.recordPlayback(song.id, expectedDurationMs, any())
         }
-        assertThat(expectedDurationMs).isGreaterThan(TimeUnit.SECONDS.toMillis(5))
+        assertThat(expectedDurationMs).isGreaterThan(TimeUnit.SECONDS.toMillis(30))
     }
 
     private fun song(songId: String, durationMs: Long = 5 * 60 * 1000L): Song = Song(

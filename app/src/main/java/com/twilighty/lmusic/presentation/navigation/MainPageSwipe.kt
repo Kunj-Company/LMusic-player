@@ -90,6 +90,12 @@ private val mainRootRoutesInOrder: List<String>
     get() = listOf(Screen.Home.route, Screen.Library.route, Screen.Search.route, Screen.Stats.route)
 
 /** direction < 0 = swipe left = next page, > 0 = swipe right = previous page. */
+/** One page change per gesture: the pointer and nested-scroll paths can both fire for one swipe. */
+private object PageSwipeCooldown {
+    @Volatile var lastNavigateAt = 0L
+    const val WINDOW_MS = 450L
+}
+
 private fun neighbourRoute(route: String?, direction: Float): String? {
     val index = mainRootRouteIndex(route) ?: return null
     val target = if (direction < 0f) index + 1 else index - 1
@@ -121,7 +127,10 @@ internal fun Modifier.mainPageSwipe(
             val current = navController.currentBackStackEntry?.destination?.route
             // Only the screen the user is looking at may switch (not one that is animating out).
             if (current != latestRoute) return@nav false
+            val now = android.os.SystemClock.uptimeMillis()
+            if (now - PageSwipeCooldown.lastNavigateAt < PageSwipeCooldown.WINDOW_MS) return@nav false
             val target = neighbourRoute(current, direction) ?: return@nav false
+            PageSwipeCooldown.lastNavigateAt = now
             haptics.selection()
             navController.navigateToTopLevelSafely(target)
         }
