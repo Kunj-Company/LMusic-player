@@ -1,6 +1,7 @@
 package com.twilighty.lmusic.data.sleep
 
 import android.content.Context
+import android.content.Intent
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -17,6 +18,7 @@ import com.twilighty.lmusic.data.lofi.LofiSource
 import com.twilighty.lmusic.data.model.Song
 import com.twilighty.lmusic.data.noise.NoiseController
 import com.twilighty.lmusic.data.noise.NoiseDefaults
+import com.twilighty.lmusic.data.service.MusicService
 import com.twilighty.lmusic.data.smart.SmartModel
 import com.twilighty.lmusic.data.smart.SmartRepository
 import com.twilighty.lmusic.presentation.viewmodel.PlaybackStateHolder
@@ -93,7 +95,6 @@ class SleepController @Inject constructor(
     private var loaded = false
     private var fadeJob: Job? = null
     private var watchJob: Job? = null
-    private var savedVolume: Float? = null
 
     /** The running session, or null. Ends by itself when its timer runs out or playback stops. */
     val session: Flow<SleepSession?> by lazy {
@@ -233,28 +234,21 @@ class SleepController @Inject constructor(
         }
     }
 
-    /** Lowers the player volume over the last [fadeMs]; the player's own timer then pauses it. */
+    /**
+     * Asks MusicService to lower its volume over the last [fadeMs] (the service owns the fade and
+     * always puts the volume back); the player's own sleep timer then pauses it.
+     */
     private fun startMusicFade(minutes: Int, fadeMs: Long) {
         fadeJob?.cancel()
         watchJob?.cancel()
         val total = minutes * 60_000L
         val endsAt = System.currentTimeMillis() + total
+        sendToMusicService(MusicService.ACTION_SLEEP_FADE) {
+            putExtra(MusicService.EXTRA_SLEEP_FADE_START_AT, endsAt - fadeMs)
+            putExtra(MusicService.EXTRA_SLEEP_FADE_END_AT, endsAt)
+        }
         fadeJob = scope.launch {
-            delay((total - fadeMs).coerceAtLeast(0L))
-            val mc = playback.get().mediaController ?: return@launch
-            val start = savedVolume ?: mc.volume.also { savedVolume = it }
-            val steps = (fadeMs / 5_000L).toInt().coerceIn(10, 360)
-            for (i in steps downTo 1) {
-                val f = i / steps.toFloat()
-                runCatching { mc.volume = start * f * f }
-                delay(fadeMs / steps)
-            }
-            // The player's sleep timer pauses now (pause here too in case it couldn't be set);
-            // then put the volume back for next time.
-            delay(1_500L)
-            runCatching { if (mc.isPlaying) mc.pause() }
-            delay(2_500L)
-            restoreVolume()
+            delay(total + 5_000L)
             _active.value = null
         }
         // The player's timer was cancelled or replaced elsewhere: stop fading.
@@ -268,17 +262,23 @@ class SleepController @Inject constructor(
                         fadeJob?.cancel()
                         restoreVolume()
                         _active.value = null
-                        watchJob?.cancel()
+                    } else {
+                        _active.value = null
                     }
+                    watchJob?.cancel()
                 }
             }
         }
     }
 
-    private fun restoreVolume() {
-        val v = savedVolume ?: return
-        savedVolume = null
-        runCatching { playback.get().mediaController?.volume = v }
+    /** Cancels a service-side fade; the service restores the volume it had. */
+    private fun restoreVolume() = sendToMusicService(MusicService.ACTION_SLEEP_FADE_CANCEL)
+
+    private fun sendToMusicService(action: String, extras: Intent.() -> Unit = {}) {
+        // MusicService is running (it plays the calm mix), so a plain start is allowed.
+        runCatching {
+            context.startService(Intent(context, MusicService::class.java).setAction(action).apply(extras))
+        }.onFailure { Timber.tag(TAG).w(it, "Could not reach MusicService for %s", action) }
     }
 
     /**
@@ -343,3 +343,6 @@ class SleepController @Inject constructor(
         )
     }
 }
+
+/** For backup/restore (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupSleepDataStore: DataStore<Preferences> get() = sleepDataStore

@@ -36,6 +36,9 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.flow.drop
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -87,15 +90,24 @@ class StatsWidget2x2 : GlanceAppWidget() {
     override val sizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = runCatching {
-            val repo = EntryPointAccessors.fromApplication(context.applicationContext, StatsWidgetEntryPoint::class.java)
+        val repo = runCatching {
+            EntryPointAccessors.fromApplication(context.applicationContext, StatsWidgetEntryPoint::class.java)
                 .playbackStatsRepository()
-            ListeningTodayCalculator.compute(repo.exportEventsForBackup())
-        }.onFailure { Timber.w(it, "Stats widget: load failed") }.getOrElse { ListeningToday(0L, 0) }
+        }.getOrNull()
+        val initial = loadSafely(repo)
         provideContent {
+            // Recomputes whenever a play is recorded while the Glance session is open.
+            val data by produceState(initial) {
+                repo?.refreshFlow?.drop(1)?.collect { value = loadSafely(repo) }
+            }
             GlanceTheme(colors = YuyuGlanceColors) { Content(data) }
         }
     }
+
+    private suspend fun loadSafely(repo: PlaybackStatsRepository?): ListeningToday =
+        runCatching { repo?.let { ListeningTodayCalculator.compute(it.exportEventsForBackup()) } }
+            .onFailure { Timber.w(it, "Stats widget: load failed") }
+            .getOrNull() ?: ListeningToday(0L, 0)
 
     @Composable
     private fun Content(data: ListeningToday) {

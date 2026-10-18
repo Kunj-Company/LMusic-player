@@ -33,6 +33,9 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
@@ -41,6 +44,7 @@ import timber.log.Timber
 interface RecentWidgetEntryPoint {
     fun engagementDao(): EngagementDao
     fun musicRepository(): MusicRepository
+    fun playbackStatsRepository(): com.twilighty.lmusic.data.stats.PlaybackStatsRepository
 }
 
 private data class RecentSong(val id: Long, val title: String, val artUri: String?)
@@ -50,13 +54,24 @@ class RecentWidget4x2 : GlanceAppWidget() {
     override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val songs = runCatching { load(context) }
-            .onFailure { Timber.w(it, "Recently played widget: load failed") }
-            .getOrElse { emptyList() }
+        val stats = runCatching {
+            EntryPointAccessors.fromApplication(context.applicationContext, RecentWidgetEntryPoint::class.java)
+                .playbackStatsRepository()
+        }.getOrNull()
+        val initial = loadSafely(context)
         provideContent {
+            // Reloads whenever a play is recorded while the Glance session is open.
+            val songs by produceState(initial) {
+                stats?.refreshFlow?.drop(1)?.collect { value = loadSafely(context) }
+            }
             GlanceTheme(colors = YuyuGlanceColors) { Content(context, songs) }
         }
     }
+
+    private suspend fun loadSafely(context: Context): List<RecentSong> =
+        runCatching { load(context) }
+            .onFailure { Timber.w(it, "Recently played widget: load failed") }
+            .getOrElse { emptyList() }
 
     private suspend fun load(context: Context): List<RecentSong> {
         val ep = EntryPointAccessors.fromApplication(context.applicationContext, RecentWidgetEntryPoint::class.java)

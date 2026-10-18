@@ -203,6 +203,11 @@ class MusicService : MediaLibraryService() {
         private const val TAG = "MusicService_LMusic"
         const val NOTIFICATION_ID = 101
         const val ACTION_SLEEP_TIMER_EXPIRED = "com.twilighty.lmusic.ACTION_SLEEP_TIMER_EXPIRED"
+        /** Sleep space: lower the volume from [EXTRA_SLEEP_FADE_START_AT] to [EXTRA_SLEEP_FADE_END_AT] (wall clock). */
+        const val ACTION_SLEEP_FADE = "com.twilighty.lmusic.ACTION_SLEEP_FADE"
+        const val ACTION_SLEEP_FADE_CANCEL = "com.twilighty.lmusic.ACTION_SLEEP_FADE_CANCEL"
+        const val EXTRA_SLEEP_FADE_START_AT = "com.twilighty.lmusic.extra.SLEEP_FADE_START_AT"
+        const val EXTRA_SLEEP_FADE_END_AT = "com.twilighty.lmusic.extra.SLEEP_FADE_END_AT"
         const val EXTRA_FORCE_FOREGROUND_ON_START =
             "com.twilighty.lmusic.extra.FORCE_FOREGROUND_ON_START"
         // Queue/index/flags snapshot is only used for restore on process death. A full-queue
@@ -238,7 +243,7 @@ class MusicService : MediaLibraryService() {
         private const val DEFAULT_STREAM_BUFFER_SIZE = 8 * 1024
         private const val WIDGET_ART_FAILURE_RETRY_MS = 30_000L
         private const val WIDGET_QUEUE_PREVIEW_LIMIT = 4
-        private const val COLD_WIDGET_COMMAND_SETTLE_MS = 1_500L
+        private const val WIDGET_COMMAND_FOREGROUND_WAIT_MS = 8_000L
         private const val HEADSET_RECONNECT_RESUME_WINDOW_MS = 15_000L
 
         fun markPendingMediaButtonForegroundStart() {
@@ -995,12 +1000,21 @@ class MusicService : MediaLibraryService() {
         }
     }
 
-    private fun isServiceAlreadyForeground(): Boolean {
-        val player = mediaSession?.player ?: return false
-        return player.playWhenReady &&
+    /** The real foreground state (Media3 keeps the service foreground for a while after a pause). */
+    private fun isServiceAlreadyForeground(): Boolean = foregroundServiceType != 0
+
+    private fun isPlayerActive(player: Player?): Boolean =
+        player != null && player.playWhenReady &&
             player.playbackState != Player.STATE_IDLE &&
             player.playbackState != Player.STATE_ENDED
-    }
+
+    private fun isTemporaryForegroundNotificationShowing(): Boolean = runCatching {
+        getSystemService(android.app.NotificationManager::class.java)
+            ?.activeNotifications?.any { it.id == NOTIFICATION_ID } == true
+    }.getOrDefault(false)
+
+    /** Widget commands still running; the service never stops while one is in flight. */
+    private var widgetCommandsInFlight = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val startedTemporaryForegroundInOnCreate = temporaryForegroundStartedInOnCreate
@@ -1022,46 +1036,48 @@ class MusicService : MediaLibraryService() {
         }
 
         val action = intent?.action
-        var deferredWidgetCommand = false
+        var widgetCommand = false
         if (action != null) {
             val player = mediaSession?.player
             if (player != null) {
-                val isWidgetCommand = action in PlayerActions.ALL
-                if (isWidgetCommand && (player.mediaItemCount == 0 || playbackRestoreJob?.isActive == true)) {
-                    // Cold start from a widget (app was killed): the queue restore is still
-                    // running. Wait for it, then act — "Play" must resume the last queue.
-                    deferredWidgetCommand = true
+                if (action in PlayerActions.ALL) {
+                    widgetCommand = true
+                    widgetCommandsInFlight++
                     val commandIntent = Intent(intent)
+                    val startedTemp = needsTemporaryForeground
                     serviceScope.launch {
-                        runCatching { playbackRestoreJob?.join() }
-                        runCatching { restorePlaybackQueueSnapshotIfNeeded() }
-                        val current = mediaSession?.player
-                        if (current != null) handleStartCommandAction(current, action, commandIntent, coldStart = true)
-                        if (needsTemporaryForeground) {
-                            delay(COLD_WIDGET_COMMAND_SETTLE_MS)
-                            val p = mediaSession?.player
-                            val playing = p != null && p.playWhenReady &&
-                                p.playbackState != Player.STATE_IDLE && p.playbackState != Player.STATE_ENDED
-                            if (!playing) {
-                                stopForeground(STOP_FOREGROUND_REMOVE)
+                        try {
+                            val cold = player.mediaItemCount == 0 || playbackRestoreJob?.isActive == true
+                            if (cold) {
+                                // Cold start from a widget (app was killed): wait for the queue
+                                // restore, then act — "Play" must resume the last queue.
+                                runCatching { playbackRestoreJob?.join() }
+                                runCatching { restorePlaybackQueueSnapshotIfNeeded() }
+                            }
+                            val current = mediaSession?.player
+                            if (current != null) {
+                                runCatching { handleStartCommandAction(current, action, commandIntent, coldStart = cold) }
+                                    .onFailure { Timber.tag(TAG).w(it, "Widget command %s failed", action) }
+                            }
+                            if (startedTemp) settleTemporaryForeground()
+                        } finally {
+                            widgetCommandsInFlight--
+                            // Only an empty player (nothing to resume) lets the service go; a paused
+                            // queue stays loaded so the widgets and controls keep working.
+                            if (widgetCommandsInFlight == 0 && (mediaSession?.player?.mediaItemCount ?: 0) == 0) {
                                 stopSelfResult(startId)
                             }
                         }
                     }
                 } else {
-                    handleStartCommandAction(player, action, intent, coldStart = false)
+                    serviceScope.launch { handleStartCommandAction(player, action, intent, coldStart = false) }
                 }
             }
         }
         val startCommandResult = super.onStartCommand(intent, flags, startId)
-        if (needsTemporaryForeground && !deferredWidgetCommand) {
-            val player = mediaSession?.player
-            val isActivelyPlaying = player?.let {
-                it.playWhenReady &&
-                    it.playbackState != Player.STATE_IDLE &&
-                    it.playbackState != Player.STATE_ENDED
-            } == true
-            if (!isActivelyPlaying) {
+        if (needsTemporaryForeground && !widgetCommand) {
+            // Media-button / internal starts: same as before.
+            if (!isPlayerActive(mediaSession?.player)) {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelfResult(startId)
             }
@@ -1069,8 +1085,30 @@ class MusicService : MediaLibraryService() {
         return startCommandResult
     }
 
+    /**
+     * After a widget command that needed the temporary "processing" foreground: once playback is
+     * running Media3 takes the foreground with its own notification (which replaces ours); if
+     * nothing plays, only our notification is dropped — the service stays for the paused queue.
+     */
+    private suspend fun settleTemporaryForeground() {
+        if (isPlayerActive(mediaSession?.player)) {
+            kotlinx.coroutines.withTimeoutOrNull(WIDGET_COMMAND_FOREGROUND_WAIT_MS) {
+                while (isTemporaryForegroundNotificationShowing() && isPlayerActive(mediaSession?.player)) {
+                    delay(250L)
+                }
+            }
+        }
+        if (!isTemporaryForegroundNotificationShowing()) return
+        if (isPlayerActive(mediaSession?.player)) {
+            // Media3 hasn't re-posted yet: ask it to, which swaps the foreground notification.
+            mediaSession?.let { runCatching { onUpdateNotification(it, true) } }
+        } else {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        }
+    }
+
     /** Widget / internal commands sent with startService. [coldStart]: the service was just started for it. */
-    private fun handleStartCommandAction(player: Player, action: String, intent: Intent, coldStart: Boolean) {
+    private suspend fun handleStartCommandAction(player: Player, action: String, intent: Intent, coldStart: Boolean) {
         when (action) {
             PlayerActions.PLAY_PAUSE -> {
                 if (coldStart || !player.playWhenReady) {
@@ -1140,7 +1178,13 @@ class MusicService : MediaLibraryService() {
                 Timber.tag(TAG).d("Sleep timer expired action received. Pausing player.")
                 cancelDurationSleepTimerInternal()
                 player.pause()
+                cancelSleepFade(restore = true)
             }
+            ACTION_SLEEP_FADE -> startSleepFade(
+                startAt = intent.getLongExtra(EXTRA_SLEEP_FADE_START_AT, 0L),
+                endAt = intent.getLongExtra(EXTRA_SLEEP_FADE_END_AT, 0L),
+            )
+            ACTION_SLEEP_FADE_CANCEL -> cancelSleepFade(restore = true)
         }
     }
 
@@ -1155,7 +1199,7 @@ class MusicService : MediaLibraryService() {
     }
 
     /** Widget "play this song": jump to it in the queue, or play it next. */
-    private fun playSongFromWidget(player: Player, songId: Long) {
+    private suspend fun playSongFromWidget(player: Player, songId: Long) {
         val timeline = player.currentTimeline
         if (!timeline.isEmpty) {
             val window = Timeline.Window()
@@ -1169,13 +1213,13 @@ class MusicService : MediaLibraryService() {
                 }
             }
         }
-        serviceScope.launch {
+        run {
             val song = runCatching {
                 musicRepository.getSongsByIds(listOf(songId.toString())).first().firstOrNull()
-            }.getOrNull() ?: return@launch
+            }.getOrNull() ?: return
             val item = runCatching { engine.resolveMediaItem(MediaItemBuilder.build(song)) }
                 .getOrElse { MediaItemBuilder.build(song) }
-            val p = mediaSession?.player ?: return@launch
+            val p = mediaSession?.player ?: return
             if (p.mediaItemCount == 0) {
                 p.setMediaItems(listOf(item))
                 p.prepare()
@@ -1581,8 +1625,65 @@ class MusicService : MediaLibraryService() {
 
     private fun setPlayerVolume(player: Player, volume: Float) {
         val clampedVolume = volume.coerceIn(0f, 1f)
-        expectedReplayGainVolume = clampedVolume
-        player.volume = clampedVolume
+        // During a Sleep fade the fade level rides on top of ReplayGain / the user's volume.
+        val applied = if (sleepFadeBase != null) {
+            sleepFadeBase = clampedVolume
+            clampedVolume * sleepFadeLevel
+        } else clampedVolume
+        expectedReplayGainVolume = applied
+        player.volume = applied
+    }
+
+    // ---------------------------------------------------------------- Sleep space fade
+    // Owned here (not by the UI), so the volume is always put back, even with the app swiped away.
+    // In memory only: a new service starts at the normal volume.
+
+    private var sleepFadeJob: Job? = null
+    /** The volume without the fade, while a fade runs. */
+    private var sleepFadeBase: Float? = null
+    private var sleepFadeLevel = 1f
+
+    private fun startSleepFade(startAt: Long, endAt: Long) {
+        cancelSleepFade(restore = true)
+        if (endAt <= System.currentTimeMillis()) return
+        sleepFadeJob = serviceScope.launch {
+            delay((startAt - System.currentTimeMillis()).coerceAtLeast(0L))
+            val player = engine.masterPlayer
+            sleepFadeBase = player.volume.coerceIn(0f, 1f)
+            val total = (endAt - System.currentTimeMillis()).coerceAtLeast(1_000L)
+            val steps = (total / 5_000L).toInt().coerceIn(10, 360)
+            for (i in steps downTo 1) {
+                if (!player.playWhenReady) { cancelSleepFade(restore = true); return@launch } // paused by hand
+                val f = i / steps.toFloat()
+                sleepFadeLevel = f * f
+                applySleepFadeVolume()
+                delay(total / steps)
+            }
+            // The sleep timer pauses now; pause here too in case it wasn't set, then restore.
+            delay(1_500L)
+            runCatching { if (player.isPlaying) player.pause() }
+            cancelSleepFade(restore = true)
+        }
+    }
+
+    private fun applySleepFadeVolume() {
+        val base = sleepFadeBase ?: return
+        val v = (base * sleepFadeLevel).coerceIn(0f, 1f)
+        expectedReplayGainVolume = v
+        engine.masterPlayer.volume = v
+    }
+
+    private fun cancelSleepFade(restore: Boolean) {
+        val job = sleepFadeJob
+        sleepFadeJob = null
+        job?.cancel() // also fine from inside the job: the restore below still runs
+        val base = sleepFadeBase
+        sleepFadeBase = null
+        sleepFadeLevel = 1f
+        if (restore && base != null) {
+            expectedReplayGainVolume = base
+            engine.masterPlayer.volume = base
+        }
     }
 
     private fun onTransitionFinished() {

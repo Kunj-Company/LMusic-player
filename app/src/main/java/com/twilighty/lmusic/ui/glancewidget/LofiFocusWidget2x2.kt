@@ -44,6 +44,9 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
@@ -67,16 +70,27 @@ class LofiFocusWidget2x2 : GlanceAppWidget() {
     override val sizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = runCatching { load(context) }
+        val ep = runCatching {
+            EntryPointAccessors.fromApplication(context.applicationContext, LofiFocusWidgetEntryPoint::class.java)
+        }.getOrNull()
+        val initial = runCatching { ep?.let { load(it) } }
             .onFailure { Timber.w(it, "Lofi & focus widget: load failed") }
-            .getOrElse { LofiFocusData(false, false, FocusTimerState(), 25) }
+            .getOrNull() ?: LofiFocusData(false, false, FocusTimerState(), 25)
         provideContent {
+            // Live while the Glance session is open: later controller changes recompose this
+            // instead of showing the state read when the session started.
+            val focus by produceState(initial.focus) {
+                ep?.focusController()?.state?.drop(1)?.collect { value = it }
+            }
+            val lofi by produceState(initial.lofiPlaying to initial.lofiLoaded) {
+                ep?.lofiController()?.state?.drop(1)?.collect { value = it.isPlaying to (it.source != null) }
+            }
+            val data = initial.copy(lofiPlaying = lofi.first, lofiLoaded = lofi.second, focus = focus)
             GlanceTheme(colors = YuyuGlanceColors) { Content(context, data) }
         }
     }
 
-    private suspend fun load(context: Context): LofiFocusData {
-        val ep = EntryPointAccessors.fromApplication(context.applicationContext, LofiFocusWidgetEntryPoint::class.java)
+    private suspend fun load(ep: LofiFocusWidgetEntryPoint): LofiFocusData {
         val lofi = ep.lofiController()
         // Cheap and async: makes a later "play" use the saved lofi settings in a cold process.
         runCatching { lofi.ensureLoaded() }
@@ -113,15 +127,19 @@ class LofiFocusWidget2x2 : GlanceAppWidget() {
                 }
             )
             Spacer(GlanceModifier.height(4.dp))
-            if (focus.isRunning) {
-                val remaining = focus.remainingMs(now)
+            val remaining = focus.remainingMs(now)
+            if (focus.isRunning && remaining > 0L) {
                 val rv = RemoteViews(context.packageName, R.layout.widget_focus_chronometer).apply {
                     setChronometer(R.id.focus_chronometer, SystemClock.elapsedRealtime() + remaining, null, true)
                     setChronometerCountDown(R.id.focus_chronometer, true)
                 }
                 AndroidRemoteViews(remoteViews = rv)
             } else {
-                val ms = if (focus.isPaused) focus.pausedRemainingMs else data.focusMinutes * 60_000L
+                val ms = when {
+                    focus.isPaused -> focus.pausedRemainingMs
+                    focus.isRunning -> 0L // phase just ended; the controller publishes the next one
+                    else -> data.focusMinutes * 60_000L
+                }
                 Text(
                     text = FocusService.formatClock(ms),
                     style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 30.sp, fontWeight = FontWeight.Bold),
