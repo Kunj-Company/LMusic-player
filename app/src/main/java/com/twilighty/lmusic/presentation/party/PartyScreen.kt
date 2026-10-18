@@ -88,6 +88,7 @@ fun PartyScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    val batteryTip = com.twilighty.lmusic.presentation.yuyu.rememberBatteryTipState()
     Box(
         Modifier
             .fillMaxSize()
@@ -116,6 +117,11 @@ fun PartyScreen(
                         )
                     }
                 )
+            }
+            if (batteryTip.visible) {
+                item(key = "battery_tip") {
+                    com.twilighty.lmusic.presentation.yuyu.BatteryOptimizationTip(batteryTip, Modifier.padding(horizontal = 16.dp))
+                }
             }
             state.lastSummary?.let { summary ->
                 item(key = "summary") {
