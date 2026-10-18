@@ -98,6 +98,7 @@ fun ReorderPresetsSheet(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                         onReset()
                         showResetDialog = false
                         onDismiss()

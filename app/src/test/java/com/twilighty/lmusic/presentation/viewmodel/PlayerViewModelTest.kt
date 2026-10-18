@@ -121,6 +121,9 @@ class PlayerViewModelTest {
         MockKAnnotations.init(this)
 
         mockkStatic(ContextCompat::class)
+        // android.net.Uri is a stub on the JVM (parse returns null); return a mock instead.
+        mockkStatic(android.net.Uri::class)
+        every { android.net.Uri.parse(any()) } returns mockk(relaxed = true)
         val directExecutor = java.util.concurrent.Executor { it.run() }
         every { ContextCompat.getMainExecutor(any()) } returns directExecutor
         every { mockTelegramCacheManager.embeddedArtUpdated } returns kotlinx.coroutines.flow.MutableSharedFlow()
@@ -196,6 +199,12 @@ class PlayerViewModelTest {
         
         // Mock MusicRepository Basic Returns
         every { mockMusicRepository.getPaginatedSongs(any(), any()) } returns flowOf(androidx.paging.PagingData.empty())
+        every { mockMusicRepository.getDistinctAlbumArtSongs() } returns flowOf(emptyList())
+        every { mockMusicRepository.getHomeMixPreviewSongs(any()) } returns flowOf(emptyList())
+        every { mockMusicRepository.getSongCountFlow() } returns flowOf(0)
+        every { mockMusicRepository.getAllUniqueAlbumArtUris() } returns flowOf(emptyList())
+        every { mockMusicRepository.getFavoriteSongIdsFlow() } returns flowOf(emptySet())
+        every { mockMusicRepository.getGenres() } returns flowOf(emptyList())
         every { mockMusicRepository.getAudioFiles() } returns flowOf(emptyList())
         coEvery { mockMusicRepository.getFavoriteSongIdsOnce() } returns emptySet()
         every { mockMusicRepository.getFavoriteSongIdsFlow() } returns flowOf(emptySet())
@@ -545,6 +554,8 @@ class PlayerViewModelTest {
         fun `triggerShuffleAllFromTile uses startAtZero when library is already loaded`() = runTest {
             val songs = listOf(song1, song2, song3)
             _allSongsFlow.value = songs.toImmutableList()
+            // The tile samples songs from the repository rather than the in-memory list.
+            coEvery { mockMusicRepository.getRandomSongs(any()) } returns songs
             stubShuffledPlayback(songs, "All Songs (Shuffled)", startSong = song1)
 
             playerViewModel.triggerShuffleAllFromTile()

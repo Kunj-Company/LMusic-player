@@ -89,6 +89,7 @@ internal fun PlayerArtistPickerBottomSheet(
         else -> stringResource(R.string.artist_picker_count_multiple, shortcutItems.size)
     }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

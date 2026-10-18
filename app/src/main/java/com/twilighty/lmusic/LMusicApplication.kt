@@ -80,6 +80,9 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
     @Inject
     lateinit var smartShuffleController: dagger.Lazy<com.twilighty.lmusic.data.playback.SmartShuffleController>
 
+    @Inject
+    lateinit var smartPreferences: dagger.Lazy<com.twilighty.lmusic.data.smart.SmartPreferences>
+
     private val startupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
@@ -94,6 +97,10 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(AppLocaleManager.wrapContext(base))
+        // Crash capture as early as possible (before super.onCreate / Hilt), so early crashes are
+        // recorded too. Writes filesDir/crash/last_crash.txt, then the default handler runs.
+        // Benchmark runs intentionally kill/restart the process: don't record those as crashes.
+        if (BuildConfig.BUILD_TYPE != "benchmark") runCatching { CrashHandler.install(this) }
     }
 
     override fun onCreate() {
@@ -101,8 +108,17 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
 
         // Benchmark variant intentionally restarts/kills app process during tests.
         // Avoid persisting those events as user-facing crash reports.
-        if (BuildConfig.BUILD_TYPE != "benchmark") {
-            CrashHandler.install(this)
+        val isBenchmarkBuild = BuildConfig.BUILD_TYPE == "benchmark"
+        // Safe mode after two early crashes in a row (counted by CrashHandler; see data/crash/SafeMode.kt).
+        val safeMode = !isBenchmarkBuild &&
+            runCatching { com.twilighty.lmusic.data.crash.SafeMode.onAppStart(this) }.getOrDefault(false)
+        if (!isBenchmarkBuild) {
+            // A process that lives this long (e.g. started only for playback) resets the early-crash count.
+            runCatching {
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                    { com.twilighty.lmusic.data.crash.SafeMode.markStable(this) }, 60_000L
+                )
+            }
         }
 
         if (BuildConfig.DEBUG) {
@@ -111,6 +127,9 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
             // Release tree: only WARN/ERROR/WTF - no DEBUG/VERBOSE/INFO
             Timber.plant(ReleaseTree())
         }
+        // Last ~200 INFO+ log lines, attached to crash reports.
+        runCatching { Timber.plant(com.twilighty.lmusic.data.crash.RecentLogBuffer) }
+        if (safeMode) runCatching { applySafeMode() }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -140,13 +159,22 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
 
         // Resolve these on the main thread: their dependency graphs create objects that
         // register lifecycle observers, which Android only allows on the main thread.
-        val foldersRepository = musicFoldersRepository.get()
-        startupScope.launch {
-            // One-time move from "excluded folders" to the "music folders" include list.
-            runCatching { foldersRepository.migrateIfNeeded() }
-                .onFailure { Timber.w(it, "Music folders migration failed") }
+        if (!safeMode) {
+            val foldersRepository = musicFoldersRepository.get()
+            startupScope.launch {
+                // One-time move from "excluded folders" to the "music folders" include list.
+                runCatching { foldersRepository.migrateIfNeeded() }
+                    .onFailure { Timber.w(it, "Music folders migration failed") }
+            }
+            startOptionalFeatures()
+        } else {
+            // "Turn features back on" in the safe mode banner restarts these without a relaunch.
+            com.twilighty.lmusic.data.crash.SafeMode.addExitListener { runCatching { startOptionalFeatures() } }
         }
+    }
 
+    /** Features that stay off in safe mode. Main thread only (resolves Lazy deps). */
+    private fun startOptionalFeatures() {
         // Smart shuffle setting -> shuffle order used by every shuffle path (QueueUtils).
         smartShuffleController.get().start(startupScope)
 
@@ -157,6 +185,32 @@ class LMusicApplication : Application(), ImageLoaderFactory, Configuration.Provi
                 // Weekly update check (KEEP keeps the existing schedule); cancelled when switched off.
                 val enabled = runCatching { prefs.checksEnabled.first() }.getOrDefault(true)
                 runCatching { scheduler.apply(enabled) }
+            }
+        }
+    }
+
+    /**
+     * Runs when safe mode is active this launch: smart shuffle stays plain, update checks are not
+     * scheduled this session, the music folders migration waits, and Smart indexing is kept off for
+     * this session (SmartIndexScheduler / SmartIndexWorker check SafeMode). The saved Smart setting
+     * is left unchanged, so indexing resumes after "Turn features back on".
+     */
+    private fun applySafeMode() {
+        com.twilighty.lmusic.utils.SmartShuffleRuntime.enabled = false
+        if (com.twilighty.lmusic.data.crash.SafeMode.enteredThisLaunch) {
+            Timber.w("Safe mode entered after repeated early crashes")
+        }
+        val smartPreferences = smartPreferences.get() // resolved on the main thread (trivial constructor)
+        startupScope.launch {
+            runCatching { com.twilighty.lmusic.data.smart.SmartIndexScheduler.cancel(this@LMusicApplication) }
+        }
+        com.twilighty.lmusic.data.crash.SafeMode.addExitListener {
+            startupScope.launch {
+                runCatching {
+                    if (smartPreferences.isEnabled()) {
+                        com.twilighty.lmusic.data.smart.SmartIndexScheduler.schedule(this@LMusicApplication)
+                    }
+                }
             }
         }
     }

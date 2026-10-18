@@ -66,7 +66,9 @@ fun SavePresetDialog(
                 onClick = {
                     if (name.isBlank()) {
                         isError = true
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
                     } else {
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                         onSave(name)
                         onDismiss()
                     }
@@ -125,7 +127,9 @@ fun RenamePresetDialog(
                 onClick = {
                     if (name.isBlank()) {
                         isError = true
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().error()
                     } else {
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                         onRename(name.trim())
                         onDismiss()
                     }

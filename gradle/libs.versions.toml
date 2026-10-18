@@ -191,6 +191,11 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 ktor-server-core = { group = "io.ktor", name = "ktor-server-core-jvm", version.ref = "ktor" }
 ktor-server-netty = { group = "io.ktor", name = "ktor-server-netty-jvm", version.ref = "ktor" }
 ktor-server-cio = { group = "io.ktor", name = "ktor-server-cio-jvm", version.ref = "ktor" }
+zxing-core = { module = "com.google.zxing:core", version = "3.5.3" }
+mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version = "17.3.0" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version = "1.4.2" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version = "1.4.2" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version = "1.4.2" }
 material = { module = "com.google.android.material:material", version.ref = "material" }
 material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 protobuf-javalite = { module = "com.google.protobuf:protobuf-javalite", version.ref = "protobufJavalite" }

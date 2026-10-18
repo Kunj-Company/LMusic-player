@@ -1,12 +1,14 @@
 name: Launch test (emulator)
 
 # Builds the app, installs it on an Android emulator, launches it and saves logcat.
-# Catches crashes on startup. Runs on every push to main (next to the release build) and diag/** branches
-# and can be started by hand.
+# Walks the main screens with a smoke test (.github/scripts/smoke.py) and fails on any crash.
+# Runs on pushes to main, feature/** and diag/** branches, on pull requests, and by hand.
 
 on:
   push:
-    branches: [ main, 'diag/**' ]
+    branches: [ main, 'diag/**', 'feature/**' ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -35,7 +37,7 @@ jobs:
           } > keystore.properties
 
       - name: Build release APK (universal, includes x86_64 for the emulator)
-        run: ./gradlew :app:assembleRelease --stacktrace -Pkotlin.daemon.jvmargs=-Xmx4g
+        run: ./gradlew :app:assembleRelease --stacktrace -Plmusic.smokeTest=true -Pkotlin.daemon.jvmargs=-Xmx4g
 
       - name: Free disk space for the emulator
         run: |
@@ -44,6 +46,9 @@ jobs:
           rm -rf app/build ~/.gradle/caches
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/share/swift /opt/hostedtoolcache/CodeQL
           df -h /
+
+      - name: Install ffmpeg (test songs)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
 
       - name: Enable KVM
         run: |

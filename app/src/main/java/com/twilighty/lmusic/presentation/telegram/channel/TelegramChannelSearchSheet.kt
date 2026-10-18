@@ -91,6 +91,7 @@ fun TelegramChannelSearchSheet(
         smoothnessAsPercentBR = 60, smoothnessAsPercentBL = 60
     )
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         // can be used for resetting sheet on dismiss/every open to start as fresh. Theo you can use this if you want it to reset.

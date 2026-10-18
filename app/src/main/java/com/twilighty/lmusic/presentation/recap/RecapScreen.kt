@@ -169,6 +169,10 @@ private fun pagesFor(data: RecapData): List<RecapPage> = buildList {
 private fun RecapPager(data: RecapData, onClose: () -> Unit) {
     val pages = pagesFor(data)
     val pagerState = rememberPagerState { pages.size }
+    com.twilighty.lmusic.presentation.haptics.HapticPagerEffect(
+        pagerState = pagerState,
+        onSettledPage = { page, haptics -> if (page == pages.lastIndex) haptics.celebration() }
+    )
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareTitle = stringResource(R.string.recap_share_chooser)

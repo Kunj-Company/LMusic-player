@@ -143,6 +143,8 @@ class MusicService : MediaLibraryService() {
     @Inject
     lateinit var listeningStatsTracker: ListeningStatsTracker
     @Inject
+    lateinit var gestureController: com.twilighty.lmusic.data.gestures.GestureController
+    @Inject
     @AppScope
     lateinit var appScope: CoroutineScope
 
@@ -406,6 +408,15 @@ class MusicService : MediaLibraryService() {
         controller.initialize()
         initializeCastWearSync()
         registerHeadsetReconnectMonitor()
+        // Shake to shuffle / face-down to pause. Sensors only run while enabled + playing + screen on.
+        runCatching {
+            gestureController.attach(object : com.twilighty.lmusic.data.gestures.GestureController.Host {
+                override fun currentPlayer(): Player = mediaSession?.player ?: engine.masterPlayer
+                override fun setShuffleEnabled(enabled: Boolean) {
+                    mediaSession?.let { updateManualShuffleState(it, enabled = enabled, broadcast = true) }
+                }
+            })
+        }.onFailure { Timber.tag(TAG).w(it, "Gesture controller attach failed") }
 
         serviceScope.launch {
             musicRepository.telegramRepository.downloadCompleted.collect {
@@ -1154,6 +1165,7 @@ class MusicService : MediaLibraryService() {
             val player = mediaSession?.player ?: engine.masterPlayer
             Timber.tag(TAG).d("onIsPlayingChanged: $isPlaying. Duration: ${player.duration}, Seekable: ${player.isCurrentMediaItemSeekable}")
             syncLocalListeningStatsFromPlayer(player)
+            runCatching { gestureController.onIsPlayingChanged(isPlaying) }
             
             if (isPlaying) {
                 reportNavidromePlayback("playing")
@@ -1642,6 +1654,7 @@ class MusicService : MediaLibraryService() {
         debouncedWidgetUpdateJob?.cancel()
         stopCastWearSync()
         unregisterHeadsetReconnectMonitor()
+        runCatching { gestureController.detach() }
         wearStatePublisher.clearState()
         replayGainJob?.cancel()
 

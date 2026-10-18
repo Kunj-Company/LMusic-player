@@ -689,6 +689,7 @@ fun LyricsSheet(
                                 accentColor = lyricHighlightColor,
                                 textStyle = scaledTextStyle,
                                 onLineClick = { syncedLine -> 
+                                    com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                                     onSeekTo(
                                         resolveSeekPositionMs(
                                             lineTimeMs = syncedLine.time.toLong(),

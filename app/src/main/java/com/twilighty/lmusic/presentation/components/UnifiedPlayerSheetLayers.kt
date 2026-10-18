@@ -58,6 +58,9 @@ internal fun BoxScope.UnifiedPlayerMiniAndFullLayers(
     carouselStyle: String,
     fullPlayerLoadingTweaks: FullPlayerLoadingTweaks,
     isSheetDragGestureActive: Boolean = false,
+    /** Horizontal skip-swipe offset for the mini player content (draw phase). */
+    miniContentOffsetXProvider: () -> Float = { 0f },
+    miniContentWidthPx: Float = 1f,
     playerViewModel: PlayerViewModel,
     currentPositionProvider: () -> Long,
     isFavorite: Boolean,
@@ -85,8 +88,12 @@ internal fun BoxScope.UnifiedPlayerMiniAndFullLayers(
                         .graphicsLayer {
                             // Compute miniAlpha in the draw phase from the Animatable,
                             // avoiding per-frame recomposition during gestures.
-                            alpha = (1f - playerContentExpansionFraction.value * 2f)
+                            val offsetX = miniContentOffsetXProvider()
+                            val swipeFraction = (kotlin.math.abs(offsetX) / miniContentWidthPx.coerceAtLeast(1f))
                                 .coerceIn(0f, 1f)
+                            translationX = offsetX
+                            alpha = (1f - playerContentExpansionFraction.value * 2f)
+                                .coerceIn(0f, 1f) * (1f - swipeFraction * 0.9f)
                         }
                         .zIndex(miniPlayerZIndex)
                 ) {

@@ -29,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.twilighty.lmusic.presentation.viewmodel.PlayerViewModel
 import androidx.lifecycle.compose.currentStateAsState
 import com.twilighty.lmusic.presentation.navigation.isMainRootRoute
+import com.twilighty.lmusic.presentation.navigation.mainPageSwipe
 
 
 @OptIn(UnstableApi::class)
@@ -83,6 +84,8 @@ fun ScreenWrapper(
         entry.destination.route?.let { route -> !isMainRootRoute(route) } == true
     }
     val shouldRunDepthEffects = !isMainRootScreen || hasVisibleNonMainRootScreen
+    val swipeBetweenPagesSetting = com.twilighty.lmusic.presentation.navigation.rememberSwipeBetweenPagesEnabled()
+    val swipeBetweenPages = isMainRootScreen && swipeBetweenPagesSetting
 
     // Dim Logic:
     // If I am BACKGROUND (myIndex < topIndex) -> Dim.
@@ -139,6 +142,11 @@ fun ScreenWrapper(
                 }
             }
             .background(MaterialTheme.colorScheme.background)
+            .mainPageSwipe(
+                enabled = swipeBetweenPages,
+                route = myRoute,
+                navController = navController
+            )
     ) {
         content()
 

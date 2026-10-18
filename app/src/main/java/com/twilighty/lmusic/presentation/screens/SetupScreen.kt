@@ -207,6 +207,7 @@ fun SetupScreen(
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
+    com.twilighty.lmusic.presentation.haptics.HapticPagerEffect(pagerState, userDragOnly = true)
     val scope = rememberCoroutineScope()
     val currentPage = pages[pagerState.currentPage]
     val musicFoldersViewModel: com.twilighty.lmusic.presentation.folders.MusicFoldersViewModel = hiltViewModel()

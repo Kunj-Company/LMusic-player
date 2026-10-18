@@ -66,6 +66,11 @@ android {
         versionName = (project.findProperty("APP_VERSION_NAME") as? String) ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Emulator smoke test only (-Plmusic.smokeTest=true): lets a release build honour the
+        // is_benchmark / smoke_route launch extras. Never set for published releases.
+        val smokeTest = (project.findProperty("lmusic.smokeTest") as? String)?.toBoolean() ?: false
+        buildConfigField("boolean", "SMOKE_TEST", smokeTest.toString())
     }
 
     signingConfigs {
@@ -253,6 +258,13 @@ dependencies {
     implementation(libs.kotlinx.collections.immutable)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
+    // Party queue: local QR encoding for the join link
+    implementation(libs.zxing.core)
+    // Taste match: offline QR scanning (bundled ML Kit model) + CameraX preview
+    implementation(libs.mlkit.barcode.scanning)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     // Smart features (on-device YAMNet audio tagging)
     implementation(libs.tensorflow.lite)

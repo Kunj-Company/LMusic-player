@@ -92,8 +92,9 @@ fun RowScope.CustomNavigationBarItem(
 
     // Determinar si mostrar la etiqueta
     val showLabel = label != null && (alwaysShowLabel || selected)
-    val indicatorWidth = 64.dp
-    val indicatorHeight = 32.dp
+    // Compact pill so icon + label fit the 64dp bar.
+    val indicatorWidth = if (showLabel) 56.dp else 64.dp
+    val indicatorHeight = if (showLabel) 28.dp else 32.dp
     val iconWidth = 48.dp
     val iconHeight = 24.dp
     val indicatorPadding = 4.dp
@@ -187,14 +188,14 @@ fun RowScope.CustomNavigationBarItem(
             enter = fadeIn(animationSpec = tween(200, delayMillis = 50)),
             exit = fadeOut(animationSpec = tween(100))
         ) {
-            Spacer(modifier = Modifier.height(4.dp))
             Box(
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 2.dp)
             ) {
                 ProvideTextStyle(
                     value = MaterialTheme.typography.labelMedium.copy(
                         color = textColor,
-                        fontSize = 13.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
                         fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
                     )
                 ) {

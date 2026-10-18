@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Shuffle
@@ -62,6 +64,8 @@ fun YuyuHomeHeader(
     onWhatsNewClick: () -> Unit,
     onSourcesClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onPartyClick: (() -> Unit)? = null,
+    onLofiClick: (() -> Unit)? = null,
 ) {
     val greeting = remember { greetingForNow() }
     YuyuTopBar(
@@ -79,6 +83,20 @@ fun YuyuHomeHeader(
                 contentDescription = "Music sources",
                 onClick = onSourcesClick
             )
+            if (onLofiClick != null) {
+                YuyuIconButton(
+                    imageVector = androidx.compose.material.icons.Icons.Rounded.Headphones,
+                    contentDescription = "Lofi",
+                    onClick = onLofiClick
+                )
+            }
+            if (onPartyClick != null) {
+                YuyuIconButton(
+                    imageVector = androidx.compose.material.icons.Icons.Rounded.Celebration,
+                    contentDescription = "Party queue",
+                    onClick = onPartyClick
+                )
+            }
             YuyuIconButton(
                 painter = painterResource(R.drawable.rounded_settings_24),
                 contentDescription = "Settings",

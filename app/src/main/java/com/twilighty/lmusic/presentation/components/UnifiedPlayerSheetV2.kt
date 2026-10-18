@@ -64,12 +64,12 @@ import com.twilighty.lmusic.presentation.components.scoped.PlayerArtistNavigatio
 import com.twilighty.lmusic.presentation.components.scoped.PlayerSheetPredictiveBackHandler
 import com.twilighty.lmusic.presentation.components.scoped.QueueSheetRuntimeEffects
 import com.twilighty.lmusic.presentation.components.scoped.SheetMotionController
-import com.twilighty.lmusic.presentation.components.scoped.miniPlayerDismissHorizontalGesture
+import com.twilighty.lmusic.presentation.components.scoped.miniPlayerSwipeGestures
 import com.twilighty.lmusic.presentation.components.scoped.playerSheetVerticalDragGesture
 import com.twilighty.lmusic.presentation.components.scoped.rememberFullPlayerCompositionPolicy
 import com.twilighty.lmusic.presentation.components.scoped.rememberCastSheetState
 import com.twilighty.lmusic.presentation.components.scoped.rememberFullPlayerVisualState
-import com.twilighty.lmusic.presentation.components.scoped.rememberMiniPlayerDismissGestureHandler
+import com.twilighty.lmusic.presentation.components.scoped.rememberMiniPlayerSwipeGestureHandler
 import com.twilighty.lmusic.presentation.components.scoped.rememberPrewarmFullPlayer
 import com.twilighty.lmusic.presentation.components.scoped.rememberQueueSheetState
 import com.twilighty.lmusic.presentation.components.scoped.rememberSheetActionHandlers
@@ -217,15 +217,20 @@ fun UnifiedPlayerSheetV2(
     val configuration = LocalConfiguration.current
     val scope = rememberCoroutineScope()
 
+    // Mini player swipes: X = skip (content offset), Y = swipe-down dismiss (card offset).
     val offsetAnimatable = remember { Animatable(0f) }
+    val miniDismissOffsetY = remember { Animatable(0f) }
     val screenWidthPx = remember(configuration, density) {
         with(density) { configuration.screenWidthDp.dp.toPx() }
     }
-    val dismissThresholdPx = remember(screenWidthPx) { screenWidthPx * 0.4f }
+    val dismissThresholdPx = remember(density) {
+        with(density) { MiniPlayerHeight.toPx() } *
+            com.twilighty.lmusic.presentation.components.scoped.MiniPlayerSwipeGestureHandler.DISMISS_THRESHOLD_FRACTION
+    }
     val swipeDismissProgress by remember(dismissThresholdPx) {
         derivedStateOf {
             if (dismissThresholdPx == 0f) 0f
-            else (abs(offsetAnimatable.value) / dismissThresholdPx).coerceIn(0f, 1f)
+            else (abs(miniDismissOffsetY.value) / dismissThresholdPx).coerceIn(0f, 1f)
         }
     }
 
@@ -430,14 +435,18 @@ fun UnifiedPlayerSheetV2(
         sheetCollapsedTargetY = sheetCollapsedTargetY
     )
 
-    val hapticFeedback = LocalHapticFeedback.current
-    val miniDismissGestureHandler = rememberMiniPlayerDismissGestureHandler(
+    val miniSwipeGestureHandler = rememberMiniPlayerSwipeGestureHandler(
         scope = scope,
         density = density,
-        hapticFeedback = hapticFeedback,
-        offsetAnimatable = offsetAnimatable,
-        screenWidthPx = screenWidthPx,
-        onDismissPlaylistAndShowUndo = { playerViewModel.dismissPlaylistAndShowUndo() }
+        haptics = com.twilighty.lmusic.presentation.haptics.LocalLMusicHaptics.current,
+        offsetX = offsetAnimatable,
+        offsetY = miniDismissOffsetY,
+        widthPx = screenWidthPx,
+        miniHeightPx = miniPlayerContentHeightPx,
+        currentSongId = infrequentPlayerState.currentSong?.id,
+        onNext = { playerViewModel.nextSong() },
+        onPrevious = { playerViewModel.previousSong() },
+        onDismiss = { playerViewModel.dismissPlaylistAndShowUndo() }
     )
 
     QueueSheetRuntimeEffects(
@@ -616,15 +625,23 @@ fun UnifiedPlayerSheetV2(
                                     placeable.placeRelative(startPaddingPx, 0)
                                 }
                             }
-                            .miniPlayerDismissHorizontalGesture(
-                                enabled = currentSheetContentState == PlayerSheetState.COLLAPSED,
-                                handler = miniDismissGestureHandler
+                            .miniPlayerSwipeGestures(
+                                enabled = currentSheetContentState == PlayerSheetState.COLLAPSED &&
+                                    sheetInteractionState.canDragSheet,
+                                handler = miniSwipeGestureHandler,
+                                verticalHandler = sheetInteractionState.sheetVerticalDragGestureHandler,
+                                canDismissProvider = {
+                                    !playerContentExpansionFraction.isRunning &&
+                                        playerContentExpansionFraction.value < 0.05f
+                                }
                             )
                             .graphicsLayer {
-                                translationX = offsetAnimatable.value
+                                val dismissFraction = if (dismissThresholdPx == 0f) 0f else
+                                    (miniDismissOffsetY.value / (dismissThresholdPx * 2.5f)).coerceIn(0f, 1f)
+                                translationY = miniDismissOffsetY.value
                                 scaleX = miniAppearScale
                                 scaleY = visualOvershootScaleY.value * miniAppearScale
-                                alpha = miniReadyAlpha
+                                alpha = miniReadyAlpha * (1f - dismissFraction)
                                 transformOrigin = TransformOrigin(0.5f, 1f)
                             }
                             .then(
@@ -647,7 +664,9 @@ fun UnifiedPlayerSheetV2(
                                 contentDescription = playerSheetSemanticsDescription
                             }
                             .playerSheetVerticalDragGesture(
-                                enabled = sheetInteractionState.canDragSheet,
+                                // Collapsed: miniPlayerSwipeGestures forwards swipe-up to the same handler.
+                                enabled = sheetInteractionState.canDragSheet &&
+                                    currentSheetContentState != PlayerSheetState.COLLAPSED,
                                 handler = sheetInteractionState.sheetVerticalDragGestureHandler
                             )
                             .clickable(
@@ -675,6 +694,8 @@ fun UnifiedPlayerSheetV2(
                             carouselStyle = carouselStyle,
                             fullPlayerLoadingTweaks = fullPlayerLoadingTweaks,
                             isSheetDragGestureActive = sheetBackAndDragState.isDraggingPlayerArea,
+                            miniContentOffsetXProvider = { offsetAnimatable.value },
+                            miniContentWidthPx = screenWidthPx,
                             playerViewModel = playerViewModel,
                             currentPositionProvider = positionToDisplayProvider,
                             isFavorite = isFavorite,

@@ -52,6 +52,7 @@ fun GenreSortBottomSheet(
         skipPartiallyExpanded = true
     )
     
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -154,7 +155,7 @@ fun SortOptionCard(
     val contentColor = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
 
     Surface(
-        onClick = onClick,
+        onClick = { if (!isSelected) com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection(); onClick() },
         color = containerColor,
         shape = AbsoluteSmoothCornerShape(16.dp, 60),
         modifier = Modifier.fillMaxWidth().height(64.dp)

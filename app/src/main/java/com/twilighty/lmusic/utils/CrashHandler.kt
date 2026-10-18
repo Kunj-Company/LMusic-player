@@ -1,15 +1,14 @@
 package com.twilighty.lmusic.utils
 
 import android.content.Context
-import android.content.SharedPreferences
-import java.io.PrintWriter
-import java.io.StringWriter
+import com.twilighty.lmusic.data.crash.CrashReportStore
+import com.twilighty.lmusic.data.crash.SafeMode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Data class representing a saved crash log entry.
+ * Data class representing a saved crash log entry (kept for the older [com.twilighty.lmusic.presentation.components.CrashReportDialog]).
  */
 data class CrashLogData(
     val timestamp: Long,
@@ -33,103 +32,71 @@ data class CrashLogData(
 }
 
 /**
- * Custom UncaughtExceptionHandler that saves crash information to SharedPreferences
- * so it can be displayed to the user when the app restarts.
+ * Default uncaught exception handler. Writes the crash synchronously to
+ * `filesDir/crash/last_crash.txt` (see [CrashReportStore.writeCrash]) and then hands the crash to
+ * the previous default handler, so the normal crash behaviour is unchanged.
+ * Installed in Application.attachBaseContext (before Hilt), so it needs no injection.
  */
 object CrashHandler : Thread.UncaughtExceptionHandler {
 
-    private const val PREFS_NAME = "crash_handler_prefs"
-    private const val KEY_HAS_CRASH = "has_crash"
-    private const val KEY_TIMESTAMP = "crash_timestamp"
-    private const val KEY_EXCEPTION_MESSAGE = "crash_exception_message"
-    private const val KEY_STACK_TRACE = "crash_stack_trace"
+    private const val LEGACY_PREFS_NAME = "crash_handler_prefs"
 
     private lateinit var appContext: Context
     private var defaultHandler: Thread.UncaughtExceptionHandler? = null
 
-    private val prefs: SharedPreferences
-        get() = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    @Volatile
+    private var handling = false
 
     /**
      * Installs this crash handler as the default uncaught exception handler.
      * Should be called in Application.onCreate().
      */
     fun install(context: Context) {
-        appContext = context.applicationContext
-        defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        // From Application.attachBaseContext the application context isn't set yet: use the app itself.
+        appContext = context.applicationContext ?: context
+        val current = Thread.getDefaultUncaughtExceptionHandler()
+        if (current === this) return
+        defaultHandler = current
         Thread.setDefaultUncaughtExceptionHandler(this)
     }
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
-        try {
-            saveCrashLog(throwable)
-        } catch (e: Exception) {
-            // Ignore any errors during crash saving
+        // Guard against a second crash while writing the first one.
+        if (!handling) {
+            handling = true
+            try {
+                if (::appContext.isInitialized) CrashReportStore.writeCrash(appContext, thread, throwable)
+            } catch (_: Throwable) {
+                // Never let saving the report get in the way of the crash itself.
+            }
+            // Counts towards safe mode only when the crash happened soon after process start.
+            if (::appContext.isInitialized) SafeMode.recordCrash(appContext)
         }
-
-        // Call the default handler to allow normal crash behavior
         defaultHandler?.uncaughtException(thread, throwable)
     }
 
-    private fun saveCrashLog(throwable: Throwable) {
-        val timestamp = System.currentTimeMillis()
-        val stackTrace = getStackTraceString(throwable)
-        val exceptionMessage = throwable.message ?: throwable.javaClass.simpleName
-
-        // Use commit() instead of apply() to ensure data is written synchronously
-        // before the process terminates
-        prefs.edit().apply {
-            putBoolean(KEY_HAS_CRASH, true)
-            putLong(KEY_TIMESTAMP, timestamp)
-            putString(KEY_EXCEPTION_MESSAGE, exceptionMessage)
-            putString(KEY_STACK_TRACE, stackTrace)
-            commit() // Synchronous write - ensures data is saved before process dies
-        }
-    }
-
-    private fun getStackTraceString(throwable: Throwable): String {
-        val sw = StringWriter()
-        val pw = PrintWriter(sw)
-        throwable.printStackTrace(pw)
-        return sw.toString()
-    }
-
-    /**
-     * Checks if there is a saved crash log from a previous session.
-     */
+    /** True when a crash report exists on disk. Disk check — prefer CrashReportStore off the main thread. */
     fun hasCrashLog(): Boolean {
         if (!::appContext.isInitialized) return false
-        return prefs.getBoolean(KEY_HAS_CRASH, false)
+        return CrashReportStore.exists(appContext)
     }
 
-    /**
-     * Retrieves the saved crash log data.
-     * Returns null if no crash log exists.
-     */
+    /** The saved crash in the older shape, or null. */
     fun getCrashLog(): CrashLogData? {
-        if (!hasCrashLog()) return null
-
-        val timestamp = prefs.getLong(KEY_TIMESTAMP, 0)
-        val exceptionMessage = prefs.getString(KEY_EXCEPTION_MESSAGE, "Unknown error") ?: "Unknown error"
-        val stackTrace = prefs.getString(KEY_STACK_TRACE, "") ?: ""
-
-        val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
-        val formattedDate = dateFormat.format(Date(timestamp))
-
+        if (!::appContext.isInitialized) return null
+        val report = CrashReportStore.read(appContext) ?: return null
         return CrashLogData(
-            timestamp = timestamp,
-            formattedDate = formattedDate,
-            exceptionMessage = exceptionMessage,
-            stackTrace = stackTrace
+            timestamp = report.timestamp,
+            formattedDate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date(report.timestamp)),
+            exceptionMessage = report.message.ifBlank { report.exceptionType },
+            stackTrace = report.stackTrace
         )
     }
 
-    /**
-     * Clears the saved crash log.
-     * Should be called after the user has acknowledged the crash report.
-     */
+    /** Clears the saved crash log (and the pre-1.3 SharedPreferences copy). */
     fun clearCrashLog() {
         if (!::appContext.isInitialized) return
-        prefs.edit().clear().apply()
+        CrashReportStore.clear(appContext)
+        runCatching { appContext.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply() }
     }
 }

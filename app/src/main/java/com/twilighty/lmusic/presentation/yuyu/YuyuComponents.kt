@@ -429,7 +429,7 @@ fun YuyuCard(
             .clip(YuyuShapes.lg)
             .background(background)
             .border(1.dp, borderColor, YuyuShapes.lg)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().tap(); onClick() }) else Modifier)
             .padding(contentPadding),
         content = content
     )
@@ -447,7 +447,7 @@ fun YuyuTile(
         modifier = modifier
             .clip(YuyuShapes.xl)
             .background(background)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().tap(); onClick() }) else Modifier)
             .padding(contentPadding),
         content = content
     )
@@ -518,7 +518,7 @@ fun YuyuSongRow(
             .fillMaxWidth()
             .heightIn(min = 64.dp)
             .clip(YuyuShapes.lg)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().tap(); onClick() }) else Modifier)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -545,7 +545,7 @@ fun YuyuSettingRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().tap(); onClick() }) else Modifier)
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)

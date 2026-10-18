@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -178,6 +179,11 @@ class MainActivity : ComponentActivity() {
     // For handling shortcut navigation - using StateFlow so composables can observe changes
     private val _pendingPlaylistNavigation = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     private val _pendingShuffleAll = kotlinx.coroutines.flow.MutableStateFlow(false)
+    // Benchmark / emulator smoke test only: route to open after launch (extra "smoke_route").
+    private val _pendingSmokeRoute = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    // Test-only intent extras (is_benchmark, smoke_route) are honoured only in benchmark / smoke-test builds.
+    private val testHooksAllowed: Boolean
+        get() = BuildConfig.BUILD_TYPE == "benchmark" || BuildConfig.SMOKE_TEST
 
     private val requestAllFilesAccessLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { _ ->
         // Handle the result in onResume
@@ -212,7 +218,7 @@ class MainActivity : ComponentActivity() {
         splashScreen.setKeepOnScreenCondition { false }
 
         // LEER SEÑAL DE BENCHMARK
-        val isBenchmarkMode = intent.getBooleanExtra("is_benchmark", false)
+        val isBenchmarkMode = testHooksAllowed && intent.getBooleanExtra("is_benchmark", false)
         val shouldBenchmarkRebuildDatabase =
             isBenchmarkMode && intent.getBooleanExtra("benchmark_rebuild_database", false)
         Log.i(
@@ -240,9 +246,6 @@ class MainActivity : ComponentActivity() {
             val appColorStyle by themePreferencesRepository.appColorStyleFlow.collectAsStateWithLifecycle(initialValue = com.twilighty.lmusic.data.preferences.AppColorStyle.YUYU)
             val isSetupComplete by mainViewModel.isSetupComplete.collectAsStateWithLifecycle()
             
-            // Crash report dialog state
-            var showCrashReportDialog by remember { mutableStateOf(false) }
-            var crashLogData by remember { mutableStateOf<CrashLogData?>(null) }
             
             // Permissions Logic
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -267,14 +270,6 @@ class MainActivity : ComponentActivity() {
                 if (showSetupScreen == false) {
                      LogUtils.i(this, "Setup complete/skipped and permissions valid. Starting sync.")
                      mainViewModel.startSync()
-                }
-            }
-
-            // Check for crash log when app starts
-            LaunchedEffect(Unit) {
-                if (!isBenchmarkMode && CrashHandler.hasCrashLog()) {
-                    crashLogData = CrashHandler.getCrashLog()
-                    showCrashReportDialog = true
                 }
             }
 
@@ -326,17 +321,17 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Show crash report dialog if needed
-                    if (showCrashReportDialog && crashLogData != null) {
-                        CrashReportDialog(
-                            crashLog = crashLogData!!,
-                            onDismiss = {
-                                CrashHandler.clearCrashLog()
-                                crashLogData = null
-                                showCrashReportDialog = false
-                            }
+                    // Safe mode banner (after repeated early crashes) — see data/crash/SafeMode.kt.
+                    androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                        com.twilighty.lmusic.presentation.crash.SafeModeBanner(
+                            Modifier
+                                .align(androidx.compose.ui.Alignment.TopCenter)
+                                .statusBarsPadding()
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
+                    // "Something went wrong last time" — shown once per saved crash (filesDir/crash/last_crash.txt).
+                    com.twilighty.lmusic.presentation.crash.CrashReportOnLaunch(enabled = !isBenchmarkMode)
                 }
             }
         }
@@ -350,6 +345,9 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        if (testHooksAllowed && intent.getBooleanExtra("is_benchmark", false)) {
+            intent.getStringExtra("smoke_route")?.let { _pendingSmokeRoute.value = it }
+        }
 
         when {
             // Handle shuffle all shortcut / tile
@@ -503,6 +501,18 @@ class MainActivity : ComponentActivity() {
         // isMediaControllerReady used below for playlist navigation gate
         val isMediaControllerReady by playerViewModel.isMediaControllerReady.collectAsStateWithLifecycle()
         
+        // Smoke test navigation (benchmark launches only).
+        val pendingSmokeRoute by _pendingSmokeRoute.collectAsStateWithLifecycle()
+        LaunchedEffect(pendingSmokeRoute) {
+            val route = pendingSmokeRoute ?: return@LaunchedEffect
+            repeat(50) {
+                val ok = runCatching { navController.navigateSafely(route) }.getOrDefault(false)
+                if (ok) { _pendingSmokeRoute.value = null; return@LaunchedEffect }
+                delay(100)
+            }
+            _pendingSmokeRoute.value = null
+        }
+
         // Observe pending playlist navigation
         val pendingPlaylistNav by _pendingPlaylistNavigation.collectAsStateWithLifecycle()
         var processedPlaylistId by remember { mutableStateOf<String?>(null) }
@@ -621,7 +631,11 @@ class MainActivity : ComponentActivity() {
                 Screen.EasterEgg.route,
                 Screen.WordDelimiterConfig.route,
                 Screen.LibraryHealth.route,
-                Screen.Recap.route
+                Screen.Lofi.route,
+                Screen.Focus.route,
+                Screen.Recap.route,
+                Screen.TasteMatch.route,
+                Screen.Garden.route
             )
         }
         val shouldHideNavigationBar by remember(currentRoute, isSearchBarActive) {
@@ -629,14 +643,11 @@ class MainActivity : ComponentActivity() {
                 if (currentRoute == Screen.Search.route && isSearchBarActive) {
                     true
                 } else {
+                    // The bottom bar belongs to the four main tabs only; every other screen
+                    // (settings, detail pages, Lofi, Party, Cover studio, …) hides it.
                     currentRoute?.let { route ->
-                        routesWithHiddenNavigationBar.any { hiddenRoute ->
-                            if (hiddenRoute.contains("{")) {
-                                route.startsWith(hiddenRoute.substringBefore("{"))
-                            } else {
-                                route == hiddenRoute
-                            }
-                        }
+                        !com.twilighty.lmusic.presentation.navigation.isMainRootRoute(route) ||
+                            routesWithHiddenNavigationBar.any { hiddenRoute -> route == hiddenRoute }
                     } ?: false
                 }
             }
@@ -653,7 +664,12 @@ class MainActivity : ComponentActivity() {
             AppHapticsConfig(enabled = hapticsEnabled)
         }
         val scopedHapticFeedback = remember(platformHapticFeedback, appHapticsConfig.enabled) {
-            if (appHapticsConfig.enabled) platformHapticFeedback else NoOpHapticFeedback
+            // Route Compose/Material haptics through the LMusic engine so they follow the haptics level.
+            if (appHapticsConfig.enabled) {
+                com.twilighty.lmusic.presentation.haptics.EngineHapticFeedback(lmusicHapticsEngine)
+            } else {
+                NoOpHapticFeedback
+            }
         }
 
         val systemNavBarInset = sanitizeNavigationBarBottomInset(
@@ -1078,8 +1094,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Resumed this long without crashing -> the launch counts as stable (resets the safe mode counter).
+    private val markStableRunnable = Runnable {
+        runCatching { com.twilighty.lmusic.data.crash.SafeMode.markStable(applicationContext) }
+    }
+    private val stabilityHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
     override fun onResume() {
         super.onResume()
+        stabilityHandler.removeCallbacks(markStableRunnable)
+        stabilityHandler.postDelayed(markStableRunnable, 10_000L)
+    }
+
+    override fun onPause() {
+        stabilityHandler.removeCallbacks(markStableRunnable)
+        super.onPause()
     }
 
 

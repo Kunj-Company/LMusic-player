@@ -131,6 +131,7 @@ fun MashupScreen(
             }
 
             if (mashupUiState.showSongPickerForDeck != null) {
+                com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
                 ModalBottomSheet(
                     onDismissRequest = { mashupViewModel.closeSongPicker() },
                     sheetState = sheetState

@@ -99,7 +99,6 @@ import com.twilighty.lmusic.presentation.yuyu.YuyuMixTile
 import com.twilighty.lmusic.presentation.yuyu.YuyuRecentlyPlayedRow
 import com.twilighty.lmusic.presentation.yuyu.YuyuWeekStats
 import com.twilighty.lmusic.presentation.yuyu.MadeForYouMix
-import com.twilighty.lmusic.presentation.yuyu.YuyuContinueListeningCard
 import com.twilighty.lmusic.presentation.yuyu.YuyuHomeViewModel
 import com.twilighty.lmusic.presentation.yuyu.YuyuMadeForYouRow
 import com.twilighty.lmusic.presentation.yuyu.YuyuSongCoverRow
@@ -253,12 +252,6 @@ fun HomeScreen(
             .distinctUntilChanged()
     }.collectAsStateWithLifecycle(initialValue = false)
 
-    val isPlaying by remember(playerViewModel.stablePlayerState) {
-        playerViewModel.stablePlayerState.map { it.isPlaying }.distinctUntilChanged()
-    }.collectAsStateWithLifecycle(initialValue = false)
-    val totalDuration by remember(playerViewModel.stablePlayerState) {
-        playerViewModel.stablePlayerState.map { it.totalDuration }.distinctUntilChanged()
-    }.collectAsStateWithLifecycle(initialValue = 0L)
 
     // Yuyu Home data: "Made for you" rule-based mixes, recently added, top artists.
     val showClassicSections by yuyuHomeViewModel.showClassicSections.collectAsStateWithLifecycle()
@@ -320,9 +313,9 @@ fun HomeScreen(
 
     // Drawer state for sidebar
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val shouldShowCleanInstallDisclaimer =
-        settingsUiState.beta05CleanInstallDisclaimerDismissed == false &&
-            !cleanInstallDisclaimerDismissedThisSession
+    // The old "Beta 0.5.0 clean install" notice was for the upstream app; LMusic never shows it.
+    @Suppress("UNUSED_VARIABLE") val unusedDisclaimerState = cleanInstallDisclaimerDismissedThisSession
+    val shouldShowCleanInstallDisclaimer = false
 
     Box(
         modifier = Modifier.fillMaxSize()
@@ -357,47 +350,6 @@ fun HomeScreen(
                     com.twilighty.lmusic.presentation.folders.FoldersMigratedNotice(
                         onReview = { navController.navigateSafely(Screen.SettingsCategory.createRoute("library")) }
                     )
-                }
-
-                // Continue listening — the current song, or the last one played.
-                val continueSong = currentSong?.takeIf { it != Song.emptySong() && it.id.isNotBlank() }
-                    ?: recentlyPlayedQueue.firstOrNull()
-                if (continueSong != null) {
-                    item(key = "continue_listening", contentType = "continue_listening") {
-                        val hasLiveSong = currentSong?.let { it != Song.emptySong() && it.id.isNotBlank() } == true
-                        val positionState = playerViewModel.currentPlaybackPosition.collectAsStateWithLifecycle()
-                        YuyuContinueListeningCard(
-                            song = continueSong,
-                            isPlaying = hasLiveSong && isPlaying,
-                            progress = {
-                                val total = if (hasLiveSong) totalDuration.takeIf { it > 0 } ?: continueSong.duration else 0L
-                                if (total > 0L && hasLiveSong) positionState.value.toFloat() / total else 0f
-                            },
-                            onPlayPause = {
-                                if (hasLiveSong) {
-                                    playerViewModel.playPause()
-                                } else {
-                                    playerViewModel.playSongs(
-                                        songsToPlay = recentlyPlayedQueue,
-                                        startSong = continueSong,
-                                        queueName = "Recently Played"
-                                    )
-                                }
-                            },
-                            onOpen = {
-                                if (hasLiveSong) {
-                                    playerViewModel.expandPlayerSheet()
-                                } else {
-                                    playerViewModel.playSongs(
-                                        songsToPlay = recentlyPlayedQueue,
-                                        startSong = continueSong,
-                                        queueName = "Recently Played"
-                                    )
-                                }
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
-                    }
                 }
 
                 if (yourMixSongs.isEmpty()) {
@@ -512,6 +464,16 @@ fun HomeScreen(
                     }
                 }
 
+                item(key = "spaces", contentType = "spaces") {
+                    com.twilighty.lmusic.presentation.yuyu.YuyuSpacesRow(
+                        onLofi = { navController.navigateSafely(Screen.Lofi.route) },
+                        onFocus = { navController.navigateSafely(Screen.Focus.route) },
+                        onGarden = { navController.navigateSafely(Screen.Garden.route) },
+                        onParty = { navController.navigateSafely(Screen.Party.route) },
+                        onTasteMatch = { navController.navigateSafely(Screen.TasteMatch.route) },
+                        onCovers = { navController.navigateSafely(Screen.CoverStudio.createRoute()) },
+                    )
+                }
                 if (madeForYouMixes.isNotEmpty() || smartMixes.isNotEmpty()) {
                     item(key = "made_for_you", contentType = "made_for_you") {
                         YuyuMadeForYouRow(

@@ -92,6 +92,7 @@ fun LyricsMoreBottomSheet(
     val navigationBarsPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var showResetDialog by remember { mutableStateOf(false) }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
@@ -188,6 +189,7 @@ fun LyricsMoreBottomSheet(
                             onClick = {
                                 showResetDialog = false
                                 onDismissRequest()
+                                com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                                 onResetImportedLyrics()
                             }
                         ) {

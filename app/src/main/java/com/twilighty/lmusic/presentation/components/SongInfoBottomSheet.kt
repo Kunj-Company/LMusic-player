@@ -311,6 +311,7 @@ fun SongInfoBottomSheet(
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = {
             if (!showEditSheet) {
@@ -416,15 +417,17 @@ fun SongInfoBottomSheet(
                 YuyuActionRow(
                     text = stringResource(R.string.action_queue_next),
                     icon = rememberVectorPainter(Icons.Rounded.SkipNext),
-                    onClick = onAddNextToQueue
+                    onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight(); onAddNextToQueue() }
                 )
                 YuyuActionRow(
                     text = stringResource(R.string.action_add_to_queue),
                     icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.QueueMusic),
-                    onClick = onAddToQueue
+                    onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight(); onAddToQueue() }
                 )
                 // Smart features: "Play similar" (song radio); renders only when on and analysed.
                 com.twilighty.lmusic.presentation.smart.SmartSongActions(song = song, onDismiss = onDismiss)
+                // Ambient rain / café / fire / waves over music (opens its own small sheet).
+                com.twilighty.lmusic.presentation.lofi.LofiSongActions()
                 YuyuActionRow(
                     text = "Add to playlist…",
                     icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.PlaylistAdd),
@@ -442,6 +445,8 @@ fun SongInfoBottomSheet(
                         )
                     }
                 )
+                // Cover studio: "Make a cover" (only for local songs without artwork).
+                com.twilighty.lmusic.presentation.covers.CoverSongActions(song = song)
                 YuyuActionRow(
                     text = "Go to album",
                     icon = rememberVectorPainter(Icons.Rounded.Album),

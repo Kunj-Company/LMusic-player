@@ -453,6 +453,7 @@ fun GenreValidatorContent(
                 TextButton(
                     onClick = {
                         if (newGenreName.isNotBlank()) {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                             onAddCustomGenre(newGenreName, selectedIcon)
                             onGenreSelected(newGenreName)
                             showCustomDialog = false

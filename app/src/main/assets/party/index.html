@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>LMusic party</title>
+<style>
+  :root {
+    --canvas: #ffffff; --subtle: #f7f7f8; --muted: #f0f0f2; --emphasis: #e6e6ea;
+    --border: #e4e4e7; --border-strong: #d4d4d8;
+    --text: #111113; --text-2: #3f3f46; --text-muted: #71717a;
+    --ink: #111113; --on-ink: #ffffff;
+    --accent: #C2410C; --on-accent: #ffffff; --accent-text: #C2410C; --accent-soft: #FFF1E8;
+    --danger: #b91c1c; --ok-soft: #DCFCE7; --ok-text: #166534;
+    --display: "Bricolage Grotesque", ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --canvas: #111113; --subtle: #18181b; --muted: #1f1f23; --emphasis: #27272a;
+      --border: #2a2a2e; --border-strong: #3f3f46;
+      --text: #f4f4f5; --text-2: #d4d4d8; --text-muted: #a1a1aa;
+      --ink: #f4f4f5; --on-ink: #111113;
+      --accent: #EA580C; --on-accent: #ffffff; --accent-text: #FB923C; --accent-soft: #2A1A10;
+      --danger: #f87171; --ok-soft: #13301F; --ok-text: #86EFAC;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--canvas); color: var(--text); }
+  body { font-family: var(--body); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased;
+         padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  button, input { font: inherit; color: inherit; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 16px 16px 96px; }
+  h1, h2, h3 { font-family: var(--display); font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+  h1 { font-size: 30px; line-height: 1.1; }
+  h2 { font-size: 22px; line-height: 1.2; }
+  .kicker { font-size: 13px; color: var(--text-muted); }
+  .overline { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+  .muted { color: var(--text-muted); }
+  .meta { font-size: 14px; color: var(--text-muted); }
+  .hidden { display: none !important; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 8px 0 16px; }
+  .top .grow { flex: 1; min-width: 0; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px;
+          border: 1px solid var(--border); background: var(--canvas); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 18px;
+         border-radius: 999px; border: 1px solid transparent; background: var(--ink); color: var(--on-ink);
+         font-weight: 600; cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+  .btn:active { transform: scale(.97); }
+  .btn.accent { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--canvas); color: var(--text); border-color: var(--border-strong); }
+  .btn.small { height: 36px; padding: 0 14px; font-size: 14px; }
+  .btn.large { height: 52px; padding: 0 24px; font-size: 17px; }
+  .btn.block { width: 100%; }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .btn.voted { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+  .card { border: 1px solid var(--border); border-radius: 16px; padding: 16px; background: var(--canvas); }
+  .tile { border-radius: 24px; padding: 20px; background: var(--accent-soft); }
+  .field { width: 100%; height: 52px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--subtle);
+           padding: 0 20px; font-size: 17px; outline: none; }
+  .field:focus { border-color: var(--accent); background: var(--canvas); }
+  .pin { letter-spacing: .3em; text-align: center; font-family: var(--display); font-weight: 800; font-size: 26px; }
+  .stack > * + * { margin-top: 12px; }
+  .seg { display: flex; padding: 4px; border-radius: 999px; background: var(--muted); }
+  .seg button { flex: 1; height: 38px; border: 0; border-radius: 999px; background: transparent; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+  .seg button.on { background: var(--canvas); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
+  .np { display: flex; gap: 14px; align-items: center; }
+  .np .t { font-family: var(--display); font-weight: 800; font-size: 20px; line-height: 1.2; }
+  .bar { height: 6px; border-radius: 99px; background: var(--emphasis); overflow: hidden; margin-top: 12px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .9s linear; }
+  .art { flex: none; border-radius: 12px; overflow: hidden; display: grid; place-items: center; color: #fff;
+         font-family: var(--display); font-weight: 800; background: var(--muted); }
+  .art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px 0; }
+  .row + .row { border-top: 1px solid var(--border); }
+  .row .info { flex: 1; min-width: 0; }
+  .row .title { font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .sub { font-size: 14px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--accent-soft); color: var(--accent-text); }
+  .badge.wait { background: var(--muted); color: var(--text-muted); }
+  .section { margin-top: 24px; }
+  .section h3 { font-size: 20px; margin-bottom: 4px; }
+  .empty { border: 1.5px dashed var(--border-strong); border-radius: 16px; padding: 20px; text-align: center; color: var(--text-muted); }
+  .search { position: sticky; top: 0; background: var(--canvas); padding: 12px 0 8px; z-index: 2; }
+  #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+           background: var(--ink); color: var(--on-ink); padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 14px;
+           opacity: 0; pointer-events: none; transition: all .2s ease; max-width: calc(100% - 32px); text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .center { min-height: 70vh; display: flex; flex-direction: column; justify-content: center; }
+
+  /* TV / big-screen mode */
+  body.tv .wrap { max-width: 1400px; padding: 4vh 4vw; }
+  .tvgrid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 4vw; align-items: start; }
+  .tv-art { width: min(38vw, 60vh); aspect-ratio: 1; border-radius: 28px; font-size: 8vw; }
+  .tv-title { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 4.6vw, 80px); line-height: 1.02; letter-spacing: -0.03em; margin-top: 3vh; }
+  .tv-artist { font-size: clamp(18px, 2vw, 34px); color: var(--text-2); margin-top: 1vh; }
+  .tv-by { display: inline-block; margin-top: 2vh; font-size: clamp(14px, 1.3vw, 22px); }
+  .tv-side .row .title { font-size: clamp(16px, 1.4vw, 24px); }
+  .tv-side .row .sub { font-size: clamp(13px, 1.1vw, 18px); }
+  .qrbox { display: flex; gap: 20px; align-items: center; margin-top: 3vh; }
+  .qrbox img { width: clamp(120px, 14vw, 240px); height: auto; border-radius: 16px; background: #fff; padding: 8px; }
+  @media (max-width: 800px) { .tvgrid { grid-template-columns: 1fr; } .tv-art { width: 70vw; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- PIN entry (no token in the link) -->
+  <section id="v-pin" class="center hidden">
+    <div class="stack">
+      <div class="overline">LMusic party</div>
+      <h1>Enter the party PIN</h1>
+      <p class="muted">It's on the host's phone, under the QR code.</p>
+      <input id="pin" class="field pin" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+      <button id="pin-go" class="btn accent large block">Continue</button>
+    </div>
+  </section>
+
+  <!-- Name -->
+  <section id="v-join" class="center hidden">
+    <div class="stack">
+      <div class="overline">You're invited</div>
+      <h1>Pick a name</h1>
+      <p class="muted">Friends will see it next to the songs you add.</p>
+      <input id="name" class="field" maxlength="24" autocomplete="nickname" placeholder="Your name">
+      <button id="join-go" class="btn accent large block">Join the party</button>
+    </div>
+  </section>
+
+  <!-- Guest main -->
+  <section id="v-main" class="hidden">
+    <div class="top">
+      <div class="grow">
+        <div class="kicker" id="m-kicker">Party queue</div>
+        <h1>Party</h1>
+      </div>
+      <span class="chip" id="m-me"></span>
+    </div>
+
+    <div class="card" id="m-np">
+      <div class="overline" style="margin-bottom:10px">Now playing</div>
+      <div class="np">
+        <div class="art" id="np-art" style="width:72px;height:72px;font-size:24px"></div>
+        <div style="min-width:0;flex:1">
+          <div class="t" id="np-title">Nothing playing</div>
+          <div class="meta" id="np-sub"></div>
+        </div>
+      </div>
+      <div class="bar"><i id="np-bar"></i></div>
+    </div>
+
+    <div class="seg" style="margin-top:16px" role="tablist">
+      <button id="tab-next" class="on" role="tab">Up next</button>
+      <button id="tab-add" role="tab">Add songs</button>
+    </div>
+
+    <div id="p-next" class="section" style="margin-top:12px">
+      <div id="mine-wait"></div>
+      <div id="next-list"></div>
+    </div>
+
+    <div id="p-add" class="hidden">
+      <div class="search">
+        <input id="q" class="field" type="search" placeholder="Search songs, artists, albums" autocomplete="off" enterkeyhint="search">
+        <div class="meta" id="add-hint" style="padding:8px 4px 0"></div>
+      </div>
+      <div id="results"></div>
+      <button id="more" class="btn secondary block hidden" style="margin-top:12px">Show more</button>
+    </div>
+  </section>
+
+  <!-- TV -->
+  <section id="v-tv" class="hidden">
+    <div class="tvgrid">
+      <div>
+        <div class="art tv-art" id="tv-art"></div>
+        <div class="tv-title" id="tv-title">Nothing playing</div>
+        <div class="tv-artist" id="tv-artist"></div>
+        <span class="badge tv-by hidden" id="tv-by"></span>
+        <div class="bar" style="height:8px;margin-top:3vh;max-width:min(38vw,60vh)"><i id="tv-bar"></i></div>
+      </div>
+      <div class="tv-side">
+        <div class="overline">Up next</div>
+        <div id="tv-next" style="margin-top:8px"></div>
+        <div class="qrbox">
+          <img id="tv-qr" alt="Scan to join">
+          <div>
+            <h2>Scan to add songs</h2>
+            <div class="meta" id="tv-url"></div>
+            <div class="meta" id="tv-guests"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Messages -->
+  <section id="v-msg" class="center hidden">
+    <div class="stack">
+      <div class="overline" id="msg-over">LMusic party</div>
+      <h1 id="msg-title"></h1>
+      <p class="muted" id="msg-body"></p>
+    </div>
+  </section>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var isTv = location.pathname.replace(/\/+$/, "") === "/tv";
+  var params = new URLSearchParams(location.search);
+  var token = params.get("t") || "";
+  var guest = null; // {key, name}
+  var lastState = null;
+  var pollTimer = null;
+  var searchPage = 0, searchQuery = "", searchSeq = 0;
+  var PALETTE = ["#C2410C", "#0F766E", "#4338CA", "#B45309", "#BE185D", "#15803D", "#7C3AED", "#0369A1"];
+
+  if (isTv) document.body.classList.add("tv");
+
+  function $(id) { return document.getElementById(id); }
+  function show(id) {
+    ["v-pin", "v-join", "v-main", "v-tv", "v-msg"].forEach(function (v) { $(v).classList.toggle("hidden", v !== id); });
+  }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2600);
+  }
+  function message(title, body) {
+    stopPolling();
+    $("msg-title").textContent = title;
+    $("msg-body").textContent = body || "";
+    show("v-msg");
+  }
+  function storeKey() { return "lmparty:" + token; }
+  function loadGuest() {
+    try { var raw = localStorage.getItem(storeKey()); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  function saveGuest(g) { try { localStorage.setItem(storeKey(), JSON.stringify(g)); } catch (e) {} }
+  function clearGuest() { try { localStorage.removeItem(storeKey()); } catch (e) {} }
+
+  function api(method, path, body) {
+    var headers = { "X-Party-Token": token };
+    if (guest) headers["X-Party-Guest"] = guest.key;
+    var opts = { method: method, headers: headers, cache: "no-store" };
+    if (body) opts.body = new URLSearchParams(body);
+    return fetch(path, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok) {
+          var err = new Error(data.message || ("Error " + r.status));
+          err.code = data.error || String(r.status);
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+  function handleFatal(err) {
+    if (err.code === "kicked") { clearGuest(); message("You're out of this party", "The host removed you."); return true; }
+    if (err.code === "ended") { message("The party has ended", "Thanks for the tunes."); return true; }
+    if (err.code === "bad_token") { message("This link doesn't work", "Ask the host to show the QR code again."); return true; }
+    if (err.code === "no_guest") { guest = null; clearGuest(); show("v-join"); return true; }
+    return false;
+  }
+
+  // ---------- art
+  function initials(text) {
+    var w = (text || "?").split(/[\s\-_/.]+/).filter(function (x) { return x; });
+    return ((w[0] || "?").charAt(0) + (w[1] ? w[1].charAt(0) : "")).toUpperCase();
+  }
+  function color(key) {
+    var h = 0; key = key || "";
+    for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+    return PALETTE[Math.abs(h) % PALETTE.length];
+  }
+  function fillArt(box, songId, label, size) {
+    box.innerHTML = "";
+    box.style.background = color(label);
+    box.textContent = initials(label);
+    if (!songId) return;
+    var img = new Image();
+    img.alt = "";
+    img.decoding = "async";
+    img.loading = "lazy";
+    img.onload = function () { box.textContent = ""; box.appendChild(img); };
+    img.src = "/api/art/" + encodeURIComponent(songId) + "?t=" + encodeURIComponent(token) + "&s=" + size;
+  }
+  function artBox(songId, label, px) {
+    var b = el("div", "art");
+    b.style.width = px + "px"; b.style.height = px + "px"; b.style.fontSize = Math.round(px / 2.8) + "px";
+    fillArt(b, songId, label, px * 2);
+    return b;
+  }
+
+  // ---------- polling
+  function startPolling() {
+    stopPolling();
+    poll();
+    pollTimer = setInterval(function () { if (!document.hidden) poll(); }, 3000);
+  }
+  function stopPolling() { if (pollTimer) clearInterval(pollTimer); pollTimer = null; }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && pollTimer) poll(); });
+
+  function poll() {
+    api("GET", "/api/state").then(function (s) {
+      if (!s.running) { message("The party has ended", "Thanks for the tunes."); return; }
+      lastState = s;
+      if (!isTv && guest && !s.me) { guest = null; clearGuest(); stopPolling(); show("v-join"); return; }
+      if (isTv) renderTv(s); else renderMain(s);
+    }).catch(function (e) { if (!handleFatal(e)) { /* transient; keep polling */ } });
+  }
+
+  var npKey = null, listSig = null;
+  function progress(np, now) {
+    if (!np || !np.durationMs) return 0;
+    var pos = np.positionMs + (np.isPlaying ? Math.max(0, now - np.positionAt) : 0);
+    return Math.min(100, (pos / np.durationMs) * 100);
+  }
+  function tick() {
+    if (!lastState || !lastState.nowPlaying) return;
+    var skew = lastState.now - Date.now();
+    var p = progress(lastState.nowPlaying, Date.now() + skew);
+    var bar = $(isTv ? "tv-bar" : "np-bar");
+    if (bar) bar.style.width = p + "%";
+  }
+  setInterval(function () { if (!document.hidden) tick(); }, 1000);
+
+  // ---------- guest UI
+  function renderMain(s) {
+    show("v-main");
+    $("m-me").textContent = s.me ? s.me.name : "Guest";
+    var mins = Math.max(0, Math.round((s.endsAt - s.now) / 60000));
+    $("m-kicker").textContent = s.guests + (s.guests === 1 ? " guest" : " guests") + " · ends in " +
+      (mins >= 60 ? Math.floor(mins / 60) + "h " + (mins % 60) + "m" : mins + "m");
+
+    var np = s.nowPlaying;
+    var key = np ? (np.songId + "|" + np.title) : "";
+    if (key !== npKey) {
+      npKey = key;
+      $("np-title").textContent = np ? (np.title || "Unknown song") : "Nothing playing";
+      fillArt($("np-art"), np && np.hasArt ? np.songId : null, np ? (np.album || np.title) : "", 160);
+    }
+    $("np-sub").textContent = np ? [np.artist, np.addedBy ? "added by " + np.addedBy : null].filter(Boolean).join(" · ") : "";
+    tick();
+
+    updateAddHint(s);
+    var sig = JSON.stringify([s.awaiting, s.upNext]);
+    if (sig === listSig) return;
+    listSig = sig;
+    // My songs waiting for the host
+    var mw = $("mine-wait");
+    mw.innerHTML = "";
+    if (s.awaiting && s.awaiting.length) {
+      var h = el("div", "overline", "Waiting for the host");
+      mw.appendChild(h);
+      s.awaiting.forEach(function (r) { mw.appendChild(requestRow(r, true)); });
+      mw.appendChild(el("div", null)).style.height = "16px";
+    }
+    var list = $("next-list");
+    list.innerHTML = "";
+    if (!s.upNext.length) {
+      var e = el("div", "empty", "Nothing queued yet. Tap “Add songs” and pick something.");
+      list.appendChild(e);
+    } else {
+      s.upNext.forEach(function (r) { list.appendChild(requestRow(r, false)); });
+    }
+  }
+
+  function requestRow(r, waiting) {
+    var row = el("div", "row");
+    row.appendChild(artBox(r.songId, r.title, 48));
+    var info = el("div", "info");
+    info.appendChild(el("div", "title", r.title));
+    info.appendChild(el("div", "sub", r.artist + " · " + (r.mine ? "you" : r.addedBy)));
+    row.appendChild(info);
+    if (waiting) {
+      row.appendChild(el("span", "badge wait", "Waiting"));
+    } else if (r.staged) {
+      row.appendChild(el("span", "badge", "Next"));
+      if (r.votes > 1) row.appendChild(el("span", "meta", "▲ " + r.votes));
+    } else if (r.mine) {
+      row.appendChild(el("span", "meta", "▲ " + r.votes));
+    } else {
+      var b = el("button", "btn small " + (r.votedByMe ? "voted" : "secondary"), "▲ " + r.votes);
+      b.setAttribute("aria-label", (r.votedByMe ? "Remove vote" : "Vote up") + ", " + r.votes + " votes");
+      b.onclick = function () {
+        b.disabled = true;
+        api("POST", "/api/vote", { requestId: r.id }).then(poll).catch(function (e) {
+          if (!handleFatal(e)) toast(e.message);
+        }).then(function () { b.disabled = false; });
+      };
+      row.appendChild(b);
+    }
+    return row;
+  }
+
+  function updateAddHint(s) {
+    if (!s || !s.me) return;
+    var left = 5 - s.me.pending;
+    var hint = left <= 0 ? "You have 5 songs waiting. Let some play first." :
+      (s.approveEach ? "The host approves each song. " : "") + left + (left === 1 ? " more song" : " more songs") + " you can add right now.";
+    $("add-hint").textContent = hint;
+  }
+
+  function setTab(add) {
+    $("tab-next").classList.toggle("on", !add);
+    $("tab-add").classList.toggle("on", add);
+    $("p-next").classList.toggle("hidden", add);
+    $("p-add").classList.toggle("hidden", !add);
+    if (add && !$("results").childNodes.length) search(true);
+  }
+  $("tab-next").onclick = function () { setTab(false); };
+  $("tab-add").onclick = function () { setTab(true); };
+
+  var qTimer = null;
+  $("q").addEventListener("input", function () {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(function () { search(true); }, 300);
+  });
+  $("more").onclick = function () { search(false); };
+
+  function search(reset) {
+    if (reset) { searchPage = 0; searchQuery = $("q").value.trim(); }
+    var seq = ++searchSeq;
+    var page = searchPage;
+    api("GET", "/api/search?q=" + encodeURIComponent(searchQuery) + "&page=" + page).then(function (res) {
+      if (seq !== searchSeq) return;
+      var box = $("results");
+      if (reset) box.innerHTML = "";
+      if (reset && !res.items.length) {
+        box.appendChild(el("div", "empty", searchQuery ? "No songs match “" + searchQuery + "”." : "The library is empty."));
+      }
+      if (reset && !searchQuery && res.items.length) box.appendChild(el("div", "overline", "Recently added"));
+      res.items.forEach(function (s) { box.appendChild(resultRow(s)); });
+      searchPage = page + 1;
+      $("more").classList.toggle("hidden", !res.hasMore);
+    }).catch(function (e) { if (!handleFatal(e)) toast(e.message); });
+  }
+
+  function fmt(ms) {
+    var s = Math.round(ms / 1000); return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2);
+  }
+  function resultRow(s) {
+    var row = el("div", "row");
+    row.appendChild(artBox(s.id, s.album || s.title, 48));
+    var info = el("div", "info");
+    info.appendChild(el("div", "title", s.title));
+    info.appendChild(el("div", "sub", [s.artist, s.album, s.durationMs ? fmt(s.durationMs) : null].filter(Boolean).join(" · ")));
+    row.appendChild(info);
+    var b = el("button", "btn small " + (s.requested ? "secondary" : "accent"), s.requested ? "Vote" : "Add");
+    b.onclick = function () {
+      b.disabled = true;
+      api("POST", "/api/add", { songId: s.id }).then(function (res) {
+        toast(res.result === "awaiting" ? "Sent to the host for approval" : res.message);
+        b.textContent = res.result === "voted" ? "Voted" : "Added";
+        b.className = "btn small voted";
+        poll();
+      }).catch(function (e) {
+        b.disabled = false;
+        if (!handleFatal(e)) toast(e.message);
+      });
+    };
+    row.appendChild(b);
+    return row;
+  }
+
+  // ---------- TV UI
+  var tvNpKey = null;
+  function renderTv(s) {
+    show("v-tv");
+    var np = s.nowPlaying;
+    var key = np ? (np.songId + "|" + np.title) : "";
+    if (key !== tvNpKey) {
+      tvNpKey = key;
+      $("tv-title").textContent = np ? (np.title || "Unknown song") : "Nothing playing";
+      $("tv-artist").textContent = np ? np.artist : "";
+      var a = $("tv-art");
+      fillArt(a, np && np.hasArt ? np.songId : null, np ? (np.album || np.title) : "", 640);
+    }
+    var by = $("tv-by");
+    by.classList.toggle("hidden", !(np && np.addedBy));
+    by.textContent = np && np.addedBy ? "Added by " + np.addedBy : "";
+    tick();
+    $("tv-guests").textContent = s.guests + (s.guests === 1 ? " guest" : " guests") + " in the party";
+    var sig = JSON.stringify(s.upNext.slice(0, 7));
+    if (sig === listSig) return;
+    listSig = sig;
+    var list = $("tv-next");
+    list.innerHTML = "";
+    if (!s.upNext.length) list.appendChild(el("div", "empty", "No requests yet. Scan the code to add one."));
+    s.upNext.slice(0, 7).forEach(function (r) {
+      var row = el("div", "row");
+      row.appendChild(artBox(r.songId, r.title, 56));
+      var info = el("div", "info");
+      info.appendChild(el("div", "title", r.title));
+      info.appendChild(el("div", "sub", r.artist + " · " + r.addedBy));
+      row.appendChild(info);
+      row.appendChild(el("span", r.staged ? "badge" : "meta", r.staged ? "Next" : "▲ " + r.votes));
+      list.appendChild(row);
+    });
+  }
+  function initTv() {
+    $("tv-qr").src = "/api/qr.svg?t=" + encodeURIComponent(token);
+    $("tv-url").textContent = location.host;
+    startPolling();
+  }
+
+  // ---------- boot
+  function afterToken() {
+    if (isTv) { initTv(); return; }
+    guest = loadGuest();
+    if (guest) { startPolling(); } else { show("v-join"); setTimeout(function () { $("name").focus(); }, 50); }
+  }
+
+  $("pin-go").onclick = function () {
+    var pin = $("pin").value.replace(/\D/g, "");
+    if (pin.length < 4) { toast("Enter the PIN from the host's phone"); return; }
+    $("pin-go").disabled = true;
+    fetch("/api/pin", { method: "POST", body: new URLSearchParams({ pin: pin }), cache: "no-store" })
+      .then(function (r) { return r.json().then(function (d) { if (!r.ok) throw new Error(d.message || "Wrong PIN"); return d; }); })
+      .then(function (d) {
+        token = d.token;
+        history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token));
+        afterToken();
+      })
+      .catch(function (e) { toast(e.message); })
+      .then(function () { $("pin-go").disabled = false; });
+  };
+  $("pin").addEventListener("keydown", function (e) { if (e.key === "Enter") $("pin-go").click(); });
+
+  $("join-go").onclick = function () {
+    var name = $("name").value.trim();
+    if (!name) { toast("Pick a name first"); $("name").focus(); return; }
+    $("join-go").disabled = true;
+    guest = null;
+    api("POST", "/api/join", { name: name }).then(function (d) {
+      guest = { key: d.key, name: d.name };
+      saveGuest(guest);
+      startPolling();
+    }).catch(function (e) { if (!handleFatal(e)) toast(e.message); })
+      .then(function () { $("join-go").disabled = false; });
+  };
+  $("name").addEventListener("keydown", function (e) { if (e.key === "Enter") $("join-go").click(); });
+
+  if (!token) { show("v-pin"); setTimeout(function () { $("pin").focus(); }, 50); }
+  else afterToken();
+})();
+</script>
+</body>
+</html>

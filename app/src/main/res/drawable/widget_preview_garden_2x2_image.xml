@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Preview for the Garden 2x2 widget: a little potted plant with one bloom. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="180dp"
+    android:height="180dp"
+    android:viewportWidth="180"
+    android:viewportHeight="180">
+
+  <path
+      android:pathData="M32,0L148,0A32,32 0,0 1,180 32L180,148A32,32 0,0 1,148 180L32,180A32,32 0,0 1,0 148L0,32A32,32 0,0 1,32 0z"
+      android:fillColor="#FFFFFFFF"/>
+
+  <!-- Stem -->
+  <path
+      android:pathData="M88.5,118C87,100 94,86 90,62L92,62C97,86 90,100 91.5,118Z"
+      android:fillColor="#FF3E7C4D"/>
+  <!-- Leaves -->
+  <path android:pathData="M89,104Q78,92 66,96Q76,108 89,104Z" android:fillColor="#FF4F9D66"/>
+  <path android:pathData="M91,94Q102,82 114,86Q104,98 91,94Z" android:fillColor="#FF2F7A4A"/>
+  <path android:pathData="M90,80Q80,70 70,74Q78,84 90,80Z" android:fillColor="#FF4F9D66"/>
+  <!-- Flower -->
+  <path android:pathData="M91,50m-7,0a7,9 0,1 1,14 0a7,9 0,1 1,-14 0" android:fillColor="#FFD9541E"/>
+  <path android:pathData="M82,62m-8,0a8,6 0,1 1,16 0a8,6 0,1 1,-16 0" android:fillColor="#FFD9541E"/>
+  <path android:pathData="M100,62m-8,0a8,6 0,1 1,16 0a8,6 0,1 1,-16 0" android:fillColor="#FFD9541E"/>
+  <path android:pathData="M86,70m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" android:fillColor="#FFD9541E"/>
+  <path android:pathData="M96,70m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" android:fillColor="#FFD9541E"/>
+  <path android:pathData="M91,62m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" android:fillColor="#FFF2B33D"/>
+  <!-- Pot -->
+  <path
+      android:pathData="M64,116L116,116A4,4 0,0 1,120 120L120,126A4,4 0,0 1,116 130L64,130A4,4 0,0 1,60 126L60,120A4,4 0,0 1,64 116z"
+      android:fillColor="#FFDD8C66"/>
+  <path
+      android:pathData="M63,130L117,130L112,154Q111,158 107,158L73,158Q69,158 68,154Z"
+      android:fillColor="#FFD27D57"/>
+  <path
+      android:pathData="M102,130L117,130L112,154Q111,158 107,158L99,158Z"
+      android:fillColor="#FFB4613F"/>
+</vector>

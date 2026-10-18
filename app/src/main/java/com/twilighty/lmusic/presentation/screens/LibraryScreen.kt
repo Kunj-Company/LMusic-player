@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
+import com.twilighty.lmusic.presentation.navigation.navigateToTopLevelSafely
 import com.twilighty.lmusic.presentation.navigation.navigateSafelyReplacing
 
 import android.os.Trace
@@ -486,6 +487,7 @@ fun LibraryScreen(
     } else {
         rememberPagerState(initialPage = normalizedLastTabIndex) { tabCount }
     }
+    com.twilighty.lmusic.presentation.haptics.HapticPagerEffect(pagerState, userDragOnly = true)
     val currentTabIndex by remember(pagerState, tabTitles, isCompactNavigation) {
         derivedStateOf {
             resolveTabIndex(
@@ -928,7 +930,7 @@ fun LibraryScreen(
                     YuyuIconButton(
                         imageVector = Icons.Rounded.Search,
                         contentDescription = "Search",
-                        onClick = { navController.navigateSafely(Screen.Search.route) },
+                        onClick = { navController.navigateToTopLevelSafely(Screen.Search.route) },
                         style = YuyuIconButtonStyle.Tonal
                     )
                     YuyuIconButton(
@@ -2104,6 +2106,7 @@ fun LibraryScreen(
                 TextButton(
                     onClick = {
                         if (mergePlaylistName.isNotEmpty()) {
+                            com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                             playlistViewModel.mergePlaylistsIntoOne(
                                 pendingMergePlaylistIds,
                                 mergePlaylistName
@@ -2591,6 +2594,7 @@ private fun LibraryTabSwitcherSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

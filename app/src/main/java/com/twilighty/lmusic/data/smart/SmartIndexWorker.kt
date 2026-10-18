@@ -1,5 +1,6 @@
 package com.twilighty.lmusic.data.smart
 
+import com.twilighty.lmusic.data.crash.SafeMode
 import android.content.Context
 import android.os.BatteryManager
 import androidx.hilt.work.HiltWorker
@@ -36,6 +37,7 @@ class SmartIndexWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         if (!preferences.isEnabled()) return@withContext Result.success()
+        if (SafeMode.isActive(applicationContext)) return@withContext Result.success()
         if (!batteryOk(applicationContext)) {
             Timber.d("Smart: battery below %d%%, skipping", MIN_BATTERY_PERCENT)
             return@withContext Result.success()
@@ -115,6 +117,8 @@ object SmartIndexScheduler {
         .build()
 
     fun schedule(context: Context) {
+        // Safe mode keeps Smart indexing off for this session; the saved setting is untouched.
+        if (SafeMode.isActive(context)) return
         val request = PeriodicWorkRequestBuilder<SmartIndexWorker>(12, TimeUnit.HOURS, 3, TimeUnit.HOURS)
             .setConstraints(constraints())
             .addTag(UNIQUE_PERIODIC)
@@ -126,6 +130,7 @@ object SmartIndexScheduler {
     }
 
     fun enqueueContinuation(context: Context, policy: ExistingWorkPolicy = ExistingWorkPolicy.APPEND_OR_REPLACE) {
+        if (SafeMode.isActive(context)) return
         val request = OneTimeWorkRequestBuilder<SmartIndexWorker>()
             .setConstraints(constraints())
             .setInitialDelay(1, TimeUnit.MINUTES)

@@ -56,8 +56,16 @@ sealed class Screen(val route: String) {
     object NavidromeDashboard : Screen("navidrome_dashboard")
     object JellyfinDashboard : Screen("jellyfin_dashboard")
     object LibraryHealth : Screen("library_health")
+    object CoverStudio : Screen("cover_studio?mode={mode}") {
+        fun createRoute(batch: Boolean = false) = if (batch) "cover_studio?mode=batch" else "cover_studio"
+    }
+    object Lofi : Screen("lofi")
+    object Focus : Screen("focus")
     object Recap : Screen("recap/{period}") {
         fun createRoute(period: String) = "recap/$period"
     }
+    object Party : Screen("party")
+    object Garden : Screen("garden")
+    object TasteMatch : Screen("taste_match")
 
 }

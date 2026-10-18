@@ -615,6 +615,15 @@ fun SettingsCategoryScreen(
                                     onSelectionChanged = { settingsViewModel.setCarouselStyle(it) },
                                     leadingIcon = { Icon(painterResource(R.drawable.rounded_view_carousel_24), null, tint = MaterialTheme.colorScheme.secondary) }
                                 )
+                                val livingArtworkSettings: com.twilighty.lmusic.presentation.components.player.LivingArtworkViewModel = hiltViewModel()
+                                val livingArtworkEnabled by livingArtworkSettings.enabled.collectAsStateWithLifecycle()
+                                SwitchSettingItem(
+                                    title = "Living artwork",
+                                    subtitle = "The cover breathes gently in time with the song",
+                                    checked = livingArtworkEnabled,
+                                    onCheckedChange = { livingArtworkSettings.setEnabled(it) },
+                                    leadingIcon = { Icon(painterResource(R.drawable.rounded_album_24), null, tint = MaterialTheme.colorScheme.secondary) }
+                                )
                             }
 
                             SettingsSubsection(title = stringResource(R.string.setcat_home_collage)) {
@@ -881,6 +890,9 @@ fun SettingsCategoryScreen(
                                     }
                                 )
                             }
+                            SettingsSubsection(title = "Navigation") {
+                                com.twilighty.lmusic.presentation.navigation.SwipeBetweenPagesSetting()
+                            }
                             SettingsSubsection(
                                 title = stringResource(R.string.setcat_player_gestures)
                             ) {
@@ -891,6 +903,9 @@ fun SettingsCategoryScreen(
                                     onCheckedChange = { settingsViewModel.setTapBackgroundClosesPlayer(it) },
                                     leadingIcon = { Icon(painterResource(R.drawable.rounded_touch_app_24), null, tint = MaterialTheme.colorScheme.secondary) }
                                 )
+                            }
+                            SettingsSubsection(title = "Gestures") {
+                                com.twilighty.lmusic.presentation.gestures.GestureSettingsSection()
                             }
                             SettingsSubsection(
                                 title = stringResource(R.string.setcat_haptics),
@@ -1253,6 +1268,8 @@ fun SettingsCategoryScreen(
                                     trailingIcon = { Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
                                     onClick = { navController.navigateSafely("about") }
                                 )
+                                // Shown only when a crash report is saved (view / share / clear).
+                                com.twilighty.lmusic.presentation.crash.LastCrashReportSetting()
                             }
                         }
                         SettingsCategory.EQUALIZER -> {
@@ -1336,6 +1353,7 @@ fun SettingsCategoryScreen(
     )
 
     if (showPaletteRegenerateSheet) {
+        com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(paletteRegenerateSheetState)
         ModalBottomSheet(
             onDismissRequest = {
                 if (!isAnyPaletteRegenerateRunning) {
@@ -1505,7 +1523,7 @@ fun SettingsCategoryScreen(
             title = { Text(stringResource(R.string.dialog_reset_lyrics_title)) },
             text = { Text(stringResource(R.string.dialog_cannot_undo)) },
             onDismissRequest = { showClearLyricsDialog = false },
-            confirmButton = { TextButton(onClick = { showClearLyricsDialog = false; playerViewModel.resetAllLyrics() }) { Text(stringResource(R.string.confirm)) } },
+            confirmButton = { TextButton(onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection(); showClearLyricsDialog = false; playerViewModel.resetAllLyrics() }) { Text(stringResource(R.string.confirm)) } },
             dismissButton = { TextButton(onClick = { showClearLyricsDialog = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
@@ -1520,6 +1538,7 @@ fun SettingsCategoryScreen(
             confirmButton = { 
                 TextButton(
                     onClick = { 
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().selection()
                         showRebuildDatabaseWarning = false
                         refreshRequested = true
                         syncRequestObservedRunning = false
@@ -1547,6 +1566,7 @@ fun SettingsCategoryScreen(
                     onClick = {
                         showRegenerateDailyMixDialog = false
                         playerViewModel.forceUpdateDailyMix()
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                         Toast.makeText(context, context.getString(R.string.toast_daily_mix_regeneration_started), Toast.LENGTH_SHORT).show()
                     }
                 ) {
@@ -1568,6 +1588,7 @@ fun SettingsCategoryScreen(
                     onClick = {
                         showRegenerateStatsDialog = false
                         statsViewModel.forceRegenerateStats()
+                        com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().success()
                         Toast.makeText(context, context.getString(R.string.toast_stats_regeneration_started), Toast.LENGTH_SHORT).show()
                     }
                 ) {

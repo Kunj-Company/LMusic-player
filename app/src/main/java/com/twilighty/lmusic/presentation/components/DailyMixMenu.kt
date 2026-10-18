@@ -31,6 +31,7 @@ fun DailyMixMenu(
     val sheetState = rememberModalBottomSheetState()
     var prompt by remember { mutableStateOf("") }
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState

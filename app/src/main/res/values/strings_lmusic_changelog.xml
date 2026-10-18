@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="lmusic_changelog_130_highlights">
+        <item>Spaces on Home: Lofi (generator, radio, ambience), Focus, Listening garden, Party queue, Taste match and Cover studio.</item>
+        <item>Living artwork that breathes with the song, and double-tap to like.</item>
+        <item>Artist story on every artist page.</item>
+    </string-array>
+    <string-array name="lmusic_changelog_130_improvements">
+        <item>Swipe the mini player for next and previous; swipe between pages; slimmer bottom bar.</item>
+        <item>Stronger haptics and optional shake and face-down gestures.</item>
+        <item>Crash reports and safe mode.</item>
+    </string-array>
     <string-array name="lmusic_changelog_120_highlights">
         <item>New Home: continue listening, Made for you mixes, recently added and your top artists.</item>
         <item>Smart features (experimental): on-device mood and genre tags, mixes, song radio and insights.</item>

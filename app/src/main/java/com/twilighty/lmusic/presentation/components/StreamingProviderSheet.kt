@@ -57,6 +57,7 @@ fun StreamingProviderSheet(
     val providerSegmentContainerShape = RoundedCornerShape(20.dp)
     val providerSegmentItemShape = RoundedCornerShape(8.dp)
 
+    com.twilighty.lmusic.presentation.haptics.HapticBottomSheetEffect(sheetState)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
