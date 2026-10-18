@@ -122,21 +122,30 @@ internal fun Modifier.mainPageSwipe(
     val densityScale = LocalDensity.current.density
     val latestRoute by rememberUpdatedState(route)
 
-    val navigate: (Float) -> Boolean = remember(navController) {
-        nav@{ direction ->
+    val navigateFrom: (String, Float) -> Boolean = remember(navController) {
+        nav@{ source, direction ->
             val current = navController.currentBackStackEntry?.destination?.route
+            if (com.twilighty.lmusic.BuildConfig.SMOKE_TEST) {
+                android.util.Log.w("LMusicSwipe", "source=$source dir=$direction screen=$latestRoute current=$current")
+            }
             // Only the screen the user is looking at may switch (not one that is animating out).
             if (current != latestRoute) return@nav false
             val now = android.os.SystemClock.uptimeMillis()
             if (now - PageSwipeCooldown.lastNavigateAt < PageSwipeCooldown.WINDOW_MS) return@nav false
             val target = neighbourRoute(current, direction) ?: return@nav false
             PageSwipeCooldown.lastNavigateAt = now
+            if (com.twilighty.lmusic.BuildConfig.SMOKE_TEST) {
+                android.util.Log.w("LMusicSwipe", "navigate $current -> $target")
+            }
             haptics.selection()
             navController.navigateToTopLevelSafely(target)
         }
     }
 
-    val nestedConnection = remember(navigate, densityScale) {
+    val navigate: (Float) -> Boolean = remember(navigateFrom) { { d -> navigateFrom("pointer", d) } }
+    val navigateNested: (Float) -> Boolean = remember(navigateFrom) { { d -> navigateFrom("nested", d) } }
+
+    val nestedConnection = remember(navigateNested, densityScale) {
         object : NestedScrollConnection {
             var overscrollX = 0f
 
@@ -159,7 +168,7 @@ internal fun Modifier.mainPageSwipe(
                 val flingVelocity = FLING_VELOCITY_DP * densityScale
                 val flingMatches = abs(available.x) > flingVelocity && sign(available.x) == sign(distance)
                 if (abs(distance) >= strongDistance || (abs(distance) >= minDistance && flingMatches)) {
-                    navigate(sign(distance))
+                    navigateNested(sign(distance))
                 }
                 return Velocity.Zero
             }

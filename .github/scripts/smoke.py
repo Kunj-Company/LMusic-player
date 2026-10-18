@@ -129,7 +129,9 @@ def main():
     adb("shell", "am", "force-stop", PKG); time.sleep(1)
     launch(); time.sleep(4)
     step("02-home", lambda: True)
-    # The test songs must reach the library (sync on first launch).
+    # Shuffle-all syncs the library when it is empty, so the test songs get indexed.
+    adb("shell", "am", "start", "-W", "-a", "com.twilighty.lmusic.ACTION_SHUFFLE_ALL", "-n", ACT, "--ez", "is_benchmark", "true")
+    time.sleep(12)
     tap("Library") or tap_xy(0.4, 0.94)
     expect("test songs appear in Library", has_text("LMusic Test", tries=10, wait=4))
     shot("02b-library-with-songs")
@@ -153,11 +155,12 @@ def main():
         time.sleep(8); return True
     step("06-shuffle-all", shuffle_all)
     expect("a test song is playing (mini player)", has_text("LMusic Test", tries=4))
-    before = [t for t in texts() if t.startswith("LMusic Test")]
+    before = sorted(t for t in texts() if t.startswith("Test Artist") or t.startswith("LMusic Test"))
     step("07-mini-player-swipe-next", lambda: (adb("shell", "input", "swipe", str(int(W*0.8)), str(int(H*0.82)), str(int(W*0.2)), str(int(H*0.82)), "200"), True)[1])
     time.sleep(2)
-    after = [t for t in texts() if t.startswith("LMusic Test")]
-    expect("mini player swipe changes the song", bool(before) and bool(after) and before[:1] != after[:1])
+    after = sorted(t for t in texts() if t.startswith("Test Artist") or t.startswith("LMusic Test"))
+    print("mini player before:", before, "after:", after)
+    expect("mini player swipe changes the song", bool(before) and bool(after) and before != after)
     step("08-open-player", lambda: (adb("shell", "am", "start", "-W", "-n", ACT, "--ez", "is_benchmark", "true", "--ez", "ACTION_SHOW_PLAYER", "true"), time.sleep(5), True)[2])
     expect("now playing shows the song", has_text("Test Artist", tries=3))
     step("09-now-playing-double-tap", lambda: (tap_xy(0.5, 0.33), tap_xy(0.5, 0.33), True)[2])
@@ -168,6 +171,8 @@ try:
 finally:
     crash = adb("logcat", "-d", "-b", "crash")
     full = adb("logcat", "-d")
+    print("===== swipe log =====")
+    print("\n".join(l for l in full.splitlines() if "LMusicSwipe" in l))
     open(f"{OUT}/crash.txt", "w").write(crash)
     open(f"{OUT}/logcat.txt", "w").write(full)
     ours = f"Process: {PKG}," in crash or f"Process: {PKG}," in full

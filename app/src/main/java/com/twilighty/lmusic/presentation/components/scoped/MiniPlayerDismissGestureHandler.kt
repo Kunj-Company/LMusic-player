@@ -109,6 +109,9 @@ internal class MiniPlayerSwipeGestureHandler(
                 tween(durationMillis = 140, easing = FastOutLinearInEasing)
             )
             haptics().skip()
+            if (com.twilighty.lmusic.BuildConfig.SMOKE_TEST) {
+                android.util.Log.w("LMusicSwipe", "mini player swipe dir=$direction")
+            }
             if (direction < 0f) onNext() else onPrevious()
             // Wait briefly for the new song so it slides in (previous may just restart the song).
             withTimeoutOrNull(SONG_CHANGE_TIMEOUT_MS) {
