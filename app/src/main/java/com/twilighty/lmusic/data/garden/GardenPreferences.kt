@@ -55,3 +55,6 @@ class GardenPreferences @Inject constructor(
         store.edit { it[Keys.WIDGET_DAY] = epochDay }
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupGardenDataStore: DataStore<Preferences> get() = gardenDataStore

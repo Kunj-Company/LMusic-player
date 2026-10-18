@@ -57,7 +57,9 @@ object BackupModule {
         quickFillHandler: QuickFillModuleHandler,
         artistImagesHandler: ArtistImagesModuleHandler,
         equalizerHandler: EqualizerModuleHandler,
-        aiUsageHandler: AiUsageBackupHandler
+        aiUsageHandler: AiUsageBackupHandler,
+        featureSettingsHandler: com.twilighty.lmusic.data.backup.module.FeatureSettingsModuleHandler,
+        activityHistoryHandler: com.twilighty.lmusic.data.backup.module.ActivityHistoryModuleHandler
     ): Map<BackupSection, BackupModuleHandler> {
         return mapOf(
             BackupSection.PLAYLISTS to playlistsHandler,
@@ -71,7 +73,9 @@ object BackupModule {
             BackupSection.QUICK_FILL to quickFillHandler,
             BackupSection.ARTIST_IMAGES to artistImagesHandler,
             BackupSection.EQUALIZER to equalizerHandler,
-            BackupSection.AI_USAGE_LOGS to aiUsageHandler
+            BackupSection.AI_USAGE_LOGS to aiUsageHandler,
+            BackupSection.FEATURE_SETTINGS to featureSettingsHandler,
+            BackupSection.ACTIVITY_HISTORY to activityHistoryHandler
         )
     }
 }

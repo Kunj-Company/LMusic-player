@@ -107,10 +107,13 @@ class GestureDetectorsTest {
 
         /** Feeds [z] every 50 ms from [from] until [to] inclusive; returns the events seen. */
         private fun FaceDownDetector.feed(z: Float, from: Long, to: Long, near: Boolean? = null) =
-            (from..to step 50).mapNotNull { onSample(z, it, near) }
+            (from..to step 50).mapNotNull { onSample(0f, 0f, z, it, near) }
+
+        private fun FaceDownDetector.feedXyz(x: Float, y: Float, z: Float, from: Long, to: Long, step: Long = 50) =
+            (from..to step step).mapNotNull { onSample(x, y, z, it) }
 
         @Test
-        fun `face-down for 700 ms pauses once`() {
+        fun `face-down for 800 ms pauses once`() {
             val d = FaceDownDetector()
             d.feed(up, 0, 500)
             val events = d.feed(down, 550, 3_000)
@@ -122,17 +125,17 @@ class GestureDetectorsTest {
         fun `fires only after the hold time`() {
             val d = FaceDownDetector()
             d.feed(up, 0, 100)
-            assertTrue(d.feed(down, 150, 800).isEmpty()) // 650 ms
-            assertEquals(listOf(FaceDownDetector.Event.FACE_DOWN), d.feed(down, 850, 900))
+            assertTrue(d.feed(down, 150, 900).isEmpty()) // 750 ms
+            assertEquals(listOf(FaceDownDetector.Event.FACE_DOWN), d.feed(down, 950, 1_000))
         }
 
         @Test
         fun `a brief flip does not fire`() {
             val d = FaceDownDetector()
             d.feed(up, 0, 100)
-            d.feed(down, 150, 600)
-            d.feed(up, 650, 700)
-            assertTrue(d.feed(down, 750, 1_400).isEmpty())
+            d.feed(down, 150, 700)
+            d.feed(up, 750, 800)
+            assertTrue(d.feed(down, 850, 1_600).isEmpty())
         }
 
         @Test
@@ -203,8 +206,232 @@ class GestureDetectorsTest {
         }
 
         @Test
+        fun `upright phone in a pocket never fires`() {
+            val d = FaceDownDetector()
+            d.feed(up, 0, 100)
+            // Standing on its end (gravity along y), and upside down in a pocket.
+            assertTrue(d.feedXyz(0f, 9.8f, 0.3f, 150, 5_000).isEmpty())
+            assertTrue(d.feedXyz(0.5f, -9.6f, -1.5f, 5_050, 10_000).isEmpty())
+        }
+
+        @Test
+        fun `tilted 30 degrees screen-down does not fire`() {
+            val d = FaceDownDetector()
+            d.feed(up, 0, 100)
+            assertTrue(d.feedXyz(4.9f, 0f, -8.5f, 150, 5_000).isEmpty())
+            // Even with z just under the threshold, a large sideways tilt blocks it.
+            assertTrue(d.feedXyz(0f, 3.5f, -9.0f, 5_050, 10_000).isEmpty())
+        }
+
+        @Test
+        fun `slightly tilted on a table still fires`() {
+            val d = FaceDownDetector()
+            d.feed(up, 0, 100)
+            assertEquals(listOf(FaceDownDetector.Event.FACE_DOWN), d.feedXyz(0.8f, -0.6f, -9.7f, 150, 2_000))
+        }
+
+        @Test
+        fun `moving while screen-down does not fire`() {
+            val d = FaceDownDetector()
+            d.feed(up, 0, 100)
+            // Swinging in a bag: screen-down but the vector keeps moving.
+            val events = (150L..5_000L step 50).mapNotNull { t ->
+                val swing = if ((t / 50) % 4 < 2) 1.2f else -1.2f
+                d.onSample(swing, -swing, -9.6f, t)
+            }
+            assertTrue(events.isEmpty())
+        }
+
+        @Test
+        fun `accelerating screen-down does not fire`() {
+            val d = FaceDownDetector()
+            d.feed(up, 0, 100)
+            assertTrue(d.feed(-12.5f, 150, 3_000).isEmpty())
+        }
+
+        @Test
+        fun `works with 5 Hz batched samples`() {
+            val d = FaceDownDetector()
+            d.feedXyz(0f, 0f, up, 0, 400, step = 200)
+            assertTrue(d.feedXyz(0f, 0f, down, 600, 1_200, step = 200).isEmpty()) // 600 ms
+            assertEquals(listOf(FaceDownDetector.Event.FACE_DOWN), d.feedXyz(0f, 0f, down, 1_400, 1_400, step = 200))
+        }
+
+        @Test
+        fun `proximity near is fine (that is a table)`() {
+            val d = FaceDownDetector()
+            d.feed(up, 0, 100, near = true)
+            assertEquals(listOf(FaceDownDetector.Event.FACE_DOWN), d.feed(down, 150, 2_000, near = true))
+        }
+
+        @Test
         fun `NaN is ignored`() {
-            assertNull(FaceDownDetector().onSample(Float.NaN, 0))
+            assertNull(FaceDownDetector().onSample(0f, 0f, Float.NaN, 0))
+            assertNull(FaceDownDetector().onSample(Float.NaN, 0f, -9.8f, 0))
+        }
+    }
+
+    @Nested
+    inner class PocketShake {
+        private fun detector() = PocketShakeDetector(thresholdMs2 = ShakeSensitivity.MEDIUM.screenOffThresholdMs2)
+
+        /** One peak: a strong sample then a calm one. */
+        private fun PocketShakeDetector.peak(t: Long, magnitude: Float = 4f * g, near: Boolean? = null): Boolean {
+            val fired = onSample(magnitude, t, near)
+            onSample(0.2f * g, t + 40, near)
+            return fired
+        }
+
+        /** One shake = two peaks 200 ms apart; returns whether the second peak fired. */
+        private fun PocketShakeDetector.shake(t: Long, magnitude: Float = 4f * g, near: Boolean? = null): Boolean {
+            peak(t, magnitude, near)
+            return peak(t + 200, magnitude, near)
+        }
+
+        @Test
+        fun `screen-off threshold is firmer than screen-on`() {
+            ShakeSensitivity.entries.forEach {
+                assertTrue(it.screenOffThresholdMs2 > it.thresholdMs2)
+            }
+        }
+
+        @Test
+        fun `a single shake does not fire`() {
+            val d = detector()
+            assertFalse(d.shake(0))
+            assertFalse(d.onSample(0f, 3_000))
+        }
+
+        @Test
+        fun `two shakes within 1_2 s fire`() {
+            val d = detector()
+            assertFalse(d.shake(0))
+            assertTrue(d.shake(500))
+        }
+
+        @Test
+        fun `two shakes too far apart do not fire`() {
+            val d = detector()
+            assertFalse(d.shake(0))
+            assertFalse(d.shake(1_500)) // 1.5 s after the first shake ended
+            // ...but that one counts as the first of a new double shake.
+            assertTrue(d.shake(2_100))
+        }
+
+        @Test
+        fun `a screen-on strength shake is not enough`() {
+            val d = detector()
+            val medium = 2.7f * g // above the screen-on medium threshold, below screen-off
+            assertFalse(d.shake(0, medium))
+            assertFalse(d.shake(500, medium))
+            assertFalse(d.shake(1_000, medium))
+        }
+
+        @Test
+        fun `ignored while proximity is near`() {
+            val d = detector()
+            assertFalse(d.shake(0, near = true))
+            assertFalse(d.shake(500, near = true))
+            assertFalse(d.shake(1_000, near = true))
+        }
+
+        @Test
+        fun `near in the middle forgets the first shake`() {
+            val d = detector()
+            assertFalse(d.shake(0, near = false))
+            d.onSample(0f, 450, proximityNear = true)
+            assertFalse(d.shake(500, near = false))
+            assertTrue(d.shake(900, near = false))
+        }
+
+        @Test
+        fun `unknown proximity still allows a double shake`() {
+            val d = detector()
+            assertFalse(d.shake(0, near = null))
+            assertTrue(d.shake(500, near = null))
+        }
+
+        @Test
+        fun `cooldown blocks an immediate second shuffle`() {
+            val d = detector()
+            d.shake(0)
+            assertTrue(d.shake(500))
+            assertFalse(d.shake(1_000))
+            assertFalse(d.shake(1_500))
+            assertFalse(d.shake(3_000)) // first shake after the cooldown
+            assertTrue(d.shake(3_500))
+        }
+
+        /**
+         * Raw 50 Hz accelerometer samples (phone resting screen-up) with a one-sample jolt on x at
+         * each of [peaksAtMs], like a batch the sensor hub delivers in one go.
+         */
+        private fun batch(fromMs: Long, toMs: Long, peaksAtMs: Set<Long>, peak: Float = 45f): List<Pair<Long, FloatArray>> =
+            (fromMs..toMs step 20).map { t ->
+                t to floatArrayOf(if (t in peaksAtMs) peak else 0f, 0f, g)
+            }
+
+        /** Runs samples through the same pipeline as the screen-off listener; returns firing times. */
+        private fun PocketShakeDetector.process(
+            filter: GravityFilter,
+            samples: List<Pair<Long, FloatArray>>,
+            near: Boolean? = null,
+        ): List<Long> = samples.mapNotNull { (t, v) ->
+            val magnitude = filter.update(v[0], v[1], v[2])
+            if (onSample(magnitude, t, near)) t else null
+        }
+
+        @Test
+        fun `a double shake inside one 1_2 s batch fires once at the sample time`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet())) // settle the gravity estimate
+            val fired = d.process(f, batch(1_000, 2_180, setOf(1_100L, 1_300L, 1_600L, 1_800L)))
+            assertEquals(listOf(1_800L), fired)
+        }
+
+        @Test
+        fun `a double shake split across two batches still fires`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()))
+            assertTrue(d.process(f, batch(1_000, 1_380, setOf(1_100L, 1_300L))).isEmpty())
+            // The next batch arrives ~1.2 s later in wall time; only sample timestamps matter.
+            assertEquals(listOf(1_600L), d.process(f, batch(1_400, 2_580, setOf(1_400L, 1_600L))))
+        }
+
+        @Test
+        fun `shakes further apart than the window do not fire even when delivered together`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()))
+            // One batch, but the two shakes are 1.6 s apart in sample time.
+            val fired = d.process(f, batch(1_000, 4_000, setOf(1_100L, 1_300L, 2_900L, 3_100L)))
+            assertTrue(fired.isEmpty())
+        }
+
+        @Test
+        fun `a batched double shake while near does not fire`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()), near = true)
+            val fired = d.process(f, batch(1_000, 2_180, setOf(1_100L, 1_300L, 1_600L, 1_800L)), near = true)
+            assertTrue(fired.isEmpty())
+        }
+
+        @Test
+        fun `walking-strength bumps in a batch do not fire`() {
+            val d = detector()
+            val f = GravityFilter()
+            d.process(f, batch(0, 980, emptySet()))
+            // ~2 steps per second at about 2.5 g of linear acceleration.
+            val steps = (1_000L..6_000L step 500).toSet()
+            assertTrue(d.process(f, batch(1_000, 6_000, steps, peak = 31f)).isEmpty())
+        }
+
+        @Test
+        fun `NaN is ignored`() {
+            assertFalse(detector().onSample(Float.NaN, 0))
         }
     }
 

@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="lmusic_changelog_140_highlights">
+        <item>Noise generator in Focus, and a new Sleep space.</item>
+        <item>Screensaver when charging in landscape, made for OLED screens.</item>
+        <item>Six new widgets, a lock-screen player and Quick Settings tiles for Focus, Lofi and Noise.</item>
+    </string-array>
+    <string-array name="lmusic_changelog_140_improvements">
+        <item>Shake and face-down gestures work with the screen off.</item>
+        <item>Shuffle follows the Phone / Cloud filter and covers the whole library.</item>
+        <item>More reliable widgets; drag along the bottom bar to switch tabs.</item>
+    </string-array>
     <string-array name="lmusic_changelog_130_highlights">
         <item>Spaces on Home: Lofi (generator, radio, ambience), Focus, Listening garden, Party queue, Taste match and Cover studio.</item>
         <item>Living artwork that breathes with the song, and double-tap to like.</item>

@@ -40,7 +40,7 @@ class BarWidget4x1 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
-            val playerInfo = currentState<PlayerInfo>()
+            val playerInfo = currentState<PlayerInfo>().forDisplay()
             GlanceTheme(colors = YuyuGlanceColors) {
                 BarWidget4x1Content(playerInfo = playerInfo, context = context)
             }

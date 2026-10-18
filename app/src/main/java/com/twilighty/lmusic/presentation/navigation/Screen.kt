@@ -61,6 +61,7 @@ sealed class Screen(val route: String) {
     }
     object Lofi : Screen("lofi")
     object Focus : Screen("focus")
+    object Sleep : Screen("sleep")
     object Recap : Screen("recap/{period}") {
         fun createRoute(period: String) = "recap/$period"
     }

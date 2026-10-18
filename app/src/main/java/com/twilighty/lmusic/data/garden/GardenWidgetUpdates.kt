@@ -63,6 +63,8 @@ class GardenWidgetRefresher @Inject constructor(
     private val repository: GardenRepository,
 ) {
     suspend fun onListeningRecorded() {
+        // Stats and recently played widgets change with every recorded play (throttled there).
+        runCatching { com.twilighty.lmusic.ui.glancewidget.ExtraWidgetUpdater.onListeningRecorded(context) }
         runCatching {
             val ids = GlanceAppWidgetManager(context).getGlanceIds(GardenWidget2x2::class.java)
             if (ids.isEmpty()) return

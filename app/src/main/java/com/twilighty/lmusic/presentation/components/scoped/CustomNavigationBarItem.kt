@@ -36,7 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -66,6 +68,10 @@ fun RowScope.CustomNavigationBarItem(
     selectedTextColor: Color = MaterialTheme.colorScheme.onSurface,
     unselectedTextColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     indicatorColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    // False while the bar's shared drag pill is shown, so the per-item pill doesn't double up.
+    showIndicator: Boolean = true,
+    // Reports the indicator slot's coordinates so the shared drag pill can line up vertically.
+    onIndicatorPositioned: ((LayoutCoordinates) -> Unit)? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
 ) {
     // Colores animados - Solo se recomponen cuando 'selected' cambia
@@ -126,10 +132,17 @@ fun RowScope.CustomNavigationBarItem(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(indicatorWidth, indicatorHeight)
+                .then(
+                    if (onIndicatorPositioned != null) {
+                        Modifier.onGloballyPositioned(onIndicatorPositioned)
+                    } else {
+                        Modifier
+                    }
+                )
         ) {
             // Indicador de fondo (pill shape para Material 3 Expressive)
             androidx.compose.animation.AnimatedVisibility(
-                visible = selected,
+                visible = selected && showIndicator,
                 enter = fadeIn(animationSpec = tween(100)) + // Un fade in más rápido
                         scaleIn(
                             animationSpec = spring( // Usamos spring para el scaleIn

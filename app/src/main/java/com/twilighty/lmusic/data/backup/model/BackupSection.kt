@@ -84,6 +84,20 @@ enum class BackupSection(
         description = "History of AI requests and token consumption.",
         iconRes = R.drawable.rounded_monitoring_24,
         sinceVersion = 4
+    ),
+    FEATURE_SETTINGS(
+        key = "feature_settings",
+        label = "Feature Settings",
+        description = "Haptics, gestures, Focus, lofi presets and stations, smart shuffle, Home and update settings.",
+        iconRes = R.drawable.rounded_instant_mix_24,
+        sinceVersion = 5
+    ),
+    ACTIVITY_HISTORY(
+        key = "activity_history",
+        label = "Focus & Garden History",
+        description = "Finished Focus rounds, Garden milestones and Taste match history.",
+        iconRes = R.drawable.rounded_timer_24,
+        sinceVersion = 5
     );
 
     companion object {

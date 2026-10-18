@@ -33,6 +33,8 @@
     <!-- Required only on Android 11 and below for legacy Bluetooth discovery and Wi-Fi SSID access. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="30" />
+    <!-- Screensaver weather: approximate location, asked only when the user turns on "Use my approximate location" -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- For disabling battery optimization -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -118,6 +120,16 @@
             android:label="Jellyfin Login"
             android:theme="@style/Theme.LMusic" />
 
+
+        <!-- Screensaver (standby) mode: Settings › Appearance › Screensaver, or the charging prompt -->
+        <activity
+            android:name=".presentation.screensaver.ScreensaverActivity"
+            android:exported="false"
+            android:label="Screensaver"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.LMusic.Screensaver"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize" />
 
         <activity
             android:name=".ExternalPlayerActivity"
@@ -216,6 +228,78 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/garden_widget_2x2_info" />
+        </receiver>
+
+        <!-- v1.4 widgets (Yuyu): now playing, album art, queue, lofi & focus, stats, recently played, lock screen. -->
+        <receiver
+            android:name=".ui.glancewidget.NowPlayingWidget2x1Receiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/now_playing_widget_2x1_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.glancewidget.AlbumArtWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/album_art_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.glancewidget.QueueWidget4x3Receiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/queue_widget_4x3_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.glancewidget.LofiFocusWidget2x2Receiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/lofi_focus_widget_2x2_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.glancewidget.StatsWidget2x2Receiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/stats_widget_2x2_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.glancewidget.RecentWidget4x2Receiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recent_widget_4x2_info" />
+        </receiver>
+        <receiver
+            android:name=".ui.glancewidget.LockScreenWidgetReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/lock_screen_widget_info" />
         </receiver>
 
         <receiver android:name=".data.service.SleepTimerReceiver" android:exported="false" />
@@ -356,12 +440,66 @@
         </service>
 
         <service
+            android:name=".data.service.tile.FocusTileService"
+            android:exported="true"
+            android:label="@string/tile_focus"
+            android:icon="@drawable/ic_tile_focus"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
+            android:name=".data.service.tile.LofiTileService"
+            android:exported="true"
+            android:label="@string/tile_lofi"
+            android:icon="@drawable/ic_tile_lofi"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
+            android:name=".data.service.tile.NoiseTileService"
+            android:exported="true"
+            android:label="@string/tile_noise"
+            android:icon="@drawable/ic_tile_noise"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:enabled="false"
             android:exported="false">
             <meta-data
                 android:name="autoStoreLocales"
                 android:value="true" />
+        </service>
+
+        <!-- System screen saver (Settings › Display › Screen saver) using the same screensaver UI -->
+        <service
+            android:name=".presentation.screensaver.LMusicDreamService"
+            android:exported="true"
+            android:label="LMusic"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </service>
 
     </application>

@@ -696,6 +696,23 @@ fun AppNavigation(
                 }
             }
             composable(
+                Screen.Sleep.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.sleep.SleepScreen(
+                        onBack = { navController.popBackStack() },
+                        onPlaySongs = { songs ->
+                            songs.firstOrNull()?.let { playerViewModel.playSongs(songs, it, "Sleep") }
+                        },
+                        bottomInset = paddingValues.calculateBottomPadding()
+                    )
+                }
+            }
+            composable(
                 route = Screen.Recap.route,
                 arguments = listOf(navArgument("period") { type = NavType.StringType }),
                 enterTransition = { enterTransition() },

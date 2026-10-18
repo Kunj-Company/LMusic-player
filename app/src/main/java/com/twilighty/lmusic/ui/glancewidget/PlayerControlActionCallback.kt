@@ -2,7 +2,6 @@ package com.twilighty.lmusic.ui.glancewidget
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.annotation.OptIn
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
@@ -41,22 +40,10 @@ class PlayerControlActionCallback : ActionCallback {
             }
         }
 
+        // Kept for widgets drawn by older versions; new widgets use [musicServiceAction] directly.
+        serviceIntent.putExtra(MusicService.EXTRA_FORCE_FOREGROUND_ON_START, true)
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    context.startService(serviceIntent)
-                } catch (e: IllegalStateException) {
-                    Timber.tag(TAG).w(
-                        e,
-                        "startService denied in background for action %s; retrying as foreground service",
-                        action
-                    )
-                    serviceIntent.putExtra(MusicService.EXTRA_FORCE_FOREGROUND_ON_START, true)
-                    context.startForegroundService(serviceIntent)
-                }
-            } else {
-                context.startService(serviceIntent)
-            }
+            context.startForegroundService(serviceIntent)
             Timber.tag(TAG).d("Service intent sent for action: $action")
         } catch (e: android.app.ForegroundServiceStartNotAllowedException) {
             Timber.tag(TAG).w(e, "Cannot start foreground service from background for action $action")
@@ -76,4 +63,10 @@ object PlayerActions {
     const val PLAY_FROM_QUEUE = "com.twilighty.lmusic.ACTION_WIDGET_PLAY_FROM_QUEUE"
     const val SHUFFLE = "com.twilighty.lmusic.ACTION_WIDGET_SHUFFLE"
     const val REPEAT = "com.twilighty.lmusic.ACTION_WIDGET_REPEAT"
+    /** Plays a song by id: jumps to it when it is in the queue, otherwise plays it next. */
+    const val PLAY_SONG = "com.twilighty.lmusic.ACTION_WIDGET_PLAY_SONG"
+    const val EXTRA_SONG_ID = "song_id"
+
+    /** Actions [com.twilighty.lmusic.data.service.MusicService] handles for widgets. */
+    val ALL = setOf(PLAY_PAUSE, NEXT, PREVIOUS, FAVORITE, PLAY_FROM_QUEUE, SHUFFLE, REPEAT, PLAY_SONG)
 }

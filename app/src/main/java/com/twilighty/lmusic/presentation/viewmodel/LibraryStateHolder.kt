@@ -88,8 +88,39 @@ class LibraryStateHolder @Inject constructor(
             _currentStorageFilter,
             userPreferencesRepository.hideLocalMediaFlow
         ) { filter, hideLocal ->
-            if (hideLocal) com.twilighty.lmusic.data.model.StorageFilter.ONLINE else filter
+            com.twilighty.lmusic.data.model.LibrarySourceFilter.effective(filter, hideLocal)
         }
+
+    /** Public view of the effective filter (selected filter + "hide local media"). */
+    val effectiveStorageFilterFlow: kotlinx.coroutines.flow.Flow<com.twilighty.lmusic.data.model.StorageFilter>
+        get() = effectiveStorageFilter
+
+    // Which effective filter the current [albums] / [artists] lists were built for (null = not yet).
+    private val _albumsStorageFilter = MutableStateFlow<com.twilighty.lmusic.data.model.StorageFilter?>(null)
+    val albumsStorageFilter = _albumsStorageFilter.asStateFlow()
+    private val _artistsStorageFilter = MutableStateFlow<com.twilighty.lmusic.data.model.StorageFilter?>(null)
+    val artistsStorageFilter = _artistsStorageFilter.asStateFlow()
+
+    /** True once the persisted filter was restored or the user picked one in this process. */
+    @Volatile
+    private var storageFilterResolved = false
+
+    /**
+     * Single source of truth for "which sources does the Library show right now", for one-shot
+     * callers (shuffle, tile, shortcut, search). Falls back to the persisted value on a cold start
+     * before [initialize] has restored it, and applies "hide local media".
+     */
+    suspend fun effectiveStorageFilterNow(): com.twilighty.lmusic.data.model.StorageFilter {
+        val selected = if (storageFilterResolved) {
+            _currentStorageFilter.value
+        } else {
+            runCatching { userPreferencesRepository.lastStorageFilterFlow.first() }
+                .getOrDefault(_currentStorageFilter.value)
+        }
+        val hideLocal = runCatching { userPreferencesRepository.hideLocalMediaFlow.first() }
+            .getOrDefault(false)
+        return com.twilighty.lmusic.data.model.LibrarySourceFilter.effective(selected, hideLocal)
+    }
 
     private fun effectiveFoldersStorageFilter(
         selectedFilter: com.twilighty.lmusic.data.model.StorageFilter
@@ -213,7 +244,11 @@ class LibraryStateHolder @Inject constructor(
             _currentFavoriteSortOption.value = SortOption.LIKED.find { it.storageKey == likedSortKey } ?: SortOption.LikedSongDateLiked
 
             // Restore last storage filter (All / Cloud / Local)
-            _currentStorageFilter.value = userPreferencesRepository.lastStorageFilterFlow.first()
+            val restoredFilter = userPreferencesRepository.lastStorageFilterFlow.first()
+            if (!storageFilterResolved) {
+                _currentStorageFilter.value = restoredFilter
+                storageFilterResolved = true
+            }
         }
     }
 
@@ -275,12 +310,13 @@ class LibraryStateHolder @Inject constructor(
             ) { filter, minTracks ->
                 filter to minTracks
             }.flatMapLatest { (filter, minTracks) ->
-                musicRepository.getAlbums(filter, minTracks)
-            }.conflate().collect { albums ->
+                musicRepository.getAlbums(filter, minTracks).map { filter to it }
+            }.conflate().collect { (albumsFilter, albums) ->
                 val sortedAlbums = withContext(Dispatchers.Default) {
                     sortAlbumsList(albums, _currentAlbumSortOption.value).toImmutableList()
                 }
                 _albums.value = sortedAlbums
+                _albumsStorageFilter.value = albumsFilter
                 _isLoadingCategories.value = false
             }
         }
@@ -289,12 +325,13 @@ class LibraryStateHolder @Inject constructor(
             _isLoadingCategories.value = true
             @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
             effectiveStorageFilter.flatMapLatest { filter ->
-                musicRepository.getArtists(filter)
-            }.conflate().collect { artists ->
+                musicRepository.getArtists(filter).map { filter to it }
+            }.conflate().collect { (artistsFilter, artists) ->
                 val sortedArtists = withContext(Dispatchers.Default) {
                     sortArtistsList(artists, _currentArtistSortOption.value).toImmutableList()
                 }
                 _artists.value = sortedArtists
+                _artistsStorageFilter.value = artistsFilter
                 _isLoadingCategories.value = false
             }
         }
@@ -549,6 +586,7 @@ class LibraryStateHolder @Inject constructor(
 
     fun setStorageFilter(filter: com.twilighty.lmusic.data.model.StorageFilter) {
         _currentStorageFilter.value = filter
+        storageFilterResolved = true
         scope?.launch {
             userPreferencesRepository.saveLastStorageFilter(filter)
         }

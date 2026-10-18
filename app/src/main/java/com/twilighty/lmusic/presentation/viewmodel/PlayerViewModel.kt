@@ -729,7 +729,7 @@ class PlayerViewModel @Inject constructor(
             failureMessage = "Failed to build full library queue for songId=%s"
         ) {
             val sortOption = playerUiState.value.currentSongSortOption
-            val storageFilter = playerUiState.value.currentStorageFilter
+            val storageFilter = currentLibrarySourceFilter()
             musicRepository.getSongIdsSorted(sortOption, storageFilter)
         }
     }
@@ -746,14 +746,14 @@ class PlayerViewModel @Inject constructor(
             failureMessage = "Failed to build favorites queue for songId=%s"
         ) {
             val sortOption = playerUiState.value.currentFavoriteSortOption
-            val storageFilter = playerUiState.value.currentStorageFilter
+            val storageFilter = currentLibrarySourceFilter()
             musicRepository.getFavoriteSongIdsSorted(sortOption, storageFilter)
         }
     }
 
     suspend fun getSongsForCurrentLibrarySelection(): List<Song> {
         val sortOption = playerUiState.value.currentSongSortOption
-        val storageFilter = playerUiState.value.currentStorageFilter
+        val storageFilter = currentLibrarySourceFilter()
         val sortedIds = musicRepository.getSongIdsSorted(sortOption, storageFilter)
         return resolvePlaybackQueueFromSortedIds(sortedIds)
     }
@@ -1381,13 +1381,31 @@ class PlayerViewModel @Inject constructor(
     fun shuffleAllSongs(queueName: String = "All Songs (Shuffled)") {
         Log.d("ShuffleDebug", "shuffleAllSongs called.")
         
-        // Load random songs from DB instead of materializing the entire library
+        // Whole library (respecting the Library source filter), not a fixed-size sample.
         viewModelScope.launch {
-            val randomSongs = musicRepository.getRandomSongs(limit = 500)
-            if (randomSongs.isNotEmpty()) {
-                playSongsShuffled(randomSongs, queueName, startAtZero = true)
+            val songs = loadShuffleAllSongs()
+            if (songs.isNotEmpty()) {
+                playSongsShuffled(songs, queueName, startAtZero = true)
+            } else {
+                sendToast(context.getString(R.string.player_no_songs_to_shuffle))
             }
         }
+    }
+
+    /** Library source filter (phone / cloud / all) every shuffle path must respect. */
+    private suspend fun currentLibrarySourceFilter(): com.twilighty.lmusic.data.model.StorageFilter =
+        libraryStateHolder.effectiveStorageFilterNow()
+
+    /**
+     * Every song of the source-filtered library, in random order. Ids come from one cheap SQL
+     * query; songs are resolved from the in-memory cache or in chunks on IO, so 10k+ songs are OK.
+     */
+    private suspend fun loadShuffleAllSongs(): List<Song> {
+        val filter = currentLibrarySourceFilter()
+        val ids = com.twilighty.lmusic.data.model.ShuffleSourceSelector.selectIds(
+            musicRepository.getShuffledSongIds(filter)
+        )
+        return resolvePlaybackQueueFromSortedIds(ids)
     }
 
     /**
@@ -1403,8 +1421,8 @@ class PlayerViewModel @Inject constructor(
         val action: () -> Unit = {
             Timber.d("[TileDebug] action() invoked")
             viewModelScope.launch {
-                var songs = musicRepository.getRandomSongs(limit = 500)
-                Timber.d("[TileDebug] Repository returned ${songs.size} random songs immediately")
+                var songs = loadShuffleAllSongs()
+                Timber.d("[TileDebug] Repository returned ${songs.size} songs immediately")
 
                 if (songs.isEmpty()) {
                     // Cold start or stale DB state: trigger a sync and retry the bounded query.
@@ -1413,7 +1431,7 @@ class PlayerViewModel @Inject constructor(
                     songs = withTimeoutOrNull(30_000L) {
                         var refreshedSongs = emptyList<Song>()
                         while (refreshedSongs.isEmpty()) {
-                            refreshedSongs = musicRepository.getRandomSongs(limit = 500)
+                            refreshedSongs = loadShuffleAllSongs()
                             if (refreshedSongs.isEmpty()) {
                                 delay(500L)
                             }
@@ -1445,7 +1463,7 @@ class PlayerViewModel @Inject constructor(
 
     fun playRandomSong() {
         viewModelScope.launch {
-            val randomSongs = musicRepository.getRandomSongs(limit = 500)
+            val randomSongs = loadShuffleAllSongs()
             if (randomSongs.isNotEmpty()) {
                 playSongsShuffled(randomSongs, "All Songs (Shuffled)", startAtZero = true)
             }
@@ -1457,7 +1475,7 @@ class PlayerViewModel @Inject constructor(
 
         // Load favorite songs from DB on-demand instead of holding them in memory
         viewModelScope.launch {
-            val favSongs = musicRepository.getFavoriteSongsOnce(playerUiState.value.currentStorageFilter)
+            val favSongs = musicRepository.getFavoriteSongsOnce(currentLibrarySourceFilter())
             if (favSongs.isNotEmpty()) {
                 playSongsShuffled(favSongs, "Liked Songs (Shuffled)", startAtZero = true)
             }
@@ -1469,7 +1487,10 @@ class PlayerViewModel @Inject constructor(
             val allAlbums = libraryStateHolder.albums.value
             if (allAlbums.isNotEmpty()) {
                 val randomAlbum = allAlbums.random()
-                val albumSongs = musicRepository.getSongsForAlbum(randomAlbum.id).first()
+                val albumSongs = com.twilighty.lmusic.data.model.ShuffleSourceSelector.selectSongs(
+                    currentLibrarySourceFilter(),
+                    musicRepository.getSongsForAlbum(randomAlbum.id).first()
+                )
                 if (albumSongs.isNotEmpty()) {
                     playSongsShuffled(albumSongs, randomAlbum.title, startAtZero = true)
                 }
@@ -1482,7 +1503,10 @@ class PlayerViewModel @Inject constructor(
             val allArtists = libraryStateHolder.artists.value
             if (allArtists.isNotEmpty()) {
                 val randomArtist = allArtists.random()
-                val artistSongs = musicRepository.getSongsForArtist(randomArtist.id).first()
+                val artistSongs = com.twilighty.lmusic.data.model.ShuffleSourceSelector.selectSongs(
+                    currentLibrarySourceFilter(),
+                    musicRepository.getSongsForArtist(randomArtist.id).first()
+                )
                 if (artistSongs.isNotEmpty()) {
                     playSongsShuffled(artistSongs, randomArtist.name, startAtZero = true)
                 }
@@ -2067,11 +2091,7 @@ class PlayerViewModel @Inject constructor(
 
     fun toggleStorageFilter() {
         val current = _playerUiState.value.currentStorageFilter
-        val next = when (current) {
-            com.twilighty.lmusic.data.model.StorageFilter.ALL -> com.twilighty.lmusic.data.model.StorageFilter.ONLINE
-            com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> com.twilighty.lmusic.data.model.StorageFilter.OFFLINE
-            com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> com.twilighty.lmusic.data.model.StorageFilter.ALL
-        }
+        val next = com.twilighty.lmusic.data.model.LibrarySourceFilter.next(current)
         setStorageFilter(next)
     }
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Palette
@@ -50,10 +51,12 @@ fun YuyuSpacesRow(
     onTasteMatch: () -> Unit,
     onCovers: () -> Unit,
     modifier: Modifier = Modifier,
+    onSleep: () -> Unit = {},
 ) {
     val spaces = listOf(
         YuyuSpace("lofi", "Lofi", "Make a tune or tune in", Icons.Rounded.Headphones, onLofi),
         YuyuSpace("focus", "Focus", "Timer with calm music", Icons.Rounded.Timer, onFocus),
+        YuyuSpace("sleep", "Sleep", "Noise, lofi, slow fade", Icons.Rounded.Bedtime, onSleep),
         YuyuSpace("garden", "Garden", "Grows as you listen", Icons.Rounded.Spa, onGarden),
         YuyuSpace("party", "Party", "Friends add songs", Icons.Rounded.Celebration, onParty),
         YuyuSpace("taste", "Taste match", "Scan a friend", Icons.Rounded.QrCode2, onTasteMatch),

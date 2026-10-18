@@ -22,7 +22,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
 
-enum class LofiSource { Generator, Radio }
+enum class LofiSource { Generator, Radio, Noise }
 
 data class LofiState(
     /** What is loaded; null when lofi is off. */
@@ -43,6 +43,10 @@ internal interface LofiServiceHandle {
     fun resume()
     fun stopAll()
     fun setSleepTimer(minutes: Int?)
+    /** Sleep timer whose volume lowers over the last [fadeMs] before stopping. */
+    fun setSleepTimer(minutes: Int?, fadeMs: Long)
+    /** Stops after fading out over [fadeMs]. */
+    fun stopWithFade(fadeMs: Long)
     /** [LofiController.holdForFocus] was cleared: resume the normal idle stop if paused. */
     fun onFocusHoldReleased()
 }
@@ -168,6 +172,40 @@ class LofiController @Inject constructor(
     /** Stop after [minutes] with a fade; null cancels. */
     fun setSleepTimer(minutes: Int?) { service?.let { s -> runOnMain { s.setSleepTimer(minutes) } } }
 
+    // ---------------------------------------------------------------- noise (see NoiseController)
+
+    /** Plays the noise generator through this service; pauses the main player and takes audio focus. */
+    fun startNoise(): Boolean {
+        pauseMainPlayer()
+        return startService(LofiService.ACTION_NOISE)
+    }
+
+    /** Stops whatever lofi is playing, fading out over [fadeMs]. */
+    fun stopWithFade(fadeMs: Long) {
+        pendingSleep = null
+        val s = service
+        if (s != null) runOnMain { s.stopWithFade(fadeMs) } else engine.stop(fadeMs.toFloat())
+    }
+
+    @Volatile private var pendingSleep: Pair<Int, Long>? = null
+
+    /**
+     * Sleep timer whose volume slowly lowers over the last [fadeMs], then everything stops.
+     * Works right after a start call: it is applied once the service is up. null cancels.
+     */
+    fun setSleepTimer(minutes: Int?, fadeMs: Long) {
+        val s = service
+        if (s != null) {
+            pendingSleep = null
+            runOnMain { s.setSleepTimer(minutes, fadeMs) }
+        } else {
+            pendingSleep = if (minutes != null && minutes > 0) minutes to fadeMs else null
+        }
+    }
+
+    /** Called by [LofiService] once it plays: a sleep timer set before it was up. */
+    internal fun takePendingSleep(): Pair<Int, Long>? = pendingSleep.also { pendingSleep = null }
+
     /** Soft bell chime. Works whether or not lofi or the main player is playing. */
     fun playChime() = engine.playChime()
 
@@ -175,8 +213,12 @@ class LofiController @Inject constructor(
     fun meters(): FloatArray? = engine.meters()
 
     internal fun publish(newState: LofiState) {
+        val playingChanged = _state.value.isPlaying != newState.isPlaying ||
+            (_state.value.source == null) != (newState.source == null)
         _state.value = newState
         _isPlaying.value = newState.isPlaying
+        // Home-screen Lofi & focus widget (throttled, skipped when none is placed).
+        if (playingChanged) runCatching { com.twilighty.lmusic.ui.glancewidget.ExtraWidgetUpdater.requestLofiFocus(context) }
     }
 
     private fun scheduleSave() {

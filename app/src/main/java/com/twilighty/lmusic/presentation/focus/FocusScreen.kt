@@ -129,6 +129,7 @@ fun FocusScreen(
 
     var customOpen by remember { mutableStateOf(false) }
     val active = timer.phase.isActive
+    val batteryTip = com.twilighty.lmusic.presentation.yuyu.rememberBatteryTipState()
 
     Box(Modifier.fillMaxSize().background(Yuyu.canvas)) {
         LazyColumn(
@@ -148,6 +149,11 @@ fun FocusScreen(
                         YuyuIconButton(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", onClick = onBack)
                     },
                 )
+            }
+            if (batteryTip.visible) {
+                item(key = "battery_tip") {
+                    com.twilighty.lmusic.presentation.yuyu.BatteryOptimizationTip(batteryTip, Modifier.padding(horizontal = 16.dp))
+                }
             }
             notice?.let { text ->
                 item(key = "notice") {
@@ -215,6 +221,7 @@ fun FocusScreen(
                         text = when (sessionMusic) {
                             FocusMusicSource.Silence -> "No music, just the timer"
                             FocusMusicSource.Lofi -> "Lofi plays during focus and softens in breaks"
+                            FocusMusicSource.Noise -> "Noise plays during focus"
                             else -> "${sessionMusic.label} plays during focus and pauses in breaks"
                         },
                         style = YuyuType.meta,
@@ -235,6 +242,12 @@ fun FocusScreen(
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
+            }
+            item(key = "noise") {
+                com.twilighty.lmusic.presentation.noise.NoiseSection(
+                    showFocusOptions = (if (active) sessionMusic else musicSource) == FocusMusicSource.Noise,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
             item(key = "today") {
                 Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

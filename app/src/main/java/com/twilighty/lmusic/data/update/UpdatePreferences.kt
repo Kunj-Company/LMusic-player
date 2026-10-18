@@ -70,3 +70,6 @@ class UpdatePreferences @Inject constructor(
         dataStore.edit { it[Keys.DISMISSED_VERSION] = version }
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupUpdateDataStore: DataStore<Preferences> get() = updateDataStore

@@ -198,7 +198,14 @@ fun SearchScreen(
     }
 
     // Search debouncing is centralized in SearchStateHolder.
-    LaunchedEffect(searchQuery, currentFilter) {
+    val searchSourceFilter by remember(playerViewModel) {
+        playerViewModel.playerUiState
+            // Show the effective filter: "hide local media" means cloud only.
+            .map { com.twilighty.lmusic.data.model.LibrarySourceFilter.effective(it.currentStorageFilter, it.hideLocalMedia) }
+            .distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = com.twilighty.lmusic.data.model.StorageFilter.ALL)
+
+    LaunchedEffect(searchQuery, currentFilter, searchSourceFilter) {
         playerViewModel.performSearch(searchQuery)
     }
     val searchResults = searchUiState.searchResults
@@ -375,6 +382,11 @@ fun SearchScreen(
                             SearchFilterChip(SearchFilterType.ARTISTS, currentFilter, playerViewModel)
                             SearchFilterChip(SearchFilterType.PLAYLISTS, currentFilter, playerViewModel)
                         }
+                        SearchSourceChips(
+                            current = searchSourceFilter,
+                            onSelect = { playerViewModel.setStorageFilter(it) },
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
                         Crossfade(
                             targetState = searchResults.isEmpty(),
                             animationSpec = tween(durationMillis = 190),
@@ -1046,4 +1058,29 @@ fun SearchFilterChip(
         onClick = { playerViewModel.updateSearchFilter(filterType) },
         modifier = modifier
     )
+}
+
+/** Phone / Cloud / All — the same source filter as the Library, so results match what Library shows. */
+@Composable
+private fun SearchSourceChips(
+    current: com.twilighty.lmusic.data.model.StorageFilter,
+    onSelect: (com.twilighty.lmusic.data.model.StorageFilter) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(
+            com.twilighty.lmusic.data.model.StorageFilter.OFFLINE to "Phone",
+            com.twilighty.lmusic.data.model.StorageFilter.ONLINE to "Cloud",
+            com.twilighty.lmusic.data.model.StorageFilter.ALL to "All"
+        ).forEach { (filter, label) ->
+            YuyuChip(
+                text = label,
+                selected = current == filter,
+                onClick = { if (current != filter) onSelect(filter) }
+            )
+        }
+    }
 }

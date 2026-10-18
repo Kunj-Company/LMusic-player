@@ -300,6 +300,27 @@ class MusicRepositoryImpl @Inject constructor(
         musicDao.getRandomSongs(limit, filter.allowedParentDirs, filter.applyFilter).map { it.toSong() }
     }
 
+    override suspend fun getRandomSongs(limit: Int, storageFilter: StorageFilter): List<Song> =
+        withContext(Dispatchers.IO) {
+            val filter = cachedDirFilter.value
+            musicDao.getRandomSongsFiltered(
+                limit = limit,
+                allowedParentDirs = filter.allowedParentDirs,
+                applyDirectoryFilter = filter.applyFilter,
+                filterMode = storageFilter.toFilterMode()
+            ).map { it.toSong() }
+        }
+
+    override suspend fun getShuffledSongIds(storageFilter: StorageFilter): List<Long> =
+        withContext(Dispatchers.IO) {
+            val filter = cachedDirFilter.value
+            musicDao.getShuffledSongIdsFiltered(
+                allowedParentDirs = filter.allowedParentDirs,
+                applyDirectoryFilter = filter.applyFilter,
+                filterMode = storageFilter.toFilterMode()
+            )
+        }
+
     override suspend fun getSongsPage(
         limit: Int,
         offset: Int,
@@ -408,11 +429,8 @@ class MusicRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun StorageFilter.toFilterMode(): Int = when (this) {
-        StorageFilter.ALL -> 0
-        StorageFilter.OFFLINE -> 1
-        StorageFilter.ONLINE -> 2
-    }
+    private fun StorageFilter.toFilterMode(): Int =
+        com.twilighty.lmusic.data.model.LibrarySourceFilter.toFilterMode(this)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun getAlbums(storageFilter: StorageFilter, minTracks: Int): Flow<List<Album>> {

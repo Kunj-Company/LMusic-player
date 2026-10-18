@@ -8,6 +8,7 @@ enum class FocusMusicSource(val label: String, val blurb: String) {
     Smart("Focus mix", "Few vocals, steady energy"),
     Library("Instrumental", "Calm songs from your library"),
     Lofi("Lofi", "Made on your phone"),
+    Noise("Noise", "Steady sound, made on your phone"),
     Silence("Silence", "Just the timer");
 }
 

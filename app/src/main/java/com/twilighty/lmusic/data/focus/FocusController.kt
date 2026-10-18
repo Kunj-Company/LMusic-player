@@ -13,6 +13,7 @@ import com.twilighty.lmusic.data.lofi.LofiController
 import com.twilighty.lmusic.data.lofi.LofiEngine
 import com.twilighty.lmusic.data.lofi.LofiMood
 import com.twilighty.lmusic.data.model.Song
+import com.twilighty.lmusic.data.noise.NoiseController
 import com.twilighty.lmusic.data.smart.SmartRepository
 import com.twilighty.lmusic.presentation.haptics.LMusicHaptics
 import com.twilighty.lmusic.presentation.viewmodel.PlaybackStateHolder
@@ -59,6 +60,7 @@ class FocusController @Inject constructor(
     private val smart: dagger.Lazy<SmartRepository>,
     private val musicDao: dagger.Lazy<MusicDao>,
     private val playbackStateHolder: dagger.Lazy<PlaybackStateHolder>,
+    private val noise: dagger.Lazy<NoiseController>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val timer = FocusTimer()
@@ -146,6 +148,18 @@ class FocusController @Inject constructor(
             }
         }
         true
+    }
+
+    /** Widget: starts a session with the saved config and music, or resumes a paused one. Main thread. */
+    internal suspend fun quickStart() {
+        val s = timer.state
+        if (s.phase.isActive) {
+            if (s.isPaused) resume()
+            return
+        }
+        val config = runCatching { repository.config.first() }.getOrDefault(FocusConfig())
+        val source = runCatching { repository.musicSource.first() }.getOrDefault(FocusMusicSource.Lofi)
+        start(config, source)
     }
 
     fun start(config: FocusConfig, source: FocusMusicSource) {
@@ -296,7 +310,7 @@ class FocusController @Inject constructor(
         if (phase != null && applyMusicChange) applyMusic(phase)
         if (finished != null) {
             cancelScheduled()
-            endMusic()
+            endMusic(sessionFinished = true)
             scope.launch { runCatching { repository.saveActive(null) } }
             val rounds = finished.completedRounds
             val minutes = rounds * timer.state.config.focusMinutes
@@ -312,6 +326,7 @@ class FocusController @Inject constructor(
         val s = timer.state
         _state.value = s
         service?.refresh()
+        runCatching { com.twilighty.lmusic.ui.glancewidget.ExtraWidgetUpdater.requestLofiFocus(context) }
         if (s.phase.isActive) {
             val snapshot = ActiveFocusSession(s, _music.value, System.currentTimeMillis())
             scope.launch { runCatching { repository.saveActive(snapshot) } }
@@ -388,6 +403,16 @@ class FocusController @Inject constructor(
                     if (!l.state.value.isPlaying && !l.resume()) lofiRefused()
                 }
             }.onFailure { Timber.tag(TAG).w(it, "Lofi failed") }
+            FocusMusicSource.Noise -> runCatching {
+                val n = noise.get()
+                // Same service as lofi: keep it up while paused or on a break.
+                lofi.get().holdForFocus = true
+                if (!musicStarted) {
+                    n.ensureLoaded()
+                    if (!n.playSolo()) lofiRefused()
+                    musicStarted = true
+                } else if (!n.isSoloPlaying && !n.resume()) lofiRefused()
+            }.onFailure { Timber.tag(TAG).w(it, "Noise failed") }
             FocusMusicSource.Smart, FocusMusicSource.Library -> {
                 if (musicStarted) {
                     runCatching { playbackStateHolder.get().mediaController?.play() }
@@ -451,6 +476,12 @@ class FocusController @Inject constructor(
                     lofiEngine.get().update(l.settings.value.let { it.copy(masterVolume = it.masterVolume * BREAK_LOFI_LEVEL) })
                 }
             }
+            // Noise keeps going through breaks unless the user chose otherwise; a paused session pauses it.
+            FocusMusicSource.Noise -> if (musicStarted) runCatching {
+                val n = noise.get()
+                if (timer.state.isPaused || !n.focusOptions.value.keepThroughBreaks) n.pause()
+                else if (!n.isSoloPlaying && !n.resume()) lofiRefused()
+            }
             FocusMusicSource.Smart, FocusMusicSource.Library -> if (musicStarted) runCatching {
                 playbackStateHolder.get().mediaController?.let { if (it.isPlaying) it.pause() }
             }
@@ -458,7 +489,7 @@ class FocusController @Inject constructor(
         }
     }
 
-    private fun endMusic() {
+    private fun endMusic(sessionFinished: Boolean = false) {
         musicJob?.cancel()
         if (!musicStarted) return
         when (_music.value) {
@@ -466,6 +497,12 @@ class FocusController @Inject constructor(
                 val l = lofi.get()
                 l.holdForFocus = false
                 l.stop()
+            }
+            FocusMusicSource.Noise -> runCatching {
+                lofi.get().holdForFocus = false
+                val n = noise.get()
+                // A finished session respects "Stop at end of session"; stopping by hand always stops.
+                if (!sessionFinished || n.focusOptions.value.stopAtSessionEnd) n.stop(NOISE_END_FADE_MS)
             }
             FocusMusicSource.Smart, FocusMusicSource.Library -> runCatching {
                 playbackStateHolder.get().mediaController?.let { if (it.isPlaying) it.pause() }
@@ -486,6 +523,7 @@ class FocusController @Inject constructor(
         const val SMART_FOCUS_ID = "smart_focus"
         const val MAX_SONGS = 120
         const val BREAK_LOFI_LEVEL = 0.3f
+        const val NOISE_END_FADE_MS = 6_000L
         const val STALE_MS = 12 * 60 * 60 * 1000L
         const val CHIME_GRACE_MS = 2_500L
     }

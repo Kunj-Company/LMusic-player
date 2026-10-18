@@ -69,7 +69,7 @@
             android:contentDescription="Shuffle"
             android:padding="12dp"
             android:src="@drawable/rounded_shuffle_24"
-            app:tint="@color/yuyu_widget_text" />
+            android:tint="@color/yuyu_widget_text" />
 
         <ImageView
             android:layout_width="0dp"
@@ -80,7 +80,7 @@
             android:contentDescription="Previous"
             android:padding="12dp"
             android:src="@drawable/rounded_skip_previous_24"
-            app:tint="@color/yuyu_widget_text" />
+            android:tint="@color/yuyu_widget_text" />
 
         <ImageView
             android:layout_width="0dp"
@@ -91,7 +91,7 @@
             android:contentDescription="Play/Pause"
             android:padding="12dp"
             android:src="@drawable/rounded_pause_24"
-            app:tint="@color/yuyu_widget_on_accent" />
+            android:tint="@color/yuyu_widget_on_accent" />
 
         <ImageView
             android:layout_width="0dp"
@@ -102,7 +102,7 @@
             android:contentDescription="Next"
             android:padding="12dp"
             android:src="@drawable/rounded_skip_next_24"
-            app:tint="@color/yuyu_widget_text" />
+            android:tint="@color/yuyu_widget_text" />
 
         <ImageView
             android:layout_width="0dp"
@@ -113,7 +113,7 @@
             android:contentDescription="Repeat"
             android:padding="12dp"
             android:src="@drawable/rounded_repeat_24"
-            app:tint="@color/yuyu_widget_text" />
+            android:tint="@color/yuyu_widget_text" />
     </LinearLayout>
 
 </LinearLayout>

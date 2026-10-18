@@ -22,24 +22,10 @@ class WidgetUpdateReceiver : BroadcastReceiver() {
             try {
                 val glanceAppWidgetManager = GlanceAppWidgetManager(context)
 
-                val glanceIds = glanceAppWidgetManager.getGlanceIds(LMusicGlanceWidget::class.java)
-                glanceIds.forEach { glanceId ->
-                    LMusicGlanceWidget().update(context, glanceId)
-                }
-
-                val barGlanceIds = glanceAppWidgetManager.getGlanceIds(BarWidget4x1::class.java)
-                barGlanceIds.forEach { glanceId ->
-                    BarWidget4x1().update(context, glanceId)
-                }
-
-                val controlGlanceIds = glanceAppWidgetManager.getGlanceIds(ControlWidget4x2::class.java)
-                controlGlanceIds.forEach { glanceId ->
-                    ControlWidget4x2().update(context, glanceId)
-                }
-
-                val gridGlanceIds = glanceAppWidgetManager.getGlanceIds(GridWidget2x2::class.java)
-                gridGlanceIds.forEach { glanceId ->
-                    GridWidget2x2().update(context, glanceId)
+                PlayerWidgetUpdater.playerWidgets().forEach { widget ->
+                    glanceAppWidgetManager.getGlanceIds(widget.javaClass).forEach { glanceId ->
+                        widget.update(context, glanceId)
+                    }
                 }
             } catch (e: Exception) {
                 Timber.tag("WidgetUpdateReceiver").e(e, "Error updating widgets")

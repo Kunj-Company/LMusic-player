@@ -115,6 +115,13 @@
     <string name="widget_control_4x2_desc">Full controls with shuffle and repeat</string>
     <string name="widget_grid_2x2_desc">Minimalist square player</string>
     <string name="widget_garden_2x2_desc">Your listening garden</string>
+    <string name="widget_now_playing_2x1_desc">Now playing: cover and play/pause</string>
+    <string name="widget_album_art_desc">Large album art with controls</string>
+    <string name="widget_queue_4x3_desc">Up next: tap a song to play it</string>
+    <string name="widget_lofi_focus_2x2_desc">Lofi and focus timer</string>
+    <string name="widget_stats_2x2_desc">Today\'s listening time and streak</string>
+    <string name="widget_recent_4x2_desc">Recently played: tap to play</string>
+    <string name="widget_lock_screen_desc">Compact player for the lock screen</string>
     <string name="service_processing_action">Processing playback action…</string>
 
     <!-- Playlist bulk actions -->

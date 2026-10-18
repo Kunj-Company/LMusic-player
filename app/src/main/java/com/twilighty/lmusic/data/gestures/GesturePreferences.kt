@@ -64,3 +64,6 @@ class GesturePreferences @Inject constructor(
     suspend fun setShakeSensitivity(value: ShakeSensitivity) =
         context.gesturesDataStore.edit { it[Keys.SENSITIVITY] = value.name }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupGesturesDataStore: DataStore<Preferences> get() = gesturesDataStore

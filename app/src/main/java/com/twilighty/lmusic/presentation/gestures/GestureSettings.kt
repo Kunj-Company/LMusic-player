@@ -82,7 +82,7 @@ fun GestureSettingsSection(viewModel: GestureSettingsViewModel = hiltViewModel()
         )
         SwitchSettingItem(
             title = "Shake to shuffle",
-            subtitle = "Shake your phone while music plays to turn shuffle on and jump to a random song$motionSubtitleSuffix",
+            subtitle = "Shake while music plays to shuffle and jump to a random song. Works with the screen off too: then give two firm shakes. Ignored in a pocket or bag$motionSubtitleSuffix",
             checked = settings.shakeToShuffle && hasMotionSensor,
             enabled = hasMotionSensor,
             onCheckedChange = { viewModel.setShakeToShuffle(it) },
@@ -96,7 +96,7 @@ fun GestureSettingsSection(viewModel: GestureSettingsViewModel = hiltViewModel()
         }
         SwitchSettingItem(
             title = "Turn face-down to pause",
-            subtitle = "Place your phone screen-down to pause$motionSubtitleSuffix",
+            subtitle = "Lay your phone flat, screen-down, to pause. Works with the screen off while music plays$motionSubtitleSuffix",
             checked = settings.faceDownToPause && hasMotionSensor,
             enabled = hasMotionSensor,
             onCheckedChange = { viewModel.setFaceDownToPause(it) },
@@ -111,7 +111,7 @@ fun GestureSettingsSection(viewModel: GestureSettingsViewModel = hiltViewModel()
             leadingIcon = { GestureIcon(R.drawable.rounded_play_arrow_24) }
         )
         Text(
-            text = "Motion gestures only listen while music plays and the screen is on.",
+            text = "Motion gestures only listen while music plays, also with the screen off or locked. You feel a short buzz when one works.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)

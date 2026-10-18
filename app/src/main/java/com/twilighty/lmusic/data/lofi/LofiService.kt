@@ -30,6 +30,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import com.twilighty.lmusic.R
+import com.twilighty.lmusic.data.noise.NoiseController
+import com.twilighty.lmusic.data.noise.NoiseEngine
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
@@ -55,6 +57,8 @@ class LofiService : Service(), LofiServiceHandle {
     @Inject lateinit var controller: LofiController
     @Inject lateinit var engine: LofiEngine
     @Inject lateinit var radioRepository: LofiRadioRepository
+    @Inject lateinit var noise: NoiseController
+    @Inject lateinit var noiseEngine: NoiseEngine
 
     private val scope = MainScope()
     private val handler = Handler(Looper.getMainLooper())
@@ -95,6 +99,7 @@ class LofiService : Service(), LofiServiceHandle {
         }
         when (intent?.action) {
             ACTION_GENERATE -> playGenerator()
+            ACTION_NOISE -> playNoise()
             ACTION_RADIO -> {
                 val st = intent.getStringExtra(EXTRA_STATION)?.let {
                     runCatching { json.decodeFromString(RadioStation.serializer(), it) }.getOrNull()
@@ -120,6 +125,8 @@ class LofiService : Service(), LofiServiceHandle {
         idleJob?.cancel()
         releaseRadio()
         engine.stop(300f)
+        // Only noise this service played (under-music noise runs without it).
+        if (source == LofiSource.Noise) noiseEngine.stop(300f)
         abandonFocus()
         releaseWake()
         scope.cancel()
@@ -136,6 +143,7 @@ class LofiService : Service(), LofiServiceHandle {
 
     private fun playGenerator() {
         releaseRadio()
+        if (source == LofiSource.Noise) noiseEngine.stop(300f)
         source = LofiSource.Generator
         station = null
         nowPlaying = null
@@ -150,11 +158,40 @@ class LofiService : Service(), LofiServiceHandle {
         playing = true
         acquireWake()
         cancelIdle()
+        applyPendingSleep()
         publish()
+    }
+
+    /** The noise generator (settings from [NoiseController]). */
+    private fun playNoise() {
+        releaseRadio()
+        engine.stop(300f)
+        source = LofiSource.Noise
+        station = null
+        nowPlaying = null
+        error = null
+        if (!requestFocus()) {
+            error = "Another app is using audio"
+            stopAll()
+            return
+        }
+        noise.ensureLoaded()
+        noiseEngine.start(noise.settings.value)
+        noiseEngine.setDucked(false)
+        playing = true
+        acquireWake()
+        cancelIdle()
+        applyPendingSleep()
+        publish()
+    }
+
+    private fun applyPendingSleep() {
+        controller.takePendingSleep()?.let { (minutes, fadeMs) -> setSleepTimer(minutes, fadeMs) }
     }
 
     private fun playRadio(st: RadioStation) {
         engine.stop(300f)
+        if (source == LofiSource.Noise) noiseEngine.stop(300f)
         releaseWake()
         source = LofiSource.Radio
         station = st
@@ -173,6 +210,7 @@ class LofiService : Service(), LofiServiceHandle {
         playing = true
         buffering = true
         cancelIdle()
+        applyPendingSleep()
         publish()
         scope.launch { radioRepository.reportClick(st) }
     }
@@ -185,6 +223,7 @@ class LofiService : Service(), LofiServiceHandle {
         when (source) {
             LofiSource.Generator -> engine.stop(500f)
             LofiSource.Radio -> radio?.pause()
+            LofiSource.Noise -> noiseEngine.stop(500f)
             null -> Unit
         }
         playing = false
@@ -206,6 +245,10 @@ class LofiService : Service(), LofiServiceHandle {
                 engine.start(controller.settings.value, 800f)
                 acquireWake()
             }
+            LofiSource.Noise -> {
+                noiseEngine.start(noise.settings.value, 800f)
+                acquireWake()
+            }
             LofiSource.Radio -> {
                 val p = radio
                 if (p == null) station?.let { playRadio(it); return } else {
@@ -220,10 +263,14 @@ class LofiService : Service(), LofiServiceHandle {
         publish()
     }
 
-    override fun stopAll() {
+    override fun stopAll() = stopWithFade(600L)
+
+    override fun stopWithFade(fadeMs: Long) {
         sleepJob?.cancel(); sleepJob = null; sleepEndsAt = null
+        sleepLevel = 1f
         cancelIdle()
-        engine.stop(600f)
+        engine.stop(fadeMs.toFloat())
+        if (source == LofiSource.Noise) noiseEngine.stop(fadeMs.toFloat())
         releaseRadio()
         abandonFocus()
         releaseWake()
@@ -241,36 +288,51 @@ class LofiService : Service(), LofiServiceHandle {
         stopSelf()
     }
 
-    override fun setSleepTimer(minutes: Int?) {
+    override fun setSleepTimer(minutes: Int?) = setSleepTimer(minutes, SLEEP_FADE_MS)
+
+    override fun setSleepTimer(minutes: Int?, fadeMs: Long) {
         sleepJob?.cancel()
         sleepJob = null
         sleepEndsAt = null
+        if (sleepLevel < 1f) applySleepLevel(1f)
         if (minutes != null && minutes > 0) {
             val total = minutes * 60_000L
             sleepEndsAt = System.currentTimeMillis() + total
             sleepJob = scope.launch {
-                val fade = SLEEP_FADE_MS.coerceAtMost(total / 2)
+                val fade = fadeMs.coerceIn(1_000L, total)
                 delay(total - fade)
-                when (source) {
-                    LofiSource.Generator -> {
-                        engine.stop(fade.toFloat())
-                        delay(fade)
+                if (fade <= SLEEP_FADE_MS && source == LofiSource.Generator) {
+                    engine.stop(fade.toFloat())
+                    delay(fade)
+                } else {
+                    // Long fades: step the level down (a gentle curve), a few seconds per step.
+                    val steps = (fade / 3_000L).toInt().coerceIn(10, 400)
+                    for (i in steps downTo 0) {
+                        val f = i / steps.toFloat()
+                        applySleepLevel(f * f)
+                        delay(fade / steps)
                     }
-                    LofiSource.Radio -> {
-                        val p = radio
-                        val steps = 30
-                        for (i in steps downTo 0) {
-                            p?.volume = i / steps.toFloat()
-                            delay(fade / steps)
-                        }
-                    }
-                    null -> Unit
                 }
                 sleepEndsAt = null
                 stopAll()
             }
         }
         publish()
+    }
+
+    /** 0..1 on top of the normal level, for the sleep fade. */
+    private var sleepLevel = 1f
+
+    private fun applySleepLevel(level: Float) {
+        sleepLevel = level
+        when (source) {
+            LofiSource.Generator -> engine.update(
+                controller.settings.value.let { it.copy(masterVolume = it.masterVolume * level) }
+            )
+            LofiSource.Radio -> radio?.volume = (if (ducked) 0.3f else 1f) * level
+            LofiSource.Noise -> noiseEngine.setLevel(level)
+            null -> Unit
+        }
     }
 
     private fun buildRadioPlayer(): ExoPlayer {
@@ -347,7 +409,8 @@ class LofiService : Service(), LofiServiceHandle {
     private fun setDuck(value: Boolean) {
         ducked = value
         engine.setDucked(value)
-        radio?.volume = if (value) 0.3f else 1f
+        noiseEngine.setDucked(value)
+        radio?.volume = (if (value) 0.3f else 1f) * sleepLevel
     }
 
     private fun requestFocus(): Boolean {
@@ -436,13 +499,17 @@ class LofiService : Service(), LofiServiceHandle {
 
     private fun buildNotification(): Notification {
         val settings = controller.settings.value
+        val noiseSettings = if (source == LofiSource.Noise) noise.settings.value else null
         val title = when (source) {
             LofiSource.Radio -> station?.name ?: "Lofi radio"
+            LofiSource.Noise -> "Noise · ${noiseSettings?.presetName ?: noiseSettings?.summary ?: ""}"
             else -> "Lofi · ${settings.mood.label}"
         }
         val text = when {
             error != null -> error
             source == LofiSource.Radio -> nowPlaying ?: if (buffering) "Connecting…" else "Lofi radio"
+            source == LofiSource.Noise ->
+                if (noiseSettings?.presetName != null) "${noiseSettings.summary} · made on your phone" else "Made on your phone"
             else -> "${settings.keyName} · ${settings.tempoBpm} BPM · made on your phone"
         }
         val contentIntent = packageManager.getLaunchIntentForPackage(packageName)?.let {
@@ -466,7 +533,7 @@ class LofiService : Service(), LofiServiceHandle {
             if (playing) "Pause" else "Play",
             action(ACTION_TOGGLE, 1)
         )
-        val compact = if (source != LofiSource.Radio) {
+        val compact = if (source == LofiSource.Generator) {
             builder.addAction(R.drawable.rounded_shuffle_24, "New tune", action(ACTION_NEW_TUNE, 2))
             intArrayOf(0, 1, 2)
         } else intArrayOf(0, 1)
@@ -498,6 +565,7 @@ class LofiService : Service(), LofiServiceHandle {
         const val CHANNEL_ID = "lmusic_lofi"
         private const val NOTIFICATION_ID = 0x10F1
         const val ACTION_GENERATE = "com.twilighty.lmusic.lofi.GENERATE"
+        const val ACTION_NOISE = "com.twilighty.lmusic.lofi.NOISE"
         const val ACTION_RADIO = "com.twilighty.lmusic.lofi.RADIO"
         const val ACTION_TOGGLE = "com.twilighty.lmusic.lofi.TOGGLE"
         const val ACTION_PAUSE = "com.twilighty.lmusic.lofi.PAUSE"

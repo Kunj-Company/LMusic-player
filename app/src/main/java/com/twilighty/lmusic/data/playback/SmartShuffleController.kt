@@ -66,3 +66,6 @@ class SmartShuffleController @Inject constructor(
         const val RECENT_LIMIT = 300
     }
 }
+
+/** Same DataStore for the backup module (data/backup/module/FeatureDataStores.kt). */
+internal val Context.backupSmartShuffleDataStore: DataStore<Preferences> get() = smartShuffleDataStore

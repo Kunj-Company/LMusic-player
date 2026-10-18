@@ -68,6 +68,7 @@ class FocusService : Service() {
             runCatching { controller.restore() }.onFailure { Timber.tag(TAG).w(it, "Focus restore failed") }
             when (action) {
                 ACTION_TOGGLE -> controller.togglePause()
+                ACTION_QUICK_START -> controller.quickStart() // home-screen widget
                 ACTION_SKIP -> controller.skip()
                 ACTION_STOP -> controller.stop()
                 ACTION_ALARM -> controller.onAlarm() // alarms armed by older versions
@@ -128,6 +129,8 @@ class FocusService : Service() {
         const val ACTION_SKIP = "com.twilighty.lmusic.focus.SKIP"
         const val ACTION_STOP = "com.twilighty.lmusic.focus.STOP"
         const val ACTION_ALARM = "com.twilighty.lmusic.focus.ALARM"
+        /** Starts a session with the saved length and music (widget); resumes a paused one. */
+        const val ACTION_QUICK_START = "com.twilighty.lmusic.focus.QUICK_START"
 
         /** The session countdown notification (also posted without the service after a background alarm). */
         internal fun buildSessionNotification(context: Context, s: FocusTimerState): Notification {

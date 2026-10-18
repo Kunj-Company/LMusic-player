@@ -33,6 +33,14 @@ class BackupSectionTest {
         assertEquals(BackupSection.QUICK_FILL, BackupSection.fromKey("quick_fill"))
         assertEquals(BackupSection.ARTIST_IMAGES, BackupSection.fromKey("artist_images"))
         assertEquals(BackupSection.EQUALIZER, BackupSection.fromKey("equalizer"))
+        assertEquals(BackupSection.FEATURE_SETTINGS, BackupSection.fromKey("feature_settings"))
+        assertEquals(BackupSection.ACTIVITY_HISTORY, BackupSection.fromKey("activity_history"))
+    }
+
+    @Test
+    fun `feature data store sections have sinceVersion 5`() {
+        assertEquals(5, BackupSection.FEATURE_SETTINGS.sinceVersion)
+        assertEquals(5, BackupSection.ACTIVITY_HISTORY.sinceVersion)
     }
 
     @Test
@@ -47,8 +55,8 @@ class BackupSectionTest {
     }
 
     @Test
-    fun `there are exactly 12 backup sections`() {
-        assertEquals(12, BackupSection.entries.size)
+    fun `there are exactly 14 backup sections`() {
+        assertEquals(14, BackupSection.entries.size)
     }
 
     @Test
