@@ -204,8 +204,17 @@ def main():
     step("06-shuffle-all", shuffle_all)
     expect("a test song is playing (mini player)", has_text("LMusic Test", tries=4))
     before = sorted(t for t in texts() if t.startswith("Test Artist") or t.startswith("LMusic Test"))
-    mini = find_where(lambda v, x, y: (v.startswith("LMusic Test") or v.startswith("Test Artist")) and y > H * 0.7)
-    mini_y = mini[1] if mini else int(H * 0.88)
+    # The mini player is the lowest song title on screen (Home's mix tile also lists test artists).
+    mini_y = None
+    root = dump()
+    if root is not None:
+        for node in root.iter("node"):
+            v = (node.get("text") or "").strip()
+            m = re.findall(r"\d+", node.get("bounds", ""))
+            if v.startswith("LMusic Test") and len(m) == 4:
+                cy = (int(m[1]) + int(m[3])) // 2
+                mini_y = cy if mini_y is None or cy > mini_y else mini_y
+    mini_y = mini_y or int(H * 0.88)
     print("mini player at y =", mini_y)
     step("07-mini-player-swipe-next", lambda: (adb("shell", "input", "swipe", str(int(W*0.85)), str(mini_y), str(int(W*0.15)), str(mini_y), "220"), True)[1])
     time.sleep(2)
