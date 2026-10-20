@@ -154,6 +154,50 @@ class YouTubeMusicRepository @Inject constructor(
         )
     }
 
+    /** YouTube's radio for a song: about 50 similar songs and the token for more. */
+    suspend fun radio(videoId: String): YouTubeMusicRadioPage =
+        YouTubeMusicParsers.parseRadio(api.next(readySession(), videoId))
+
+    suspend fun radioMore(continuation: String): YouTubeMusicRadioPage =
+        YouTubeMusicParsers.parseRadio(api.next(readySession(), videoId = null, continuation = continuation))
+
+    suspend fun searchSuggestions(input: String): List<String> =
+        YouTubeMusicParsers.parseSuggestions(api.searchSuggestions(readySession(), input))
+
+    /** Plain lyrics for a song, or null when YouTube has none. */
+    suspend fun lyrics(videoId: String): YouTubeMusicLyrics? {
+        val browseId = radio(videoId).lyricsBrowseId ?: return null
+        return YouTubeMusicParsers.parseLyrics(api.browse(readySession(), browseId))
+    }
+
+    /** Artist page: top songs, albums, singles, videos, playlists and similar artists. */
+    suspend fun artist(browseId: String): YouTubeMusicBrowsePage {
+        val raw = api.browse(readySession(), browseId)
+        return YouTubeMusicParsers.parseBrowse(raw).copy(title = YouTubeMusicParsers.parsePageTitle(raw))
+    }
+
+    /** Album tracks; album rows leave out the artist and cover, so they come from the header. */
+    suspend fun album(browseId: String): YouTubeMusicBrowsePage {
+        val raw = api.browse(readySession(), browseId)
+        val (title, artist, cover) = YouTubeMusicParsers.parseAlbumHeader(raw)
+        val tracks = YouTubeMusicParsers.parseBrowse(raw).shelves.flatMap { it.tracks }.distinctBy { it.videoId }.map { track ->
+            track.copy(
+                artist = track.artist.ifBlank { artist.orEmpty() },
+                album = track.album.ifBlank { title.orEmpty() },
+                thumbnailUrl = cover ?: track.thumbnailUrl,
+                albumId = track.albumId ?: browseId,
+            )
+        }
+        return YouTubeMusicBrowsePage(shelves = listOf(YouTubeMusicShelf(title = "", tracks = tracks)), title = title)
+    }
+
+    /** Sends a like or unlike to the signed-in account; does nothing when signed out. */
+    suspend fun setLiked(videoId: String, liked: Boolean): Boolean {
+        val session = readySession()
+        if (!session.isLoggedIn || !YouTubeMusicFormats.isValidVideoId(videoId)) return false
+        return runCatching { api.setLiked(session, videoId, liked) }.isSuccess
+    }
+
     /** A single track for a pasted link, so any YouTube video can be played or saved as audio. */
     suspend fun trackPage(videoId: String): YouTubeMusicBrowsePage {
         val payload = YouTubeMusicParsers.parsePlayer(
@@ -261,6 +305,7 @@ class YouTubeMusicRepository @Inject constructor(
                     expiresInSeconds = payload.expiresInSeconds ?: DEFAULT_EXPIRY_SECONDS,
                     userAgent = client.userAgent,
                     origin = origin,
+                    durationMs = payload.durationMs ?: format.approxDurationMs ?: 0L,
                 )
             }
         }

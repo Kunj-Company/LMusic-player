@@ -78,6 +78,107 @@ object YouTubeMusicParsers {
         }
     }
 
+    /** Radio / up-next rows from the `next` endpoint. */
+    fun parseRadio(raw: String): YouTubeMusicRadioPage {
+        val root = json.parseToJsonElement(raw)
+        val rows = mutableListOf<JsonObject>()
+        collectByKey(root, "playlistPanelVideoRenderer", rows)
+        val tracks = rows.mapNotNull { row ->
+            val videoId = row.str("videoId")?.takeIf { YouTubeMusicFormats.isValidVideoId(it) } ?: return@mapNotNull null
+            val title = row["title"]?.let(::firstRun) ?: return@mapNotNull null
+            val byline = row["longBylineText"]?.let { joinRuns(it) }.orEmpty()
+            // "Artist • Album • 2022"
+            val names = byline.split("•").map { it.trim() }.filter { it.isNotBlank() && !isMetaText(it) }
+            val ids = browseIds(row["longBylineText"])
+            YouTubeMusicTrack(
+                videoId = videoId,
+                title = title,
+                artist = names.getOrNull(0).orEmpty(),
+                album = names.getOrNull(1).orEmpty(),
+                thumbnailUrl = largestThumbnail(row["thumbnail"] ?: row),
+                durationMs = row["lengthText"]?.let(::firstRun)?.let(::parseDuration) ?: 0L,
+                artistId = ids.firstOrNull { it.startsWith("UC") },
+                albumId = ids.firstOrNull { it.startsWith("MPRE") },
+            )
+        }.distinctBy { it.videoId }
+        val continuation = findObject(root, "nextRadioContinuationData")?.str("continuation")
+            ?: findObject(root, "nextContinuationData")?.str("continuation")
+        return YouTubeMusicRadioPage(
+            tracks = tracks,
+            continuation = continuation,
+            lyricsBrowseId = browseIds(root).firstOrNull { it.startsWith("MPLY") },
+        )
+    }
+
+    fun parseSuggestions(raw: String): List<String> {
+        val items = mutableListOf<JsonObject>()
+        collectByKey(json.parseToJsonElement(raw), "searchSuggestionRenderer", items)
+        return items.mapNotNull { it["suggestion"]?.let(::firstRun) }.distinct()
+    }
+
+    /** Plain lyrics from a song's lyrics page (browse id MPLY…), or null when it has none. */
+    fun parseLyrics(raw: String): YouTubeMusicLyrics? {
+        val shelf = findObject(json.parseToJsonElement(raw), "musicDescriptionShelfRenderer") ?: return null
+        val text = shelf["description"]?.let { joinRuns(it) }?.takeIf { it.isNotBlank() } ?: return null
+        return YouTubeMusicLyrics(text = text, source = shelf["footer"]?.let { joinRuns(it) }?.takeIf { it.isNotBlank() })
+    }
+
+    /** Heading of an artist or album page. */
+    fun parsePageTitle(raw: String): String? {
+        val root = json.parseToJsonElement(raw)
+        val header = findObject(root, "musicImmersiveHeaderRenderer")
+            ?: findObject(root, "musicVisualHeaderRenderer")
+            ?: findObject(root, "musicResponsiveHeaderRenderer")
+            ?: findObject(root, "musicDetailHeaderRenderer")
+            ?: return null
+        return header["title"]?.let(::firstRun)
+    }
+
+    /** Album page header: title, main artist and the square cover. */
+    fun parseAlbumHeader(raw: String): Triple<String?, String?, String?> {
+        val header = findObject(json.parseToJsonElement(raw), "musicResponsiveHeaderRenderer")
+            ?: findObject(json.parseToJsonElement(raw), "musicDetailHeaderRenderer")
+            ?: return Triple(null, null, null)
+        val title = header["title"]?.let(::firstRun)
+        val artist = (header["straplineTextOne"] ?: header["subtitle"])?.let { joinRuns(it) }
+            ?.split("•")?.map { it.trim() }?.firstOrNull { it.isNotBlank() && !isMetaText(it) }
+        return Triple(title, artist, largestThumbnail(header["thumbnail"] ?: header))
+    }
+
+    private fun collectByKey(element: JsonElement, key: String, into: MutableList<JsonObject>) {
+        when (element) {
+            is JsonObject -> {
+                (element[key] as? JsonObject)?.let { into += it; return }
+                element.values.forEach { collectByKey(it, key, into) }
+            }
+            is JsonArray -> element.forEach { collectByKey(it, key, into) }
+            else -> Unit
+        }
+    }
+
+    private fun findObject(element: JsonElement, key: String): JsonObject? = when (element) {
+        is JsonObject -> (element[key] as? JsonObject) ?: element.values.firstNotNullOfOrNull { findObject(it, key) }
+        is JsonArray -> element.firstNotNullOfOrNull { findObject(it, key) }
+        else -> null
+    }
+
+    /** Every browseEndpoint id under [element], in order. */
+    private fun browseIds(element: JsonElement?): List<String> {
+        val ids = mutableListOf<String>()
+        fun walkIds(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    node.obj("browseEndpoint")?.str("browseId")?.let(ids::add)
+                    node.values.forEach(::walkIds)
+                }
+                is JsonArray -> node.forEach(::walkIds)
+                else -> Unit
+            }
+        }
+        element?.let(::walkIds)
+        return ids.distinct()
+    }
+
     fun parseBrowse(raw: String): YouTubeMusicBrowsePage {
         val root = json.parseToJsonElement(raw)
         val shelves = mutableListOf<YouTubeMusicShelf>()
@@ -170,6 +271,8 @@ object YouTubeMusicParsers {
             album = rest.getOrNull(1).orEmpty().ifBlank { subtitleParts.getOrNull(1).orEmpty() },
             thumbnailUrl = largestThumbnail(item),
             durationMs = durationMs,
+            artistId = browseIds(item["flexColumns"]).firstOrNull { it.startsWith("UC") },
+            albumId = browseIds(item["flexColumns"]).firstOrNull { it.startsWith("MPRE") },
         )
     }
 
@@ -189,8 +292,20 @@ object YouTubeMusicParsers {
 
     private fun parsePlaylist(item: JsonObject): YouTubeMusicPlaylist? {
         val browseId = findString(item, "browseId")
-        // Artists and channels (UC…) are not playlists; their menus only hold a radio mix.
-        if (browseId?.startsWith("UC") == true) return null
+        // Artists open their page; plain channels (profiles) and radio menus are skipped.
+        if (browseId?.startsWith("UC") == true) {
+            if (findString(item, "pageType") != "MUSIC_PAGE_TYPE_ARTIST") return null
+            val name = item["title"]?.let(::firstRun)
+                ?: item["flexColumns"].asArray().firstNotNullOfOrNull { firstRun(it) }
+                ?: return null
+            return YouTubeMusicPlaylist(
+                playlistId = browseId,
+                title = name,
+                subtitle = "Artist",
+                thumbnailUrl = largestThumbnail(item),
+                kind = YouTubeMusicItemKind.ARTIST,
+            )
+        }
         val playlistId = when {
             browseId?.startsWith("VL") == true -> browseId.removePrefix("VL")
             !browseId.isNullOrBlank() -> browseId
@@ -206,6 +321,7 @@ object YouTubeMusicParsers {
             title = title,
             subtitle = subtitle,
             thumbnailUrl = largestThumbnail(item),
+            kind = if (playlistId.startsWith("MPRE")) YouTubeMusicItemKind.ALBUM else YouTubeMusicItemKind.PLAYLIST,
         )
     }
 
@@ -310,7 +426,8 @@ object YouTubeMusicParsers {
     }
 
     private val DURATION_TEXT = Regex("""\d{1,2}:\d{2}(?::\d{2})?""")
-    private val COUNT_TEXT = Regex("""[\d.,]+\s*[KMB]?\s+(views|plays|songs|subscribers|monthly audience)""", RegexOption.IGNORE_CASE)
+    // "88M views", "24 crore views", "1.2 lakh plays": a number, an optional scale word, a unit.
+    private val COUNT_TEXT = Regex("""[\d.,]+\s*(?:[^\s\d]+\s+)?(views|plays|songs|subscribers|monthly audience|watching)""", RegexOption.IGNORE_CASE)
     private val TYPE_LABELS = setOf("Song", "Video", "Episode", "Single", "Album", "EP", "Podcast")
 
     // Upload dates on video and episode rows: "Aug 20, 2021", "2021".

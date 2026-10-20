@@ -24,6 +24,18 @@ object YouTubeMusicUris {
         return candidate.takeIf { YouTubeMusicFormats.isValidVideoId(it) }
     }
 
+    /**
+     * Video id of a song the player is streaming: either its `ytmusic://` content URI or
+     * the local proxy URL it resolves to (`http://127.0.0.1:<port>/ytmusic/<id>`).
+     */
+    fun videoIdFromPlaybackUri(uri: android.net.Uri): String? = videoIdFromPlaybackUri(uri.toString())
+
+    fun videoIdFromPlaybackUri(uriString: String): String? =
+        videoIdFrom(uriString)
+            ?: PROXY_URL_REGEX.matchEntire(uriString)?.groupValues?.get(1)?.takeIf { YouTubeMusicFormats.isValidVideoId(it) }
+
+    private val PROXY_URL_REGEX = Regex("""http://127\.0\.0\.1:\d+/ytmusic/([A-Za-z0-9_-]{11})(?:[?#].*)?""")
+
     /** Video id from a pasted YouTube or YouTube Music link, or null when the text is not one. */
     fun videoIdFromLink(text: String): String? {
         val link = text.trim()

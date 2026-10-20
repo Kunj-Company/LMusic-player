@@ -38,6 +38,19 @@ class YouTubeMusicDownloader @Inject constructor(
     private val queue = Mutex()
     private val _status = MutableStateFlow<String?>(null)
     val status: StateFlow<String?> = _status.asStateFlow()
+    private val _activeVideoId = MutableStateFlow<String?>(null)
+    /** The song being downloaded right now, so buttons can show progress for it. */
+    val activeVideoId: StateFlow<String?> = _activeVideoId.asStateFlow()
+    // Which file each downloaded song became, so it can be removed again later.
+    private val savedFiles = context.getSharedPreferences(DOWNLOADS_PREFS, Context.MODE_PRIVATE)
+    private val _savedVideoIds = MutableStateFlow(savedFiles.all.keys.toSet())
+    /** Songs that have a downloaded file. */
+    val savedVideoIds: StateFlow<Set<String>> = _savedVideoIds.asStateFlow()
+
+    init {
+        // Files deleted outside LMusic no longer count as downloaded.
+        scope.launch { forgetMissingFiles() }
+    }
 
     private val http = YouTubeMusicClients.http(okHttpClient).newBuilder()
         .callTimeout(2, TimeUnit.MINUTES)
@@ -55,13 +68,19 @@ class YouTubeMusicDownloader @Inject constructor(
                 tracks.forEachIndexed { index, track ->
                     val label = if (tracks.size == 1) track.title else "${track.title} (${index + 1}/${tracks.size})"
                     _status.value = "Downloading $label"
+                    _activeVideoId.value = track.videoId
                     runCatching { download(track) { percent -> _status.value = "Downloading $label · $percent%" } }
-                        .onSuccess { saved += 1 }
+                        .onSuccess { uri ->
+                            saved += 1
+                            savedFiles.edit().putString(track.videoId, uri).apply()
+                            _savedVideoIds.value = _savedVideoIds.value + track.videoId
+                        }
                         .onFailure { error ->
                             Timber.w(error, "YouTube Music download failed for ${track.videoId}")
                             _status.value = "Download failed: ${error.message ?: track.title}"
                         }
                 }
+                _activeVideoId.value = null
                 if (saved > 0) syncManager.incrementalSync()
                 _status.value = when {
                     tracks.size == 1 && saved == 1 -> "Saved ${tracks.first().title}"
@@ -74,6 +93,37 @@ class YouTubeMusicDownloader @Inject constructor(
 
     fun clearStatus() {
         _status.value = null
+    }
+
+    /** Deletes a song's downloaded file. LMusic created it, so no extra permission is needed. */
+    fun delete(videoId: String, title: String) {
+        scope.launch {
+            val uri = savedFiles.getString(videoId, null)
+            val removed = uri == null || runCatching {
+                context.contentResolver.delete(android.net.Uri.parse(uri), null, null)
+            }.onFailure { Timber.w(it, "Could not delete the download of $videoId") }.isSuccess
+            if (!removed) {
+                _status.value = "Could not remove $title"
+                return@launch
+            }
+            savedFiles.edit().remove(videoId).apply()
+            _savedVideoIds.value = _savedVideoIds.value - videoId
+            syncManager.incrementalSync()
+            _status.value = "Removed $title"
+        }
+    }
+
+    private fun forgetMissingFiles() {
+        val missing = savedFiles.all.filter { (_, value) ->
+            val uri = (value as? String)?.let(android.net.Uri::parse) ?: return@filter true
+            runCatching {
+                context.contentResolver.query(uri, arrayOf(MediaStore.Audio.Media._ID), null, null, null)
+                    ?.use { it.count == 0 } ?: true
+            }.getOrDefault(false)
+        }.keys
+        if (missing.isEmpty()) return
+        savedFiles.edit().apply { missing.forEach(::remove) }.apply()
+        _savedVideoIds.value = _savedVideoIds.value - missing
     }
 
     /** Downloads the highest bitrate audio and saves it, tagged, under Music/LMusic/YouTube Music. */
@@ -94,7 +144,7 @@ class YouTubeMusicDownloader @Inject constructor(
                     title = track.title,
                     artist = track.artist,
                     album = track.album,
-                    cover = fetchCover(track.thumbnailUrl),
+                    cover = fetchCover(track),
                 )
                 raw.inputStream().use { input ->
                     tagged.outputStream().use { output -> YouTubeMusicOpusRemuxer.remux(input, output, tags) }
@@ -149,13 +199,22 @@ class YouTubeMusicDownloader @Inject constructor(
         }
     }
 
-    private fun fetchCover(url: String?): ByteArray? {
-        val large = YouTubeMusicFormats.largeThumbnail(url) ?: return null
-        return runCatching {
-            http.newCall(Request.Builder().url(large).build()).execute().use { response ->
+    /** Square cover for the file: big album art, or the HD video thumbnail cropped square. */
+    private suspend fun fetchCover(track: YouTubeMusicTrack): ByteArray? {
+        val isVideo = track.thumbnailUrl == null || YouTubeMusicThumbnails.isVideoThumbnail(track.thumbnailUrl)
+        val url = if (isVideo) {
+            YouTubeMusicThumbnails.bestVideoThumbnail(http, track.videoId) ?: track.thumbnailUrl
+        } else {
+            YouTubeMusicThumbnails.albumArt(track.thumbnailUrl, DOWNLOAD_COVER_SIZE)
+        } ?: return null
+        val bytes = runCatching {
+            http.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (response.isSuccessful) response.body.bytes() else null
             }
-        }.getOrNull()
+        }.getOrNull() ?: return null
+        return if (isVideo) {
+            runCatching { YouTubeMusicThumbnails.squareCover(bytes, YouTubeMusicThumbnails.hasLetterbox(url)) }.getOrDefault(bytes)
+        } else bytes
     }
 
     private fun write(spec: YouTubeMusicDownloadSpec, track: YouTubeMusicTrack, file: File): String {
@@ -188,5 +247,7 @@ class YouTubeMusicDownloader @Inject constructor(
 
     private companion object {
         const val CHUNK_BYTES = 4L * 1024 * 1024
+        const val DOWNLOADS_PREFS = "ytmusic_downloads"
+        const val DOWNLOAD_COVER_SIZE = 1200
     }
 }

@@ -3,6 +3,7 @@ package com.twilighty.lmusic.presentation.ytmusic.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.twilighty.lmusic.data.ytmusic.YouTubeMusicDownloader
+import com.twilighty.lmusic.data.ytmusic.YouTubeMusicItemKind
 import com.twilighty.lmusic.data.ytmusic.YouTubeMusicLibrary
 import com.twilighty.lmusic.data.ytmusic.YouTubeMusicPlaylist
 import com.twilighty.lmusic.data.ytmusic.YouTubeMusicRepository
@@ -11,6 +12,7 @@ import com.twilighty.lmusic.data.ytmusic.YouTubeMusicTrack
 import com.twilighty.lmusic.data.ytmusic.YouTubeMusicUris
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,6 +38,10 @@ data class YouTubeMusicDashboardState(
     val searchResults: List<YouTubeMusicShelf> = emptyList(),
     val openPlaylistTitle: String? = null,
     val playlistTracks: List<YouTubeMusicTrack> = emptyList(),
+    /** Shelves of an open artist page (songs, albums, singles, similar artists). */
+    val pageShelves: List<YouTubeMusicShelf> = emptyList(),
+    /** YouTube search suggestions for what is being typed. */
+    val suggestions: List<String> = emptyList(),
     val status: String? = null,
     val loggedOut: Boolean = false,
 )
@@ -87,7 +93,8 @@ class YouTubeMusicDashboardViewModel @Inject constructor(
     }
 
     fun selectTab(tab: YouTubeMusicTab) {
-        _state.update { it.copy(tab = tab, openPlaylistTitle = null, error = null) }
+        pageStack.clear()
+        _state.update { it.copy(tab = tab, openPlaylistTitle = null, pageShelves = emptyList(), error = null) }
         when (tab) {
             YouTubeMusicTab.FEED -> if (_state.value.feed.isEmpty()) refresh(tab)
             YouTubeMusicTab.LIBRARY -> if (_state.value.library.isEmpty() && repository.isLoggedIn) refresh(tab)
@@ -99,7 +106,11 @@ class YouTubeMusicDashboardViewModel @Inject constructor(
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            _state.update { it.copy(tab = YouTubeMusicTab.SEARCH, loading = true, error = null, openPlaylistTitle = null) }
+            suggestJob?.cancel()
+            pageStack.clear()
+            _state.update {
+                it.copy(tab = YouTubeMusicTab.SEARCH, loading = true, error = null, openPlaylistTitle = null, pageShelves = emptyList(), suggestions = emptyList())
+            }
             val linkedVideoId = YouTubeMusicUris.videoIdFromLink(trimmed)
             runCatching {
                 if (linkedVideoId != null) repository.trackPage(linkedVideoId) else repository.search(trimmed)
@@ -113,24 +124,66 @@ class YouTubeMusicDashboardViewModel @Inject constructor(
         }
     }
 
+    /** Pages opened from a list, so back returns to the one before (artist → album → back). */
+    private data class OpenPage(val title: String, val tracks: List<YouTubeMusicTrack>, val shelves: List<YouTubeMusicShelf>)
+    private val pageStack = ArrayDeque<OpenPage>()
+    private var suggestJob: Job? = null
+
     fun openPlaylist(playlist: YouTubeMusicPlaylist) {
+        // Keep the page being left so back can return to it.
+        _state.value.openPlaylistTitle?.let { title ->
+            pageStack.addLast(OpenPage(title, _state.value.playlistTracks, _state.value.pageShelves))
+        }
         viewModelScope.launch {
             _state.update {
-                it.copy(loading = true, error = null, openPlaylistTitle = playlist.title, playlistTracks = emptyList())
+                it.copy(loading = true, error = null, openPlaylistTitle = playlist.title, playlistTracks = emptyList(), pageShelves = emptyList())
             }
-            runCatching { repository.playlist(playlist.playlistId) }
-                .onSuccess { page ->
-                    val tracks = page.shelves.flatMap { shelf -> shelf.tracks }
-                    _state.update { it.copy(loading = false, playlistTracks = tracks) }
+            runCatching {
+                when (playlist.kind) {
+                    YouTubeMusicItemKind.ARTIST -> repository.artist(playlist.playlistId)
+                    YouTubeMusicItemKind.ALBUM -> repository.album(playlist.playlistId)
+                    YouTubeMusicItemKind.PLAYLIST -> repository.playlist(playlist.playlistId)
                 }
-                .onFailure { error ->
-                    _state.update { it.copy(loading = false, error = error.message ?: "Could not open playlist") }
+            }.onSuccess { page ->
+                _state.update { current ->
+                    val title = page.title?.takeIf { it.isNotBlank() } ?: playlist.title
+                    if (playlist.kind == YouTubeMusicItemKind.ARTIST) {
+                        current.copy(loading = false, openPlaylistTitle = title, pageShelves = page.shelves)
+                    } else {
+                        current.copy(loading = false, openPlaylistTitle = title, playlistTracks = page.shelves.flatMap { it.tracks })
+                    }
                 }
+            }.onFailure { error ->
+                _state.update { it.copy(loading = false, error = error.message ?: "Could not open ${playlist.title}") }
+            }
         }
     }
 
+    /** Back from an open page: to the previous page, or to the tab. */
     fun closePlaylist() {
-        _state.update { it.copy(openPlaylistTitle = null, playlistTracks = emptyList()) }
+        val previous = pageStack.removeLastOrNull()
+        _state.update {
+            if (previous != null) {
+                it.copy(openPlaylistTitle = previous.title, playlistTracks = previous.tracks, pageShelves = previous.shelves, error = null)
+            } else {
+                it.copy(openPlaylistTitle = null, playlistTracks = emptyList(), pageShelves = emptyList())
+            }
+        }
+    }
+
+    /** Suggestions while typing in YouTube search. */
+    fun suggest(input: String) {
+        suggestJob?.cancel()
+        val trimmed = input.trim()
+        if (trimmed.length < 2) {
+            _state.update { it.copy(suggestions = emptyList()) }
+            return
+        }
+        suggestJob = viewModelScope.launch {
+            delay(250)
+            val suggestions = runCatching { repository.searchSuggestions(trimmed) }.getOrDefault(emptyList())
+            _state.update { it.copy(suggestions = suggestions.take(6)) }
+        }
     }
 
     /** Remembers the queue; each song is saved to the library when it starts to play. */

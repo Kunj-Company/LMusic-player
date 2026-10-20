@@ -35,6 +35,39 @@ class YouTubeMusicApi(
     suspend fun search(session: YouTubeMusicSession, query: String): String =
         post(session, YouTubeMusicClients.METADATA, "search", searchBody(session, query))
 
+    /** "Up next" for a song, as a radio (RDAMVM playlist), or the next batch of it. */
+    suspend fun next(session: YouTubeMusicSession, videoId: String?, continuation: String? = null): String {
+        val body = buildJsonObject {
+            put("context", clientContext(session, YouTubeMusicClients.METADATA))
+            if (continuation != null) {
+                put("continuation", continuation)
+            } else if (videoId != null) {
+                put("videoId", videoId)
+                put("playlistId", "RDAMVM$videoId")
+                put("isAudioOnly", true)
+                put("tunerSettingValue", "AUTOMIX_SETTING_NORMAL")
+            }
+        }.toString()
+        return post(session, YouTubeMusicClients.METADATA, "next", body)
+    }
+
+    suspend fun searchSuggestions(session: YouTubeMusicSession, input: String): String {
+        val body = buildJsonObject {
+            put("context", clientContext(session, YouTubeMusicClients.METADATA))
+            put("input", input)
+        }.toString()
+        return post(session, YouTubeMusicClients.METADATA, "music/get_search_suggestions", body)
+    }
+
+    /** Like or unlike a song on the signed-in account. */
+    suspend fun setLiked(session: YouTubeMusicSession, videoId: String, liked: Boolean): String {
+        val body = buildJsonObject {
+            put("context", clientContext(session, YouTubeMusicClients.METADATA))
+            putJsonObject("target") { put("videoId", videoId) }
+        }.toString()
+        return post(session, YouTubeMusicClients.METADATA, if (liked) "like/like" else "like/removelike", body)
+    }
+
     /** Plain YouTube search, filtered to videos. */
     suspend fun searchVideos(session: YouTubeMusicSession, query: String): String {
         val body = buildJsonObject {

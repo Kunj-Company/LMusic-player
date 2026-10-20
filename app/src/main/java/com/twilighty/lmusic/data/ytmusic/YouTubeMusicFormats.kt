@@ -6,17 +6,13 @@ object YouTubeMusicFormats {
     const val HIGHEST_TARGET_BITRATE = 320_000
     const val OGG_OPUS_MIME = "audio/ogg; codecs=\"opus\""
 
-    /** YouTube thumbnails carry their size in the URL; ask for a cover-sized one. */
-    fun largeThumbnail(url: String?): String? {
-        if (url.isNullOrBlank()) return null
-        return when {
-            url.contains("googleusercontent.com") || url.contains("ggpht.com") ->
-                url.replace(Regex("""=(?:w\d+-h\d+|s\d+)"""), "=w544-h544")
-            url.contains("ytimg.com/vi/") ->
-                url.substringBeforeLast('/') + "/hqdefault.jpg"
-            else -> url
-        }
-    }
+    /**
+     * Cover-sized art: square album art at 800px. Video thumbnails stay as given; the
+     * HD one is found when the song is saved (see [YouTubeMusicThumbnails]).
+     */
+    fun largeThumbnail(url: String?): String? = YouTubeMusicThumbnails.albumArt(url, COVER_SIZE)
+
+    private const val COVER_SIZE = 800
 
     fun selectHighest(
         formats: List<YouTubeMusicAudioFormat>,

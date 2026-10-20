@@ -68,9 +68,19 @@ class LibrarySourceFilterTest {
     fun `chip cycle visits every filter`() {
         var f = StorageFilter.ALL
         val seen = mutableSetOf<StorageFilter>()
-        repeat(3) { f = LibrarySourceFilter.next(f); seen += f }
+        repeat(StorageFilter.entries.size) { f = LibrarySourceFilter.next(f); seen += f }
         assertEquals(StorageFilter.entries.toSet(), seen)
         assertEquals(StorageFilter.ALL, f)
+    }
+
+    @Test
+    fun `downloaded keeps only phone files saved from YouTube Music`() {
+        val downloaded = local.copy(path = "/storage/emulated/0/Music/LMusic/YouTube Music/Artist - Song.opus")
+        val otherLocal = local.copy(path = "/storage/emulated/0/Music/Album/Song.mp3")
+        assertTrue(LibrarySourceFilter.matchesSong(StorageFilter.DOWNLOADED, downloaded))
+        assertFalse(LibrarySourceFilter.matchesSong(StorageFilter.DOWNLOADED, otherLocal))
+        assertFalse(LibrarySourceFilter.matchesSong(StorageFilter.DOWNLOADED, ytmusic))
+        assertEquals(3, LibrarySourceFilter.toFilterMode(StorageFilter.DOWNLOADED))
     }
 
     @Test

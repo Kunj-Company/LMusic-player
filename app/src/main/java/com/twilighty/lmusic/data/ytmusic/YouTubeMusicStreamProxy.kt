@@ -75,10 +75,7 @@ class YouTubeMusicStreamProxy @Inject constructor(
      * re-reads the stream to probe it. Hand it the bitrate the resolver already knows.
      */
     fun knownBitrate(uri: Uri): Int? {
-        val videoId = YouTubeMusicUris.videoIdFrom(uri.toString())
-            ?: uri.pathSegments.takeIf { uri.host == "127.0.0.1" && it.size == 2 && it[0] == routePrefix.removePrefix("/") }
-                ?.get(1)
-            ?: return null
+        val videoId = YouTubeMusicUris.videoIdFromPlaybackUri(uri) ?: return null
         return repository.knownStreamBitrate(videoId)
     }
 
@@ -88,5 +85,6 @@ class YouTubeMusicStreamProxy @Inject constructor(
         val videoId = YouTubeMusicUris.videoIdFrom(uriString) ?: return
         library.saveIfQueued(videoId)
         runCatching { getOrFetchStreamUrl(videoId) }
+        runCatching { library.fillDuration(videoId, repository.resolveStream(videoId).durationMs) }
     }
 }

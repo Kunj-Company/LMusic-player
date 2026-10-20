@@ -55,6 +55,11 @@ private fun libraryEmptySpec(
                 titleRes = R.string.lib_empty_songs_online_title,
                 subtitleRes = R.string.lib_empty_songs_online_subtitle
             )
+            StorageFilter.DOWNLOADED -> LibraryEmptySpec(
+                iconRes = R.drawable.rounded_music_off_24,
+                titleRes = R.string.lib_empty_downloaded_title,
+                subtitleRes = R.string.lib_empty_downloaded_subtitle
+            )
         }
 
         LibraryTabId.ALBUMS -> when (storageFilter) {
@@ -72,6 +77,11 @@ private fun libraryEmptySpec(
                 iconRes = R.drawable.rounded_album_24,
                 titleRes = R.string.lib_empty_albums_online_title,
                 subtitleRes = R.string.lib_empty_albums_online_subtitle
+            )
+            StorageFilter.DOWNLOADED -> LibraryEmptySpec(
+                iconRes = R.drawable.rounded_album_24,
+                titleRes = R.string.lib_empty_downloaded_title,
+                subtitleRes = R.string.lib_empty_downloaded_subtitle
             )
         }
 
@@ -91,6 +101,11 @@ private fun libraryEmptySpec(
                 titleRes = R.string.lib_empty_artists_online_title,
                 subtitleRes = R.string.lib_empty_artists_online_subtitle
             )
+            StorageFilter.DOWNLOADED -> LibraryEmptySpec(
+                iconRes = R.drawable.rounded_artist_24,
+                titleRes = R.string.lib_empty_downloaded_title,
+                subtitleRes = R.string.lib_empty_downloaded_subtitle
+            )
         }
 
         LibraryTabId.LIKED -> when (storageFilter) {
@@ -108,6 +123,11 @@ private fun libraryEmptySpec(
                 iconRes = R.drawable.rounded_favorite_24,
                 titleRes = R.string.lib_empty_liked_online_title,
                 subtitleRes = R.string.lib_empty_liked_online_subtitle
+            )
+            StorageFilter.DOWNLOADED -> LibraryEmptySpec(
+                iconRes = R.drawable.rounded_favorite_24,
+                titleRes = R.string.lib_empty_downloaded_title,
+                subtitleRes = R.string.lib_empty_downloaded_subtitle
             )
         }
 

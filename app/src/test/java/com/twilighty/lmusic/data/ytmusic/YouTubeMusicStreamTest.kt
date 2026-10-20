@@ -5,6 +5,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.gagravarr.opus.OpusFile
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -52,15 +53,19 @@ class YouTubeMusicStreamTest {
               ${row("Hits", "Playlist • YouTube Music • 50 songs", "\"navigationEndpoint\": { \"browseEndpoint\": { \"browseId\": \"VLRDCLAK5uy_hits\" } }")},
               ${row("Sid Sriram", "Artist • 355M monthly audience", "\"navigationEndpoint\": { \"browseEndpoint\": { \"browseId\": \"UC7_KgmSrwM247k2lnh5\" } }, \"menu\": { \"playlistId\": \"RDEMradio\" }")},
               ${row("Kesariya", "Song • Arijit Singh • Brahmastra • 4:28", "\"playlistItemData\": { \"videoId\": \"NJAv_7lHUIU\" }")},
+              ${row("Let Me Down Slowly", "Gravero • 24 crore views • 2:56", "\"playlistItemData\": { \"videoId\": \"abcdefghij1\" }")},
               ${row("Kesariya (Dance Mix)", "Sony Music India • 88M views • 3:18", "\"playlistItemData\": { \"videoId\": \"K3B8-klo5xc\" }")}
             ] }"""
         )
         val first = page.shelves.first()
-        assertEquals(listOf("NJAv_7lHUIU", "K3B8-klo5xc"), first.tracks.map { it.videoId })
+        assertEquals(listOf("NJAv_7lHUIU", "abcdefghij1", "K3B8-klo5xc"), first.tracks.map { it.videoId })
+        assertEquals("Gravero", first.tracks[1].artist)
+        assertEquals("", first.tracks[1].album)
+        assertEquals(176_000L, first.tracks[1].durationMs)
         assertEquals("Arijit Singh", first.tracks[0].artist)
         assertEquals("Brahmastra", first.tracks[0].album)
         assertEquals(268_000L, first.tracks[0].durationMs)
-        assertEquals("Sony Music India", first.tracks[1].artist)
+        assertEquals("Sony Music India", first.tracks[2].artist)
         assertEquals(listOf("RDCLAK5uy_hits"), page.shelves.flatMap { it.playlists }.map { it.playlistId })
     }
 
@@ -106,6 +111,14 @@ class YouTubeMusicStreamTest {
                  "streamingData": { "hlsManifestUrl": "https://manifest.googlevideo.com/api/manifest/hls_variant/x" } }"""
         )
         assertEquals("https://manifest.googlevideo.com/api/manifest/hls_variant/x", payload.hlsManifestUrl)
+    }
+
+    @Test
+    fun `playback uris give the video id for the cache and bitrate`() {
+        assertEquals("dQw4w9WgXcQ", YouTubeMusicUris.videoIdFromPlaybackUri("ytmusic://track/dQw4w9WgXcQ"))
+        assertEquals("dQw4w9WgXcQ", YouTubeMusicUris.videoIdFromPlaybackUri("http://127.0.0.1:43369/ytmusic/dQw4w9WgXcQ"))
+        assertNull(YouTubeMusicUris.videoIdFromPlaybackUri("http://127.0.0.1:43369/jellyfin/dQw4w9WgXcQ"))
+        assertNull(YouTubeMusicUris.videoIdFromPlaybackUri("content://media/external/audio/media/12"))
     }
 
     @Test
@@ -159,16 +172,64 @@ class YouTubeMusicStreamTest {
     }
 
     @Test
-    fun `thumbnails are upgraded to cover size`() {
+    fun `album art is asked for big and video thumbnails are never downgraded`() {
         assertEquals(
-            "https://lh3.googleusercontent.com/abc=w544-h544-l90-rj",
-            YouTubeMusicFormats.largeThumbnail("https://lh3.googleusercontent.com/abc=w60-h60-l90-rj"),
+            "https://lh3.googleusercontent.com/abc=w800-h800-l90-rj",
+            YouTubeMusicFormats.largeThumbnail("https://lh3.googleusercontent.com/abc=w60-h60-p-l90-rj"),
         )
-        assertEquals(
-            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-            YouTubeMusicFormats.largeThumbnail("https://i.ytimg.com/vi/dQw4w9WgXcQ/sddefault.jpg"),
-        )
+        val hd = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hq720.jpg?sqp=abc"
+        assertEquals(hd, YouTubeMusicFormats.largeThumbnail(hd))
         assertNull(YouTubeMusicFormats.largeThumbnail(null))
+        assertEquals(
+            listOf("maxresdefault", "hq720", "sddefault", "hqdefault").map { "https://i.ytimg.com/vi/dQw4w9WgXcQ/$it.jpg" },
+            YouTubeMusicThumbnails.videoThumbnailCandidates("dQw4w9WgXcQ"),
+        )
+        assertTrue(YouTubeMusicThumbnails.hasLetterbox("https://i.ytimg.com/vi/x/sddefault.jpg"))
+        assertFalse(YouTubeMusicThumbnails.hasLetterbox("https://i.ytimg.com/vi/x/maxresdefault.jpg"))
+    }
+
+    @Test
+    fun `radio rows give songs with artist, album and page ids plus the next token`() {
+        val page = YouTubeMusicParsers.parseRadio(
+            """{ "contents": [ { "playlistPanelVideoRenderer": {
+                  "videoId": "NJAv_7lHUIU",
+                  "title": { "runs": [{ "text": "Kesariya" }] },
+                  "longBylineText": { "runs": [
+                    { "text": "Arijit Singh", "navigationEndpoint": { "browseEndpoint": { "browseId": "UCDxKh1gFWeYsqePvgVzmPoQ" } } },
+                    { "text": " • " },
+                    { "text": "Brahmastra", "navigationEndpoint": { "browseEndpoint": { "browseId": "MPREb_abc" } } },
+                    { "text": " • " }, { "text": "2022" } ] },
+                  "lengthText": { "runs": [{ "text": "4:29" }] } } } ],
+                "tabs": [ { "tabRenderer": { "endpoint": { "browseEndpoint": { "browseId": "MPLYt_lyrics" } } } } ],
+                "continuations": [ { "nextRadioContinuationData": { "continuation": "TOKEN" } } ] }"""
+        )
+        val track = page.tracks.single()
+        assertEquals("Arijit Singh", track.artist)
+        assertEquals("Brahmastra", track.album)
+        assertEquals(269_000L, track.durationMs)
+        assertEquals("UCDxKh1gFWeYsqePvgVzmPoQ", track.artistId)
+        assertEquals("MPREb_abc", track.albumId)
+        assertEquals("TOKEN", page.continuation)
+        assertEquals("MPLYt_lyrics", page.lyricsBrowseId)
+    }
+
+    @Test
+    fun `suggestions and lyrics are read`() {
+        assertEquals(
+            listOf("kesariya", "kesari"),
+            YouTubeMusicParsers.parseSuggestions(
+                """{ "contents": [ { "searchSuggestionRenderer": { "suggestion": { "runs": [{ "text": "kesar" }, { "text": "iya" }] } } },
+                   { "searchSuggestionRenderer": { "suggestion": { "runs": [{ "text": "kesari" }] } } } ] }"""
+            ),
+        )
+        val lyrics = YouTubeMusicParsers.parseLyrics(
+            """{ "contents": { "musicDescriptionShelfRenderer": {
+                  "description": { "runs": [{ "text": "Line one\nLine two" }] },
+                  "footer": { "runs": [{ "text": "Source: LyricFind" }] } } } }"""
+        )
+        assertEquals("Line one\nLine two", lyrics?.text)
+        assertEquals("Source: LyricFind", lyrics?.source)
+        assertNull(YouTubeMusicParsers.parseLyrics("""{ "contents": {} }"""))
     }
 
     @Test

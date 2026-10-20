@@ -83,6 +83,8 @@ class DualPlayerEngine @Inject constructor(
     private val navidromeStreamProxy: NavidromeStreamProxy,
     private val jellyfinStreamProxy: com.twilighty.lmusic.data.jellyfin.JellyfinStreamProxy,
     private val youTubeMusicStreamProxy: YouTubeMusicStreamProxy,
+    private val youTubeMusicCache: com.twilighty.lmusic.data.ytmusic.YouTubeMusicCache,
+    private val youTubeMusicLibrary: com.twilighty.lmusic.data.ytmusic.YouTubeMusicLibrary,
     private val gdriveStreamProxy: com.twilighty.lmusic.data.gdrive.GDriveStreamProxy,
     private val telegramCacheManager: com.twilighty.lmusic.data.telegram.TelegramCacheManager,
     private val connectivityStateHolder: com.twilighty.lmusic.presentation.viewmodel.ConnectivityStateHolder
@@ -596,7 +598,8 @@ class DualPlayerEngine @Inject constructor(
             }
         }
         
-        val dataSourceFactory = DefaultDataSource.Factory(context)
+        // YouTube streams go through a 7-day, 1 GB audio cache; everything else is read directly.
+        val dataSourceFactory = youTubeMusicCache.dataSourceFactory(DefaultDataSource.Factory(context))
         val resolvingFactory = ResolvingDataSource.Factory(dataSourceFactory, resolver)
         val extractorsFactory = DefaultExtractorsFactory()
             .setMp4ExtractorFlags(Mp4Extractor.FLAG_WORKAROUND_IGNORE_EDIT_LISTS)
@@ -744,6 +747,9 @@ class DualPlayerEngine @Inject constructor(
         if (!gdriveStreamProxy.ensureReady(5_000L)) return@withContext null
         gdriveStreamProxy.resolveGDriveUri(uriString)?.let { Uri.parse(it) }
     }
+
+    /** (song id, art URL) when a streamed song's sharper cover has been found. */
+    val streamedArtworkUpdates get() = youTubeMusicLibrary.artworkUpdates
 
     /** Bitrate a streaming source already knows for [uri], when the decoder cannot report one. */
     fun knownStreamBitrate(uri: Uri): Int? = youTubeMusicStreamProxy.knownBitrate(uri)

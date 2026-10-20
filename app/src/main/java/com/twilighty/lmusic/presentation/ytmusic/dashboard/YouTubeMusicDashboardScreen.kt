@@ -295,7 +295,10 @@ fun YouTubeMusicDashboardScreen(
             if (state.tab == YouTubeMusicTab.SEARCH && state.openPlaylistTitle == null) {
                 OutlinedTextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = {
+                        query = it
+                        viewModel.suggest(it)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -307,6 +310,13 @@ fun YouTubeMusicDashboardScreen(
                             Icon(Icons.Rounded.Search, contentDescription = "Search")
                         }
                     }
+                )
+                YouTubeSearchSuggestions(
+                    suggestions = state.suggestions,
+                    onPick = { suggestion ->
+                        query = suggestion
+                        viewModel.search(suggestion)
+                    },
                 )
             }
 
@@ -360,6 +370,21 @@ fun YouTubeMusicDashboardScreen(
                             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                             color = MaterialTheme.colorScheme.error,
                             fontFamily = GoogleSansRounded
+                        )
+                    }
+                    state.openPlaylistTitle != null && state.pageShelves.isNotEmpty() -> {
+                        // Artist page: top songs, albums, singles, videos and similar artists.
+                        ShelfList(
+                            shelves = state.pageShelves,
+                            cardShape = cardShape,
+                            contentPadding = listPadding,
+                            onPlay = { shelf, track ->
+                                val tracks = shelf.tracks.ifEmpty { listOf(track) }
+                                play(viewModel, playerViewModel, tracks, track, state.openPlaylistTitle.orEmpty())
+                            },
+                            onOpenPlaylist = viewModel::openPlaylist,
+                            onDownload = viewModel::download,
+                            onWatch = watchVideo,
                         )
                     }
                     state.openPlaylistTitle != null -> {
@@ -717,4 +742,40 @@ private fun play(
 ) {
     viewModel.prepareQueue(tracks, start)
     playerViewModel.playSongs(tracks.map(YouTubeMusicUris::toSong), YouTubeMusicUris.toSong(start), queueName)
+}
+
+/** YouTube's suggestions for the text being typed, in the search field's style. */
+@Composable
+internal fun YouTubeSearchSuggestions(
+    suggestions: List<String>,
+    onPick: (String) -> Unit,
+) {
+    if (suggestions.isEmpty()) return
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        suggestions.forEach { suggestion ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onPick(suggestion) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Rounded.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    suggestion,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = GoogleSansRounded,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }

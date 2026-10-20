@@ -3,7 +3,11 @@ package com.twilighty.lmusic.data.ytmusic
 import com.twilighty.lmusic.data.database.MusicDao
 import com.twilighty.lmusic.data.database.SongArtistCrossRef
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -18,11 +22,23 @@ import javax.inject.Singleton
 @Singleton
 class YouTubeMusicLibrary @Inject constructor(
     private val musicDao: MusicDao,
+    okHttpClient: OkHttpClient,
 ) {
     private val queued = ConcurrentHashMap<String, YouTubeMusicTrack>()
+    private val http = YouTubeMusicClients.http(okHttpClient)
+    private val _artworkUpdates = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 8)
+
+    /** (song id, sharper art URL) once a song's HD cover has been found. */
+    val artworkUpdates: SharedFlow<Pair<String, String>> = _artworkUpdates.asSharedFlow()
 
     fun remember(tracks: List<YouTubeMusicTrack>) {
         tracks.forEach { queued[it.videoId] = it }
+    }
+
+    /** Search rows often carry no length: store the one from the stream once it is known. */
+    suspend fun fillDuration(videoId: String, durationMs: Long) {
+        if (durationMs <= 0L) return
+        runCatching { withContext(Dispatchers.IO) { musicDao.fillMissingDuration(YouTubeMusicUris.songId(videoId), durationMs) } }
     }
 
     /** Saves a remembered track the first time it is about to play. */
@@ -32,7 +48,13 @@ class YouTubeMusicLibrary @Inject constructor(
     }
 
     private suspend fun save(track: YouTubeMusicTrack) = withContext(Dispatchers.IO) {
-        val song = YouTubeMusicUris.toEntity(track)
+        val listed = YouTubeMusicUris.toEntity(track)
+        // Video results come with small 4:3 thumbnails; swap in the HD one when it exists.
+        val hdArt = if (track.thumbnailUrl == null || YouTubeMusicThumbnails.isVideoThumbnail(track.thumbnailUrl)) {
+            YouTubeMusicThumbnails.bestVideoThumbnail(http, track.videoId)
+        } else null
+        val song = if (hdArt != null) listed.copy(albumArtUriString = hdArt) else listed
+        if (hdArt != null && hdArt != listed.albumArtUriString) _artworkUpdates.tryEmit(song.id.toString() to hdArt)
         musicDao.insertArtistsIgnoreConflicts(listOf(YouTubeMusicUris.toArtist(track)))
         musicDao.insertAlbumsIgnoreConflicts(listOf(YouTubeMusicUris.toAlbum(track)))
         val inserted = musicDao.insertSongsIgnoreConflicts(listOf(song))

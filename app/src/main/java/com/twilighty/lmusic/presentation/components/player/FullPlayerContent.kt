@@ -1616,6 +1616,15 @@ private fun SongMetadataDisplaySection(
             }
         }
 
+        // YouTube songs only: save a tagged copy to Music/LMusic/YouTube Music.
+        song?.let { currentSong ->
+            com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicDownloadButton(
+                song = currentSong,
+                containerColor = chipColor,
+                contentColor = chipContentColor,
+            )
+        }
+
         if (showQueueButton) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),

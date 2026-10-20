@@ -19,6 +19,9 @@
     <string name="library_storage_filter_all_songs">All songs</string>
     <string name="library_storage_filter_online">Online</string>
     <string name="library_storage_filter_offline">Offline</string>
+    <string name="library_storage_filter_downloaded">Downloaded</string>
+    <string name="lib_empty_downloaded_title">No downloads yet</string>
+    <string name="lib_empty_downloaded_subtitle">Songs you download from YouTube Music show up here.</string>
     <string name="cd_sort_options">Sort options</string>
 
     <!-- Fetch lyrics (manual search fields) -->

@@ -42,14 +42,30 @@ data class YouTubeMusicTrack(
     val album: String = "",
     val thumbnailUrl: String? = null,
     val durationMs: Long = 0L,
+    /** Browse ids for the artist (UC…) and album (MPREb_…) pages, when YouTube links them. */
+    val artistId: String? = null,
+    val albumId: String? = null,
 )
+
+enum class YouTubeMusicItemKind { PLAYLIST, ALBUM, ARTIST }
 
 data class YouTubeMusicPlaylist(
     val playlistId: String,
     val title: String,
     val subtitle: String = "",
     val thumbnailUrl: String? = null,
+    val kind: YouTubeMusicItemKind = YouTubeMusicItemKind.PLAYLIST,
 )
+
+/** Songs YouTube picks after a seed song, the token for the next batch, and its lyrics page. */
+data class YouTubeMusicRadioPage(
+    val tracks: List<YouTubeMusicTrack>,
+    val continuation: String? = null,
+    val lyricsBrowseId: String? = null,
+)
+
+/** A song's lyrics as plain text, with YouTube's credit line ("Source: …"). */
+data class YouTubeMusicLyrics(val text: String, val source: String? = null)
 
 data class YouTubeMusicShelf(
     val title: String,
@@ -60,6 +76,8 @@ data class YouTubeMusicShelf(
 data class YouTubeMusicBrowsePage(
     val shelves: List<YouTubeMusicShelf>,
     val continuation: String? = null,
+    /** Page heading for artist and album pages. */
+    val title: String? = null,
 )
 
 data class YouTubeMusicAudioFormat(
@@ -92,6 +110,8 @@ data class YouTubeMusicStream(
     val expiresInSeconds: Int,
     val userAgent: String,
     val origin: String = YouTubeMusicClients.ORIGIN,
+    /** Song length from the player response; search rows often come without one. */
+    val durationMs: Long = 0L,
 )
 
 data class YouTubeMusicVideo(
