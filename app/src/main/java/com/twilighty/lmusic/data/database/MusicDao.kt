@@ -381,6 +381,26 @@ interface MusicDao {
     @Query("SELECT " + SONG_LIST_PROJECTION + " FROM songs WHERE id IN (:songIds)")
     suspend fun getSongsByIdsListSimple(songIds: List<Long>): List<SongEntity>
 
+    /** Refreshes a streamed song's display metadata, leaving likes, lyrics and dates alone. */
+    @Query(
+        """
+        UPDATE songs SET title = :title, artist_name = :artistName, artist_id = :artistId,
+            album_name = :albumName, album_id = :albumId, album_art_uri_string = :albumArtUri,
+            duration = :duration
+        WHERE id = :id
+        """
+    )
+    suspend fun updateStreamedSongMetadata(
+        id: Long,
+        title: String,
+        artistName: String,
+        artistId: Long,
+        albumName: String,
+        albumId: Long,
+        albumArtUri: String?,
+        duration: Long,
+    )
+
     /**
      * Resolves the unified-table song id for a given content URI. Used when the
      * currently-playing song was loaded from a non-unified source (e.g. raw Telegram

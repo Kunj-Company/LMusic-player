@@ -120,6 +120,25 @@
             android:label="Jellyfin Login"
             android:theme="@style/Theme.LMusic" />
 
+        <activity
+            android:name=".presentation.ytmusic.auth.YouTubeMusicLoginActivity"
+            android:exported="false"
+            android:label="YouTube Music"
+            android:theme="@style/Theme.LMusic" />
+
+        <activity
+            android:name=".presentation.ytmusic.video.YouTubeMusicVideoActivity"
+            android:autoRemoveFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:label="YouTube video"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:screenOrientation="fullSensor"
+            android:supportsPictureInPicture="true"
+            android:taskAffinity="${applicationId}.video"
+            android:theme="@style/Theme.LMusic" />
+
 
         <!-- Screensaver (standby) mode: Settings › Appearance › Screensaver, or the charging prompt -->
         <activity

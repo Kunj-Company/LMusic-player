@@ -1,0 +1,35 @@
+# LMusic notes for Claude
+
+## Build and test (Windows)
+
+- `minSdk` is 33 (Android 13). It was 35 after the rebrand, but lint's `NewApi` check at 33 found no unguarded Android 14/15 calls (2026-10-20). Rerun that check before using any new platform API.
+
+- JDK: Android Studio's bundled one. Set `JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"` and `ANDROID_HOME="%LOCALAPPDATA%\Android\Sdk"` (there is no `local.properties`).
+- `./gradlew :app:assembleDebug` builds ABI-split APKs (arm64-v8a, armeabi-v7a). The x86_64 `Pixel_8a` emulator runs the arm64 APK through translation.
+- Unit tests are JUnit 5: `./gradlew :app:testDebugUnitTest --tests "com.twilighty.lmusic.data.ytmusic.*"`.
+- `YouTubeMusicStreamTest` has a live test that hits YouTube. It only runs with `YTMUSIC_LIVE=1` in the environment.
+
+## YouTube Music (`data/ytmusic`, `presentation/ytmusic`)
+
+Streams, downloads and video use the **VISIONOS** innertube client (`YouTubeMusicClients.STREAM`). As of 2026-10 it is the only client that returns direct googlevideo URLs which play to the end without a PO token or signature deciphering. ANDROID_VR, IOS_MUSIC and ANDROID_MUSIC hit bot checks. Plain IOS URLs are cut off after about 1 MB. WEB_REMIX is used only for browse and search.
+
+Rules that each caused a real "won't play" bug:
+
+- **Use `YouTubeMusicClients.http(okHttpClient)`, never the app-wide `OkHttpClient` directly.** The shared client rewrites `User-Agent` to `LMusic/1.0`, and googlevideo URLs are bound to the requesting client's User-Agent. In debug it also logs whole bodies, which buffers entire songs in memory.
+- **Always send a `Range` header to googlevideo.** Requests without one stall forever. ExoPlayer sends none for position 0, so `YouTubeMusicStreamProxy` sets `alwaysRequestRange` and answers with a plain 200. The downloader fetches in 4 MB ranges.
+- **Saved queues hold proxy URLs (`http://127.0.0.1:<port>/ytmusic/<id>`), and the port changes every launch.** `DualPlayerEngine`'s resolver calls `rebindStaleProxyUri` to point them at the running proxy.
+- `resolveStream` shares one lookup per song and caches it until 30 minutes before the URL expires. The player, the proxy and the next-song pre-loader all ask for the same song at the same time.
+- Only clients with `probeBeforeUse` (the IOS fallback) get their URL probed past 1.5 MB. VISIONOS URLs don't get cut off, so probing them only adds a round trip. A client that fails gets a 10-minute backoff.
+
+Other behaviour:
+
+- Tracks that actually play are saved to the `songs` table (`YouTubeMusicLibrary`, ids from `YouTubeMusicUris.songId`, source type `YTMUSIC`), so likes, playlists and stats work. The queue is only remembered; a track is saved when its stream is first prepared (`saveIfQueued`), so browsing a shelf doesn't flood the library. Existing rows get only a metadata update (`updateStreamedSongMetadata`), because `songs.is_favorite` is kept in sync from the favorites table by database triggers.
+- Downloads take the highest-bitrate audio (Opus itag 251 on free accounts). `YouTubeMusicOpusRemuxer` copies it into a tagged `.opus` file without re-encoding, saved under `Music/LMusic/YouTube Music`.
+- Video plays the HLS manifest from the same VISIONOS response in `YouTubeMusicVideoActivity` (needs `media3-exoplayer-hls`). It opens in landscape with the system bars hidden, and a gear menu picks the quality (Auto or a fixed height). As of 2026-10, VISIONOS responses carry no ad placements and the HLS has no ad segments.
+- The video activity is `singleTask` in its own task (`taskAffinity` `${applicationId}.video`) with `supportsPictureInPicture`. Back or Home while playing enters PiP, which has a play/pause `RemoteAction`; closing PiP finishes the activity. It connects a `MediaController` to `MusicService`: if that song (`YouTubeMusicUris.songId`) is current, the video starts at its position and pauses it, and on close the song is seeked to the video's position.
+- YouTube WebM streams report no bitrate to ExoPlayer. `PlayerViewModel` takes it from `DualPlayerEngine.knownStreamBitrate`, so the label shows kbps and the player doesn't re-read the stream with `MediaMetadataRetriever`. 48 kHz is YouTube's maximum sample rate (Opus is always 48 kHz).
+- Start time on the x86_64 emulator is mostly the emulator itself: about 1 s of DNS per new googlevideo host, and slow software Opus decoder setup. Measure on a real phone before optimising further.
+- Settings › Playback › YouTube Music has a streaming quality and a download quality setting (`YouTubeMusicAudioQuality`: High, Normal, Data saver), stored in the plain `ytmusic_settings` prefs. Each one caps the bitrate in `YouTubeMusicFormats.ranked`. Downloads pass `opusOnly`, so every download can be remuxed to a tagged `.opus` file. The stream cache key includes the quality.
+- Search runs the YouTube Music search and a plain youtube.com video search (`WEB` client, videos-only params) at the same time. Videos not already in the music results are added as a "YouTube videos" shelf.
+- Search, feed, play, download and video work signed out. Only the Library tab needs the account cookie.
+- `Velune/` next to this repo is the GPL-3 reference app. Do not copy its code here, because LMusic is MIT.

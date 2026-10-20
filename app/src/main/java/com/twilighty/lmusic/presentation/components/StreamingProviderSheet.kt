@@ -49,6 +49,8 @@ fun StreamingProviderSheet(
     onNavigateToNavidromeDashboard: () -> Unit = {},
     isJellyfinLoggedIn: Boolean = false,
     onNavigateToJellyfinDashboard: () -> Unit = {},
+    isYouTubeMusicLoggedIn: Boolean = false,
+    onNavigateToYouTubeMusicDashboard: () -> Unit = {},
     sheetState: SheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true
     )
@@ -174,6 +176,20 @@ fun StreamingProviderSheet(
                             } else {
                                 context.startActivity(Intent(context, NeteaseLoginActivity::class.java))
                             }
+                            onDismissRequest()
+                        }
+                    )
+
+                    ProviderRow(
+                        iconPainter = painterResource(R.drawable.ic_music_placeholder),
+                        iconTint = Color(0xFFFF0033),
+                        title = "YouTube Music",
+                        subtitle = if (isYouTubeMusicLoggedIn) "Connected" else "Feed, library, and downloads",
+                        shape = providerSegmentItemShape,
+                        isConnected = isYouTubeMusicLoggedIn,
+                        onClick = {
+                            // Search, play and download work signed out; sign-in lives on the Library tab.
+                            onNavigateToYouTubeMusicDashboard()
                             onDismissRequest()
                         }
                     )

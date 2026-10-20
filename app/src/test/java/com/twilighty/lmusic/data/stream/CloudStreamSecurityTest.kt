@@ -72,7 +72,17 @@ class CloudStreamSecurityTest {
     @Test
     fun `isSupportedAudioContentType only accepts audio-safe types`() {
         assertTrue(CloudStreamSecurity.isSupportedAudioContentType("audio/mpeg"))
+        assertTrue(CloudStreamSecurity.isSupportedAudioContentType("audio/webm"))
+        assertTrue(CloudStreamSecurity.isSupportedAudioContentType("video/webm"))
         assertTrue(CloudStreamSecurity.isSupportedAudioContentType("application/octet-stream"))
         assertFalse(CloudStreamSecurity.isSupportedAudioContentType("text/html"))
+        assertTrue(CloudStreamSecurity.validateYouTubeVideoId("dQw4w9WgXcQ"))
+        assertFalse(CloudStreamSecurity.validateYouTubeVideoId("short"))
+        assertTrue(
+            CloudStreamSecurity.isSafeRemoteStreamUrl(
+                "https://rr3---sn.googlevideo.com/videoplayback?id=1",
+                allowedHostSuffixes = setOf("googlevideo.com")
+            )
+        )
     }
 }

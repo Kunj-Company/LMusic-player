@@ -1,6 +1,6 @@
 # LMusic
 
-A local music player for Android 15 and newer, written in Kotlin with Jetpack Compose.
+A local music player for Android 13 and newer, written in Kotlin with Jetpack Compose.
 LMusic is built on top of [PixelPlayer](https://github.com/theovilardo/PixelPlayer)
 (the last MIT-licensed version) and adds a Yuyu-styled look, a richer tag editor with
 metadata autofill, and deeper listening analytics.

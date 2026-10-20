@@ -2568,6 +2568,7 @@ class PlayerViewModel @Inject constructor(
                     ?: selectedAudioFormat?.containerMimeType
                     ?: current?.mimeType,
                 bitrate = selectedAudioFormat?.bitrate?.takeIf { it > 0 }
+                    ?: player.currentMediaItem?.localConfiguration?.uri?.let(dualPlayerEngine::knownStreamBitrate)
                     ?: current?.bitrate,
                 sampleRate = selectedAudioFormat?.sampleRate?.takeIf { it > 0 }
                     ?: current?.sampleRate,
@@ -3258,7 +3259,8 @@ class PlayerViewModel @Inject constructor(
                 startingUri.scheme == "netease" ||
                 startingUri.scheme == "qqmusic" ||
                 startingUri.scheme == "navidrome" ||
-                startingUri.scheme == "jellyfin"
+                startingUri.scheme == "jellyfin" ||
+                startingUri.scheme == "ytmusic"
             ) {
                 if (startingUri.scheme == "telegram") {
                     ensureTelegramPlaybackObserversStarted()

@@ -60,7 +60,7 @@ android {
 
     defaultConfig {
         applicationId = "com.twilighty.lmusic"
-        minSdk = 35
+        minSdk = 33 // Android 13: lint NewApi is clean at this level
         targetSdk = 37
         versionCode = (project.findProperty("APP_VERSION_CODE") as? String)?.toInt() ?: 1
         versionName = (project.findProperty("APP_VERSION_NAME") as? String) ?: "1.0.0"
@@ -238,6 +238,7 @@ dependencies {
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.exoplayer.ffmpeg)
     implementation(libs.androidx.media3.exoplayer.midi)
+    implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.transformer)
     implementation(libs.androidx.mediarouter)
     implementation(libs.androidx.media)

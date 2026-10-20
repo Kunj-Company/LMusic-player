@@ -82,7 +82,8 @@ object LocalArtworkUri {
             !normalized.startsWith("qqmusic://") &&
             !normalized.startsWith("navidrome://") &&
             !normalized.startsWith("jellyfin://") &&
-            !normalized.startsWith("gdrive://")
+            !normalized.startsWith("gdrive://") &&
+            !normalized.startsWith("ytmusic://")
     }
 
     fun resolveSongArtworkUri(

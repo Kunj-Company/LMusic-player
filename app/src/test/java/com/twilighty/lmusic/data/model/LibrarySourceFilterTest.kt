@@ -18,7 +18,8 @@ class LibrarySourceFilterTest {
     private val navidrome = song("5", "navidrome://x")
     private val jellyfin = song("6").copy(jellyfinId = "j")
     private val qq = song("7", "qqmusic://m")
-    private val all = listOf(local, telegram, netease, gdrive, navidrome, jellyfin, qq)
+    private val ytmusic = song("8", "ytmusic://track/dQw4w9WgXcQ")
+    private val all = listOf(local, telegram, netease, gdrive, navidrome, jellyfin, qq, ytmusic)
 
     @Test
     fun `local songs are only those without cloud ids or cloud schemes`() {
@@ -35,6 +36,7 @@ class LibrarySourceFilterTest {
         assertEquals(SourceType.NAVIDROME, LibrarySourceFilter.sourceTypeOf(navidrome))
         assertEquals(SourceType.JELLYFIN, LibrarySourceFilter.sourceTypeOf(jellyfin))
         assertEquals(SourceType.QQMUSIC, LibrarySourceFilter.sourceTypeOf(qq))
+        assertEquals(SourceType.YTMUSIC, LibrarySourceFilter.sourceTypeOf(ytmusic))
     }
 
     @Test

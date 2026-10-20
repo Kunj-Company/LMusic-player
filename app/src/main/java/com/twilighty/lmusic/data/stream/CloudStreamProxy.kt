@@ -157,6 +157,21 @@ abstract class CloudStreamProxy<K : Any>(
     /** Extract the raw ID string from a parsed URI. Override for custom URI layouts. */
     protected open fun extractIdFromUri(uri: Uri): String? = uri.host
 
+    /** Add headers the upstream host requires, such as a client User-Agent. */
+    protected open fun decorateUpstreamRequest(id: K, url: String, builder: Request.Builder) = Unit
+
+    /**
+     * Called when the upstream refuses a cached URL (403, 410 or 429).
+     * Return true to drop the URL and retry once with a freshly resolved one.
+     */
+    protected open fun onUpstreamRejected(id: K, code: Int): Boolean = false
+
+    /**
+     * Some hosts stall requests without a Range header. When true, a request that
+     * arrives without one is sent upstream as "bytes=0-" and answered as a plain 200.
+     */
+    protected open val alwaysRequestRange: Boolean = false
+
     // ─── Internal ──────────────────────────────────────────────────────
 
     protected suspend fun getOrFetchStreamUrl(id: K): String? {
@@ -191,31 +206,52 @@ abstract class CloudStreamProxy<K : Any>(
                             return@get
                         }
 
-                        val streamUrl = getOrFetchStreamUrl(id)
-                        if (streamUrl.isNullOrBlank()) {
-                            call.respond(HttpStatusCode.NotFound, "No stream URL available")
-                            return@get
-                        }
-                        if (!CloudStreamSecurity.isSafeRemoteStreamUrl(
-                                url = streamUrl,
-                                allowedHostSuffixes = allowedHostSuffixes,
-                                allowHttpForAllowedHosts = true
-                            )
-                        ) {
-                            call.respond(HttpStatusCode.BadGateway, "Rejected upstream stream URL")
-                            return@get
+                        val startedAt = System.currentTimeMillis()
+                        val forcedRange = alwaysRequestRange && rangeValidation.normalizedHeader == null
+                        var response: okhttp3.Response? = null
+                        for (attempt in 0..1) {
+                            val streamUrl = getOrFetchStreamUrl(id)
+                            if (streamUrl.isNullOrBlank()) {
+                                call.respond(HttpStatusCode.NotFound, "No stream URL available")
+                                return@get
+                            }
+                            if (!CloudStreamSecurity.isSafeRemoteStreamUrl(
+                                    url = streamUrl,
+                                    allowedHostSuffixes = allowedHostSuffixes,
+                                    allowHttpForAllowedHosts = true
+                                )
+                            ) {
+                                call.respond(HttpStatusCode.BadGateway, "Rejected upstream stream URL")
+                                return@get
+                            }
+
+                            val requestBuilder = Request.Builder().url(streamUrl)
+                            (rangeValidation.normalizedHeader ?: "bytes=0-".takeIf { forcedRange })?.let {
+                                requestBuilder.header("Range", it)
+                            }
+                            decorateUpstreamRequest(id, streamUrl, requestBuilder)
+
+                            val current = withContext(Dispatchers.IO) {
+                                okHttpClient.newCall(requestBuilder.build()).execute()
+                            }
+                            val rejected = current.code == 403 || current.code == 410 || current.code == 429
+                            if (attempt == 0 && rejected && onUpstreamRejected(id, current.code)) {
+                                current.close()
+                                urlCache.remove(id)
+                                continue
+                            }
+                            response = current
+                            break
                         }
 
-                        val requestBuilder = Request.Builder().url(streamUrl)
-                        rangeValidation.normalizedHeader?.let {
-                            requestBuilder.header("Range", it)
-                        }
-
-                        val response = withContext(Dispatchers.IO) {
-                            okHttpClient.newCall(requestBuilder.build()).execute()
-                        }
-
-                        response.use { upstream ->
+                        Timber.d(
+                            "%s range=%s -> %d in %d ms",
+                            proxyTag,
+                            rangeValidation.normalizedHeader ?: "none",
+                            response?.code ?: -1,
+                            System.currentTimeMillis() - startedAt,
+                        )
+                        checkNotNull(response).use { upstream ->
                             if (upstream.code != 200 && upstream.code != 206) {
                                 call.respond(
                                     CloudStreamSecurity.mapUpstreamStatusToProxyStatus(upstream.code),
@@ -254,14 +290,16 @@ abstract class CloudStreamProxy<K : Any>(
                                 }
                                 ?: ContentType.Audio.Any
 
-                            if (upstream.code == 206) {
+                            // A range we added ourselves covers the whole file, so the client gets a plain 200.
+                            val partial = upstream.code == 206 && !forcedRange
+                            if (partial) {
                                 call.response.status(HttpStatusCode.PartialContent)
                             } else {
                                 call.response.status(HttpStatusCode.OK)
                             }
                             call.response.header("Accept-Ranges", acceptRanges ?: "bytes")
                             contentLength?.let { call.response.header("Content-Length", it) }
-                            contentRange?.let { call.response.header("Content-Range", it) }
+                            if (partial) contentRange?.let { call.response.header("Content-Range", it) }
 
                             call.respondBytesWriter(contentType = responseContentType) {
                                 withContext(Dispatchers.IO) {
