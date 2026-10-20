@@ -90,6 +90,7 @@ import com.twilighty.lmusic.presentation.components.BetaInfoBottomSheet
 import com.twilighty.lmusic.presentation.components.Beta05CleanInstallDisclaimerDialog
 import com.twilighty.lmusic.presentation.components.ChangelogBottomSheet
 import com.twilighty.lmusic.presentation.netease.dashboard.NeteaseDashboardViewModel
+import com.twilighty.lmusic.presentation.ytmusic.dashboard.YouTubeMusicDashboardViewModel
 import com.twilighty.lmusic.presentation.jellyfin.dashboard.JellyfinDashboardViewModel
 import com.twilighty.lmusic.presentation.navidrome.dashboard.NavidromeDashboardViewModel
 import com.twilighty.lmusic.presentation.qqmusic.dashboard.QqMusicDashboardViewModel
@@ -144,6 +145,7 @@ fun HomeScreen(
     qqMusicViewModel: QqMusicDashboardViewModel = hiltViewModel(),
     navidromeViewModel: NavidromeDashboardViewModel = hiltViewModel(),
     jellyfinViewModel: JellyfinDashboardViewModel = hiltViewModel(),
+    youTubeMusicViewModel: YouTubeMusicDashboardViewModel = hiltViewModel(),
     yuyuHomeViewModel: YuyuHomeViewModel = hiltViewModel(),
     onOpenSidebar: () -> Unit
 ) {
@@ -604,6 +606,7 @@ fun HomeScreen(
         val isQqMusicLoggedIn by qqMusicViewModel.isLoggedIn.collectAsStateWithLifecycle()
         val isNavidromeLoggedIn by navidromeViewModel.isLoggedIn.collectAsStateWithLifecycle()
         val isJellyfinLoggedIn by jellyfinViewModel.isLoggedIn.collectAsStateWithLifecycle()
+        val isYouTubeMusicLoggedIn by youTubeMusicViewModel.isLoggedIn.collectAsStateWithLifecycle()
         StreamingProviderSheet(
             onDismissRequest = { showStreamingProviderSheet = false },
             isNeteaseLoggedIn = isNeteaseLoggedIn,
@@ -621,6 +624,10 @@ fun HomeScreen(
             isJellyfinLoggedIn = isJellyfinLoggedIn,
             onNavigateToJellyfinDashboard = {
                 navController.navigateSafely(Screen.JellyfinDashboard.route)
+            },
+            isYouTubeMusicLoggedIn = isYouTubeMusicLoggedIn,
+            onNavigateToYouTubeMusicDashboard = {
+                navController.navigateSafely(Screen.YouTubeMusicDashboard.route)
             }
         )
     }

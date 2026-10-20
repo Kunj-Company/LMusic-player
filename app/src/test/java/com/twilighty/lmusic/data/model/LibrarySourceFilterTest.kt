@@ -18,7 +18,8 @@ class LibrarySourceFilterTest {
     private val navidrome = song("5", "navidrome://x")
     private val jellyfin = song("6").copy(jellyfinId = "j")
     private val qq = song("7", "qqmusic://m")
-    private val all = listOf(local, telegram, netease, gdrive, navidrome, jellyfin, qq)
+    private val ytmusic = song("8", "ytmusic://track/dQw4w9WgXcQ")
+    private val all = listOf(local, telegram, netease, gdrive, navidrome, jellyfin, qq, ytmusic)
 
     @Test
     fun `local songs are only those without cloud ids or cloud schemes`() {
@@ -35,6 +36,7 @@ class LibrarySourceFilterTest {
         assertEquals(SourceType.NAVIDROME, LibrarySourceFilter.sourceTypeOf(navidrome))
         assertEquals(SourceType.JELLYFIN, LibrarySourceFilter.sourceTypeOf(jellyfin))
         assertEquals(SourceType.QQMUSIC, LibrarySourceFilter.sourceTypeOf(qq))
+        assertEquals(SourceType.YTMUSIC, LibrarySourceFilter.sourceTypeOf(ytmusic))
     }
 
     @Test
@@ -66,9 +68,19 @@ class LibrarySourceFilterTest {
     fun `chip cycle visits every filter`() {
         var f = StorageFilter.ALL
         val seen = mutableSetOf<StorageFilter>()
-        repeat(3) { f = LibrarySourceFilter.next(f); seen += f }
+        repeat(StorageFilter.entries.size) { f = LibrarySourceFilter.next(f); seen += f }
         assertEquals(StorageFilter.entries.toSet(), seen)
         assertEquals(StorageFilter.ALL, f)
+    }
+
+    @Test
+    fun `downloaded keeps only phone files saved from YouTube Music`() {
+        val downloaded = local.copy(path = "/storage/emulated/0/Music/LMusic/YouTube Music/Artist - Song.opus")
+        val otherLocal = local.copy(path = "/storage/emulated/0/Music/Album/Song.mp3")
+        assertTrue(LibrarySourceFilter.matchesSong(StorageFilter.DOWNLOADED, downloaded))
+        assertFalse(LibrarySourceFilter.matchesSong(StorageFilter.DOWNLOADED, otherLocal))
+        assertFalse(LibrarySourceFilter.matchesSong(StorageFilter.DOWNLOADED, ytmusic))
+        assertEquals(3, LibrarySourceFilter.toFilterMode(StorageFilter.DOWNLOADED))
     }
 
     @Test

@@ -238,6 +238,9 @@ fun AppNavigation(
                         },
                         onOpenJellyfinDashboard = {
                             navController.navigateSafely(Screen.JellyfinDashboard.route)
+                        },
+                        onOpenYouTubeMusicDashboard = {
+                            navController.navigateSafely(Screen.YouTubeMusicDashboard.route)
                         }
                     )
                 }
@@ -603,6 +606,20 @@ fun AppNavigation(
                 ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
                     com.twilighty.lmusic.presentation.qqmusic.dashboard.QqMusicDashboardScreen(
                         onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+            composable(
+                Screen.YouTubeMusicDashboard.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.ytmusic.dashboard.YouTubeMusicDashboardScreen(
+                        onBack = { navController.popBackStack() },
+                        playerViewModel = playerViewModel,
                     )
                 }
             }

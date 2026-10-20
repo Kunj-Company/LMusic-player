@@ -81,6 +81,7 @@ import com.twilighty.lmusic.presentation.netease.auth.NeteaseLoginActivity
 import com.twilighty.lmusic.presentation.jellyfin.auth.JellyfinLoginActivity
 import com.twilighty.lmusic.presentation.navidrome.auth.NavidromeLoginActivity
 import com.twilighty.lmusic.presentation.qqmusic.auth.QqMusicLoginActivity
+import com.twilighty.lmusic.presentation.ytmusic.auth.YouTubeMusicLoginActivity
 import com.twilighty.lmusic.presentation.telegram.auth.TelegramLoginActivity
 import com.twilighty.lmusic.presentation.viewmodel.AccountsViewModel
 import com.twilighty.lmusic.presentation.viewmodel.ExternalAccountUiModel
@@ -96,6 +97,7 @@ fun AccountsScreen(
     onOpenQqMusicDashboard: () -> Unit = {},
     onOpenNavidromeDashboard: () -> Unit = {},
     onOpenJellyfinDashboard: () -> Unit = {},
+    onOpenYouTubeMusicDashboard: () -> Unit = {},
     viewModel: AccountsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -211,6 +213,7 @@ fun AccountsScreen(
                                 onOpenQqMusicDashboard = onOpenQqMusicDashboard,
                                 onOpenNavidromeDashboard = onOpenNavidromeDashboard,
                                 onOpenJellyfinDashboard = onOpenJellyfinDashboard,
+                                onOpenYouTubeMusicDashboard = onOpenYouTubeMusicDashboard,
                                 preferNeteaseDashboard = true
                             )
                         },
@@ -236,6 +239,7 @@ fun AccountsScreen(
                                 onOpenQqMusicDashboard = onOpenQqMusicDashboard,
                                 onOpenNavidromeDashboard = onOpenNavidromeDashboard,
                                 onOpenJellyfinDashboard = onOpenJellyfinDashboard,
+                                onOpenYouTubeMusicDashboard = onOpenYouTubeMusicDashboard,
                                 preferNeteaseDashboard = false
                             )
                         }
@@ -652,6 +656,14 @@ private fun servicePalette(service: ExternalServiceAccount): ServicePalette {
             primaryActionContainer = Color(0xFFE3F2FD),
             primaryActionTint = Color(0xFF1565C0)
         )
+        ExternalServiceAccount.YOUTUBE_MUSIC -> ServicePalette(
+            iconContainer = Color(0xFFFF0033),
+            iconTint = Color.White,
+            statusContainer = Color(0xFFFFE4E8),
+            statusTint = Color(0xFF8C001A),
+            primaryActionContainer = Color(0xFFFFD6DE),
+            primaryActionTint = Color(0xFF8C001A)
+        )
     }
 }
 
@@ -663,6 +675,7 @@ private fun accountIcon(service: ExternalServiceAccount): ImageVector {
         ExternalServiceAccount.QQ_MUSIC -> Icons.Rounded.MusicNote
         ExternalServiceAccount.NAVIDROME -> Icons.Rounded.CloudQueue
         ExternalServiceAccount.JELLYFIN -> Icons.Rounded.CloudQueue
+        ExternalServiceAccount.YOUTUBE_MUSIC -> Icons.Rounded.MusicNote
     }
 }
 
@@ -718,6 +731,7 @@ private fun serviceDisplayName(service: ExternalServiceAccount): String {
         ExternalServiceAccount.QQ_MUSIC -> stringResource(R.string.screen_qq_music_dashboard_title)
         ExternalServiceAccount.NAVIDROME -> stringResource(R.string.cd_subsonic_logo)
         ExternalServiceAccount.JELLYFIN -> stringResource(R.string.auth_jellyfin_title)
+        ExternalServiceAccount.YOUTUBE_MUSIC -> "YouTube Music"
     }
 }
 
@@ -728,6 +742,7 @@ private fun openService(
     onOpenQqMusicDashboard: () -> Unit,
     onOpenNavidromeDashboard: () -> Unit,
     onOpenJellyfinDashboard: () -> Unit,
+    onOpenYouTubeMusicDashboard: () -> Unit,
     preferNeteaseDashboard: Boolean
 ) {
     when (service) {
@@ -777,6 +792,16 @@ private fun openService(
                 safeStartActivity(
                     context = context,
                     intent = Intent(context, JellyfinLoginActivity::class.java)
+                )
+            }
+        }
+        ExternalServiceAccount.YOUTUBE_MUSIC -> {
+            if (preferNeteaseDashboard) {
+                onOpenYouTubeMusicDashboard()
+            } else {
+                safeStartActivity(
+                    context = context,
+                    intent = Intent(context, YouTubeMusicLoginActivity::class.java)
                 )
             }
         }

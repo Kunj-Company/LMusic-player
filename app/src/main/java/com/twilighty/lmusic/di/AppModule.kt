@@ -317,13 +317,15 @@ object AppModule {
         @ApplicationContext context: Context,
         lrcLibApiService: LrcLibApiService,
         lyricsDao: LyricsDao,
-        okHttpClient: OkHttpClient
+        okHttpClient: OkHttpClient,
+        youTubeMusicRepository: com.twilighty.lmusic.data.ytmusic.YouTubeMusicRepository,
     ): LyricsRepository {
         return LyricsRepositoryImpl(
             context = context,
             lrcLibApiService = lrcLibApiService,
             lyricsDao = lyricsDao,
-            okHttpClient = okHttpClient
+            okHttpClient = okHttpClient,
+            youTubeLyrics = { videoId -> youTubeMusicRepository.lyrics(videoId)?.text },
         )
     }
 
@@ -378,7 +380,8 @@ object AppModule {
         songRepository: SongRepository,
         favoritesDao: FavoritesDao,
         artistImageRepository: ArtistImageRepository,
-        folderTreeBuilder: FolderTreeBuilder
+        folderTreeBuilder: FolderTreeBuilder,
+        youTubeMusicAccountSync: com.twilighty.lmusic.data.ytmusic.YouTubeMusicAccountSync,
     ): MusicRepository {
         return MusicRepositoryImpl(
             context = context,
@@ -393,7 +396,8 @@ object AppModule {
             songRepository = songRepository,
             favoritesDao = favoritesDao,
             artistImageRepository = artistImageRepository,
-            folderTreeBuilder = folderTreeBuilder
+            folderTreeBuilder = folderTreeBuilder,
+            onFavoriteChanged = youTubeMusicAccountSync::onFavoriteChanged,
         )
 
     }

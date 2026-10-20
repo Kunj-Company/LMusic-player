@@ -50,6 +50,7 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Dataset
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -250,11 +251,13 @@ fun LibraryActionRow(
                         com.twilighty.lmusic.data.model.StorageFilter.ALL -> Icons.Rounded.Dataset
                         com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> Icons.Rounded.Cloud
                         com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> Icons.Rounded.PhoneAndroid
+                        com.twilighty.lmusic.data.model.StorageFilter.DOWNLOADED -> Icons.Rounded.DownloadDone
                     }
                     val tooltipText = when (currentStorageFilter) {
                         com.twilighty.lmusic.data.model.StorageFilter.ALL -> stringResource(R.string.library_storage_filter_all_songs)
                         com.twilighty.lmusic.data.model.StorageFilter.ONLINE -> stringResource(R.string.library_storage_filter_online)
                         com.twilighty.lmusic.data.model.StorageFilter.OFFLINE -> stringResource(R.string.library_storage_filter_offline)
+                        com.twilighty.lmusic.data.model.StorageFilter.DOWNLOADED -> stringResource(R.string.library_storage_filter_downloaded)
                     }
                     val tooltipState = rememberTooltipState()
 

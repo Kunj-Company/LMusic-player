@@ -55,6 +55,7 @@ sealed class Screen(val route: String) {
     object QqMusicDashboard : Screen("qqmusic_dashboard")
     object NavidromeDashboard : Screen("navidrome_dashboard")
     object JellyfinDashboard : Screen("jellyfin_dashboard")
+    object YouTubeMusicDashboard : Screen("ytmusic_dashboard")
     object LibraryHealth : Screen("library_health")
     object CoverStudio : Screen("cover_studio?mode={mode}") {
         fun createRoute(batch: Boolean = false) = if (batch) "cover_studio?mode=batch" else "cover_studio"

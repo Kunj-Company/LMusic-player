@@ -50,6 +50,17 @@ class LocalArtworkUriTest {
     }
 
     @Test
+    fun resolveSongArtworkUri_keepsYouTubeMusicArtworkUntouched() {
+        val resolved = LocalArtworkUri.resolveSongArtworkUri(
+            storedUri = "https://lh3.googleusercontent.com/cover.jpg",
+            songId = 42L,
+            contentUriString = "ytmusic://track/dQw4w9WgXcQ"
+        )
+
+        assertThat(resolved).isEqualTo("https://lh3.googleusercontent.com/cover.jpg")
+    }
+
+    @Test
     fun parseSongId_readsStableSongUri() {
         val songId = LocalArtworkUri.parseSongId(LocalArtworkUri.buildSongUri(99L))
 

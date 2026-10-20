@@ -1274,6 +1274,7 @@ constructor(
             when (preferences[PreferencesKeys.LAST_STORAGE_FILTER]) {
                 "ONLINE"  -> StorageFilter.ONLINE
                 "OFFLINE" -> StorageFilter.OFFLINE
+                "DOWNLOADED" -> StorageFilter.DOWNLOADED
                 else      -> StorageFilter.ALL
             }
         }

@@ -209,6 +209,8 @@ fun SearchScreen(
         playerViewModel.performSearch(searchQuery)
     }
     val searchResults = searchUiState.searchResults
+    // YouTube chip: show online YouTube results instead of the library while it is on.
+    var youTubeSearch by rememberSaveable { mutableStateOf(false) }
     val handleSongMoreOptionsClick: (Song) -> Unit = { song ->
         playerViewModel.selectSongForInfo(song)
         showSongInfoBottomSheet = true
@@ -384,10 +386,27 @@ fun SearchScreen(
                         }
                         SearchSourceChips(
                             current = searchSourceFilter,
-                            onSelect = { playerViewModel.setStorageFilter(it) },
+                            youTubeSelected = youTubeSearch,
+                            onSelect = {
+                                youTubeSearch = false
+                                playerViewModel.setStorageFilter(it)
+                            },
+                            onYouTube = { youTubeSearch = !youTubeSearch },
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        Crossfade(
+                        if (youTubeSearch) {
+                            com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicSearchResults(
+                                query = searchQuery,
+                                playerViewModel = playerViewModel,
+                                currentPlayingSongId = stablePlayerState.currentSong?.id,
+                                isPlaying = stablePlayerState.isPlaying,
+                                onSongMoreOptionsClick = handleSongMoreOptionsClick,
+                                onSuggestionPick = { suggestion ->
+                                    searchQuery = suggestion
+                                    playerViewModel.updateSearchQuery(suggestion)
+                                },
+                            )
+                        } else Crossfade(
                             targetState = searchResults.isEmpty(),
                             animationSpec = tween(durationMillis = 190),
                             label = "search_results_fade"
@@ -1064,7 +1083,9 @@ fun SearchFilterChip(
 @Composable
 private fun SearchSourceChips(
     current: com.twilighty.lmusic.data.model.StorageFilter,
+    youTubeSelected: Boolean,
     onSelect: (com.twilighty.lmusic.data.model.StorageFilter) -> Unit,
+    onYouTube: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -1078,9 +1099,15 @@ private fun SearchSourceChips(
         ).forEach { (filter, label) ->
             YuyuChip(
                 text = label,
-                selected = current == filter,
-                onClick = { if (current != filter) onSelect(filter) }
+                selected = !youTubeSelected && current == filter,
+                onClick = { if (youTubeSelected || current != filter) onSelect(filter) }
             )
         }
+        // Online search, only while chosen: library results stay offline by default.
+        YuyuChip(
+            text = "YouTube",
+            selected = youTubeSelected,
+            onClick = onYouTube
+        )
     }
 }

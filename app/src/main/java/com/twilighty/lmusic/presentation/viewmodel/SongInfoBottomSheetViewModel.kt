@@ -186,6 +186,7 @@ class SongInfoBottomSheetViewModel @Inject constructor(
             contentUriString.startsWith("telegram://") -> "Telegram"
             contentUriString.startsWith("netease://") -> "Netease Cloud Music"
             contentUriString.startsWith("qqmusic://") -> "QQ Music"
+            contentUriString.startsWith("ytmusic://") -> "YouTube Music"
             contentUriString.startsWith("navidrome://") -> "Navidrome"
             contentUriString.startsWith("gdrive://") -> "Google Drive"
             else -> null

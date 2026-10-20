@@ -94,7 +94,9 @@ class LyricsRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val lrcLibApiService: LrcLibApiService,
     private val lyricsDao: com.twilighty.lmusic.data.database.LyricsDao,
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    /** YouTube Music's plain lyrics for a video id; used only for streamed YouTube songs. */
+    private val youTubeLyrics: (suspend (videoId: String) -> String?)? = null,
 ) : LyricsRepository {
 
 
@@ -344,6 +346,21 @@ class LyricsRepositoryImpl @Inject constructor(
 
         val fetchFromAPI: suspend () -> Lyrics? = {
             fetchLyricsFromAPI(song)
+        }
+
+        // Streamed YouTube songs have no file, so embedded and local lyrics cannot exist:
+        // try the lyrics API (synced) and then YouTube Music's own lyrics. Phone songs never go to YouTube.
+        val youTubeVideoId = com.twilighty.lmusic.data.ytmusic.YouTubeMusicUris.videoIdFrom(song.contentUriString)
+        if (youTubeVideoId != null) {
+            val lyrics = runCatching { fetchFromAPI() }.getOrNull()?.takeIf { it.isValid() }
+                ?: runCatching { youTubeLyrics?.invoke(youTubeVideoId) }.getOrNull()
+                    ?.lines()?.map { it.trimEnd() }?.takeIf { lines -> lines.any { it.isNotBlank() } }
+                    ?.let { lines -> Lyrics(plain = lines, areFromRemote = true) }
+            if (lyrics != null) {
+                lyricsCache.put(cacheKey, lyrics)
+                saveLocalLyricsJson(song, lyrics)
+            }
+            return@withContext lyrics
         }
 
         // Try sources in order based on preference, with fallback (matching Rhythm)

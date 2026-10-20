@@ -57,6 +57,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Menu
@@ -300,6 +301,11 @@ fun SongInfoBottomSheet(
         }
         parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
+    // Streamed YouTube songs have no file: they offer the video instead of tag editing,
+    // share their YouTube link, and cannot be deleted from the device.
+    val youTubeVideoId = remember(song.contentUriString) {
+        com.twilighty.lmusic.data.ytmusic.YouTubeMusicUris.videoIdFrom(song.contentUriString)
+    }
     val songLocationInfo = remember(song.path, song.contentUriString) {
         songInfoViewModel.getSongLocationInfo(song)
     }
@@ -329,7 +335,12 @@ fun SongInfoBottomSheet(
         ) {
             val shareSong: () -> Unit = {
                 try {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    val shareIntent = if (youTubeVideoId != null) {
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=$youTubeVideoId")
+                        }
+                    } else Intent(Intent.ACTION_SEND).apply {
                         type = "audio/*"
                         putExtra(Intent.EXTRA_STREAM, song.contentUriString.toUri())
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -424,6 +435,22 @@ fun SongInfoBottomSheet(
                     icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.QueueMusic),
                     onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight(); onAddToQueue() }
                 )
+                // YouTube songs: YouTube's mix of similar songs.
+                com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicStartRadioAction(song = song, onDismiss = onDismiss)
+                if (youTubeVideoId != null) {
+                    YuyuActionRow(
+                        text = "Watch video",
+                        icon = rememberVectorPainter(Icons.Rounded.SmartDisplay),
+                        onClick = {
+                            // Picks up at the song's position when it is the one playing.
+                            context.startActivity(
+                                com.twilighty.lmusic.presentation.ytmusic.video.YouTubeMusicVideoActivity
+                                    .intent(context, youTubeVideoId, song.title)
+                            )
+                            onDismiss()
+                        }
+                    )
+                }
                 // Smart features: "Play similar" (song radio); renders only when on and analysed.
                 com.twilighty.lmusic.presentation.smart.SmartSongActions(song = song, onDismiss = onDismiss)
                 // Ambient rain / café / fire / waves over music (opens its own small sheet).
@@ -433,7 +460,7 @@ fun SongInfoBottomSheet(
                     icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.PlaylistAdd),
                     onClick = onAddToPlayList
                 )
-                YuyuActionRow(
+                if (youTubeVideoId == null) YuyuActionRow(
                     text = "Edit tags",
                     icon = rememberVectorPainter(Icons.Rounded.Edit),
                     onClick = { showEditSheet = true },
@@ -466,7 +493,7 @@ fun SongInfoBottomSheet(
                     )
                 }
                 YuyuActionRow(
-                    text = "Share file",
+                    text = if (youTubeVideoId != null) "Share link" else "Share file",
                     icon = rememberVectorPainter(Icons.Rounded.Share),
                     onClick = shareSong
                 )
@@ -501,8 +528,8 @@ fun SongInfoBottomSheet(
                     )
                 }
 
-                YuyuDivider(Modifier.padding(vertical = 4.dp))
-                YuyuActionRow(
+                if (youTubeVideoId == null) YuyuDivider(Modifier.padding(vertical = 4.dp))
+                if (youTubeVideoId == null) YuyuActionRow(
                     text = "Delete from device…",
                     icon = rememberVectorPainter(Icons.Rounded.Delete),
                     danger = true,

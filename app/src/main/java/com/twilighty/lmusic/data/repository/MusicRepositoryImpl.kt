@@ -99,7 +99,9 @@ class MusicRepositoryImpl @Inject constructor(
     private val songRepository: SongRepository,
     private val favoritesDao: FavoritesDao,
     private val artistImageRepository: ArtistImageRepository,
-    private val folderTreeBuilder: FolderTreeBuilder
+    private val folderTreeBuilder: FolderTreeBuilder,
+    /** Told about every like change, e.g. to mirror likes of YouTube songs to the account. */
+    private val onFavoriteChanged: ((songId: Long, isFavorite: Boolean) -> Unit)? = null,
 ) : MusicRepository {
 
     companion object {
@@ -810,6 +812,7 @@ class MusicRepositoryImpl @Inject constructor(
         } else {
             favoritesDao.removeFavorite(id)
         }
+        onFavoriteChanged?.invoke(id, isFavorite)
     }
 
     override suspend fun getFavoriteSongIdsOnce(): Set<String> = withContext(Dispatchers.IO) {

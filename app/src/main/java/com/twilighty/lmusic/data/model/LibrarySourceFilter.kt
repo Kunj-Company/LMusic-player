@@ -21,7 +21,14 @@ object LibrarySourceFilter {
         StorageFilter.ALL -> 0
         StorageFilter.OFFLINE -> 1
         StorageFilter.ONLINE -> 2
+        StorageFilter.DOWNLOADED -> 3
     }
+
+    /** Folder the YouTube Music downloader saves into; matches MusicDao's `filterMode = 3`. */
+    const val DOWNLOADS_FOLDER_SUFFIX = "/LMusic/YouTube Music"
+
+    fun isDownloaded(song: Song): Boolean =
+        isLocal(song) && song.path.substringBeforeLast('/').endsWith(DOWNLOADS_FOLDER_SUFFIX)
 
     fun isLocalSourceType(sourceType: Int): Boolean = sourceType == SourceType.LOCAL
 
@@ -29,6 +36,8 @@ object LibrarySourceFilter {
         StorageFilter.ALL -> true
         StorageFilter.OFFLINE -> isLocalSourceType(sourceType)
         StorageFilter.ONLINE -> !isLocalSourceType(sourceType)
+        // Downloads are phone files; the folder check needs the song, see [matchesSong].
+        StorageFilter.DOWNLOADED -> isLocalSourceType(sourceType)
     }
 
     /** Source type of an in-memory [Song], using cloud ids first and the content URI scheme as fallback. */
@@ -44,8 +53,11 @@ object LibrarySourceFilter {
 
     fun isLocal(song: Song): Boolean = isLocalSourceType(sourceTypeOf(song))
 
-    fun matchesSong(filter: StorageFilter, song: Song): Boolean =
-        filter == StorageFilter.ALL || matchesSourceType(filter, sourceTypeOf(song))
+    fun matchesSong(filter: StorageFilter, song: Song): Boolean = when (filter) {
+        StorageFilter.ALL -> true
+        StorageFilter.DOWNLOADED -> isDownloaded(song)
+        else -> matchesSourceType(filter, sourceTypeOf(song))
+    }
 
     fun <T> filterSongs(filter: StorageFilter, songs: List<T>, songOf: (T) -> Song): List<T> =
         if (filter == StorageFilter.ALL) songs else songs.filter { matchesSong(filter, songOf(it)) }
@@ -79,7 +91,8 @@ object LibrarySourceFilter {
     fun next(filter: StorageFilter): StorageFilter = when (filter) {
         StorageFilter.ALL -> StorageFilter.ONLINE
         StorageFilter.ONLINE -> StorageFilter.OFFLINE
-        StorageFilter.OFFLINE -> StorageFilter.ALL
+        StorageFilter.OFFLINE -> StorageFilter.DOWNLOADED
+        StorageFilter.DOWNLOADED -> StorageFilter.ALL
     }
 }
 

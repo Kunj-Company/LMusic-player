@@ -243,6 +243,7 @@ class PlayerViewModelTest {
             mockAlbumArtThemeDao,
             mockSyncManager,
             mockDualPlayerEngine,
+            mockk<com.twilighty.lmusic.data.ytmusic.YouTubeMusicRadio>(relaxed = true),
             mockAppShortcutManager,
             mockTelegramCacheManagerProvider,
             mockListeningStatsTracker,

@@ -224,6 +224,7 @@ class PlayerViewModel @Inject constructor(
     val syncManager: SyncManager, // Inyectar SyncManager
 
     private val dualPlayerEngine: DualPlayerEngine,
+    private val youTubeMusicRadio: com.twilighty.lmusic.data.ytmusic.YouTubeMusicRadio,
     private val appShortcutManager: AppShortcutManager,
     private val telegramCacheManagerProvider: Lazy<com.twilighty.lmusic.data.telegram.TelegramCacheManager>,
     private val listeningStatsTracker: ListeningStatsTracker,
@@ -350,6 +351,19 @@ class PlayerViewModel @Inject constructor(
             launch {
                 telegramCacheManager.embeddedArtUpdated.collect { updatedArtUri ->
                     refreshArtwork(updatedArtUri)
+                }
+            }
+
+            launch {
+                // YouTube songs: the HD cover is looked up after playback starts; swap it in.
+                dualPlayerEngine.streamedArtworkUpdates.collect { (songId, artUri) ->
+                    val current = playbackStateHolder.stablePlayerState.value.currentSong
+                    if (current?.id == songId && current.albumArtUriString != artUri) {
+                        playbackStateHolder.updateStablePlayerState { state ->
+                            state.copy(currentSong = state.currentSong?.copy(albumArtUriString = artUri))
+                        }
+                        themeStateHolder.extractAndGenerateColorScheme(artUri.toUri(), artUri, isPreload = false)
+                    }
                 }
             }
 
@@ -2568,6 +2582,7 @@ class PlayerViewModel @Inject constructor(
                     ?: selectedAudioFormat?.containerMimeType
                     ?: current?.mimeType,
                 bitrate = selectedAudioFormat?.bitrate?.takeIf { it > 0 }
+                    ?: player.currentMediaItem?.localConfiguration?.uri?.let(dualPlayerEngine::knownStreamBitrate)
                     ?: current?.bitrate,
                 sampleRate = selectedAudioFormat?.sampleRate?.takeIf { it > 0 }
                     ?: current?.sampleRate,
@@ -2818,6 +2833,16 @@ class PlayerViewModel @Inject constructor(
 
                     mediaItem?.let { transitionedItem ->
                         val song = resolveSongFromMediaItem(transitionedItem)
+
+                        // YouTube radio: top the queue up before it runs out. Other queues are untouched.
+                        val songsLeft = playerCtrl.mediaItemCount - playerCtrl.currentMediaItemIndex - 1
+                        if (youTubeMusicRadio.isRadioSong(song?.id) && songsLeft <= RADIO_REFILL_WHEN_LEFT) {
+                            viewModelScope.launch {
+                                youTubeMusicRadio.more().forEach { next ->
+                                    mediaController?.addMediaItem(buildPlaybackMediaItem(next))
+                                }
+                            }
+                        }
                         
                         // Offline check for Telegram songs
                         if (song?.contentUriString?.startsWith("telegram:") == true) {
@@ -2919,7 +2944,15 @@ class PlayerViewModel @Inject constructor(
                         currentPositionMs = readyPosition
                     )
                     syncPlaybackPositionFromPlayer(playerCtrl.currentMediaItem?.mediaId, readyPosition)
-                    playbackStateHolder.updateStablePlayerState { it.copy(totalDuration = resolvedDuration) }
+                    playbackStateHolder.updateStablePlayerState { state ->
+                        // Streams queued without a length (YouTube search rows) take it from the player.
+                        val song = state.currentSong
+                        val withLength = if (
+                            song != null && song.duration <= 0L && resolvedDuration > 0L &&
+                            song.id == playerCtrl.currentMediaItem?.mediaId
+                        ) song.copy(duration = resolvedDuration) else song
+                        state.copy(totalDuration = resolvedDuration, currentSong = withLength)
+                    }
                     startProgressUpdates()
                 }
                 if (playbackState == Player.STATE_IDLE && playerCtrl.mediaItemCount == 0) {
@@ -3258,7 +3291,8 @@ class PlayerViewModel @Inject constructor(
                 startingUri.scheme == "netease" ||
                 startingUri.scheme == "qqmusic" ||
                 startingUri.scheme == "navidrome" ||
-                startingUri.scheme == "jellyfin"
+                startingUri.scheme == "jellyfin" ||
+                startingUri.scheme == "ytmusic"
             ) {
                 if (startingUri.scheme == "telegram") {
                     ensureTelegramPlaybackObserversStarted()
@@ -3416,6 +3450,8 @@ class PlayerViewModel @Inject constructor(
             setFavoriteStatusEverywhere(song.id, targetFavoriteState)
         }
     }
+
+    private val RADIO_REFILL_WHEN_LEFT = 3
 
     fun addSongToQueue(song: Song) {
         com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight()

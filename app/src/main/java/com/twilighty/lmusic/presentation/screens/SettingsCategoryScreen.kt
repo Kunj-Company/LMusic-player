@@ -80,6 +80,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Science
@@ -806,6 +807,8 @@ fun SettingsCategoryScreen(
                                     )
                                 }
                             }
+
+                            YouTubeMusicQualitySettings()
 
                             SettingsSubsection(title = stringResource(R.string.setcat_cast)) {
                                 ThemeSelectorItem(
@@ -2803,5 +2806,33 @@ private fun SettingsSubsection(
     }
     if (addBottomSpace) {
         Spacer(modifier = Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun YouTubeMusicQualitySettings(
+    viewModel: com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicSettingsViewModel = hiltViewModel(),
+) {
+    val streamQuality by viewModel.streamQuality.collectAsStateWithLifecycle()
+    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val options = com.twilighty.lmusic.data.ytmusic.YouTubeMusicAudioQuality.entries.associate { it.name to it.label }
+    fun quality(name: String) = com.twilighty.lmusic.data.ytmusic.YouTubeMusicAudioQuality.valueOf(name)
+    SettingsSubsection(title = "YouTube Music") {
+        ThemeSelectorItem(
+            label = "Streaming quality",
+            description = "High plays the best audio YouTube offers. Normal and Data saver use less data.",
+            options = options,
+            selectedKey = streamQuality.name,
+            onSelectionChanged = { viewModel.setStreamQuality(quality(it)) },
+            leadingIcon = { Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.secondary) }
+        )
+        ThemeSelectorItem(
+            label = "Download quality",
+            description = "Downloads are saved as tagged Opus files in Music/LMusic/YouTube Music.",
+            options = options,
+            selectedKey = downloadQuality.name,
+            onSelectionChanged = { viewModel.setDownloadQuality(quality(it)) },
+            leadingIcon = { Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.secondary) }
+        )
     }
 }
