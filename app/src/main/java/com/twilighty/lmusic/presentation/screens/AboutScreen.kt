@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,6 +67,12 @@ private const val DeveloperGitHub = "https://github.com/twilighty-abhi"
 private const val RepoUrl = "https://github.com/twilighty-abhi/lmusic-player"
 private const val ReleasesUrl = "$RepoUrl/releases"
 private const val IssuesUrl = "$RepoUrl/issues"
+
+private data class Contributor(val name: String, val login: String, val contribution: String)
+
+private val Contributors = listOf(
+    Contributor(name = "Shaan Shoukath", login = "Shaan-Shoukath", contribution = "YouTube Music"),
+)
 
 @OptIn(UnstableApi::class)
 @Suppress("UNUSED_PARAMETER")
@@ -138,6 +145,15 @@ fun AboutScreen(
                 )
             }
 
+            YuyuCard {
+                YuyuOverline("Contributors")
+                Spacer(Modifier.height(10.dp))
+                Contributors.forEachIndexed { index, contributor ->
+                    if (index > 0) YuyuDivider(Modifier.padding(vertical = 12.dp))
+                    ContributorRow(contributor) { openUrl(context, "https://github.com/${contributor.login}") }
+                }
+            }
+
             YuyuCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
                 AboutLinkRow(title = "Source code", subtitle = "github.com/twilighty-abhi/lmusic-player") { openUrl(context, RepoUrl) }
                 YuyuDivider()
@@ -200,6 +216,33 @@ private fun AboutHero(versionName: String, onVersionLongPress: () -> Unit) {
         ) {
             YuyuStatusChip(text = "Version $versionName", status = YuyuStatus.Accent)
         }
+    }
+}
+
+@Composable
+private fun ContributorRow(contributor: Contributor, onClick: () -> Unit) {
+    val initials = contributor.name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(YuyuShapes.md).clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            Modifier.size(44.dp).clip(YuyuShapes.pill).background(Yuyu.subtle),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(initials, style = YuyuType.title, color = Yuyu.text)
+        }
+        Column(Modifier.weight(1f)) {
+            Text(contributor.name, style = YuyuType.title, color = Yuyu.text)
+            Text("@${contributor.login} · ${contributor.contribution}", style = YuyuType.meta, color = Yuyu.textMuted)
+        }
+        Icon(
+            painter = painterResource(R.drawable.github),
+            contentDescription = "${contributor.name} on GitHub",
+            tint = Yuyu.textMuted,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
 
