@@ -31,6 +31,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -209,8 +210,8 @@ fun SearchScreen(
         playerViewModel.performSearch(searchQuery)
     }
     val searchResults = searchUiState.searchResults
-    // YouTube chip: show online YouTube results instead of the library while it is on.
-    var youTubeSearch by rememberSaveable { mutableStateOf(false) }
+    // YouTube and JioSaavn chips: show that service's results instead of the library while one is on.
+    var onlineSearch by rememberSaveable { mutableStateOf<OnlineSearch?>(null) }
     val handleSongMoreOptionsClick: (Song) -> Unit = { song ->
         playerViewModel.selectSongForInfo(song)
         showSongInfoBottomSheet = true
@@ -386,25 +387,35 @@ fun SearchScreen(
                         }
                         SearchSourceChips(
                             current = searchSourceFilter,
-                            youTubeSelected = youTubeSearch,
+                            online = onlineSearch,
                             onSelect = {
-                                youTubeSearch = false
+                                onlineSearch = null
                                 playerViewModel.setStorageFilter(it)
                             },
-                            onYouTube = { youTubeSearch = !youTubeSearch },
+                            onOnline = { service -> onlineSearch = service.takeIf { it != onlineSearch } },
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        if (youTubeSearch) {
+                        val onSuggestionPick: (String) -> Unit = { suggestion ->
+                            searchQuery = suggestion
+                            playerViewModel.updateSearchQuery(suggestion)
+                        }
+                        if (onlineSearch == OnlineSearch.YOUTUBE) {
                             com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicSearchResults(
                                 query = searchQuery,
                                 playerViewModel = playerViewModel,
                                 currentPlayingSongId = stablePlayerState.currentSong?.id,
                                 isPlaying = stablePlayerState.isPlaying,
                                 onSongMoreOptionsClick = handleSongMoreOptionsClick,
-                                onSuggestionPick = { suggestion ->
-                                    searchQuery = suggestion
-                                    playerViewModel.updateSearchQuery(suggestion)
-                                },
+                                onSuggestionPick = onSuggestionPick,
+                            )
+                        } else if (onlineSearch == OnlineSearch.JIOSAAVN) {
+                            com.twilighty.lmusic.presentation.jiosaavn.JioSaavnSearchResults(
+                                query = searchQuery,
+                                playerViewModel = playerViewModel,
+                                currentPlayingSongId = stablePlayerState.currentSong?.id,
+                                isPlaying = stablePlayerState.isPlaying,
+                                onSongMoreOptionsClick = handleSongMoreOptionsClick,
+                                onSuggestionPick = onSuggestionPick,
                             )
                         } else Crossfade(
                             targetState = searchResults.isEmpty(),
@@ -1079,17 +1090,25 @@ fun SearchFilterChip(
     )
 }
 
+/** An online service the Search screen can search instead of the library. */
+private enum class OnlineSearch(val label: String) {
+    YOUTUBE("YouTube"),
+    JIOSAAVN("JioSaavn"),
+}
+
 /** Phone / Cloud / All — the same source filter as the Library, so results match what Library shows. */
 @Composable
 private fun SearchSourceChips(
     current: com.twilighty.lmusic.data.model.StorageFilter,
-    youTubeSelected: Boolean,
+    online: OnlineSearch?,
     onSelect: (com.twilighty.lmusic.data.model.StorageFilter) -> Unit,
-    onYouTube: () -> Unit,
+    onOnline: (OnlineSearch) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(androidx.compose.foundation.rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         listOf(
@@ -1099,15 +1118,17 @@ private fun SearchSourceChips(
         ).forEach { (filter, label) ->
             YuyuChip(
                 text = label,
-                selected = !youTubeSelected && current == filter,
-                onClick = { if (youTubeSelected || current != filter) onSelect(filter) }
+                selected = online == null && current == filter,
+                onClick = { if (online != null || current != filter) onSelect(filter) }
             )
         }
         // Online search, only while chosen: library results stay offline by default.
-        YuyuChip(
-            text = "YouTube",
-            selected = youTubeSelected,
-            onClick = onYouTube
-        )
+        OnlineSearch.entries.forEach { service ->
+            YuyuChip(
+                text = service.label,
+                selected = online == service,
+                onClick = { onOnline(service) }
+            )
+        }
     }
 }

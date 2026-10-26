@@ -301,10 +301,13 @@ fun SongInfoBottomSheet(
         }
         parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
-    // Streamed YouTube songs have no file: they offer the video instead of tag editing,
-    // share their YouTube link, and cannot be deleted from the device.
+    // Streamed YouTube and JioSaavn songs have no file: they offer no tag editing, share a
+    // link or their name instead, and cannot be deleted from the device. YouTube adds the video.
     val youTubeVideoId = remember(song.contentUriString) {
         com.twilighty.lmusic.data.ytmusic.YouTubeMusicUris.videoIdFrom(song.contentUriString)
+    }
+    val isStreamedSong = remember(song.contentUriString) {
+        youTubeVideoId != null || com.twilighty.lmusic.data.jiosaavn.JioSaavnUris.songIdFrom(song.contentUriString) != null
     }
     val songLocationInfo = remember(song.path, song.contentUriString) {
         songInfoViewModel.getSongLocationInfo(song)
@@ -335,10 +338,13 @@ fun SongInfoBottomSheet(
         ) {
             val shareSong: () -> Unit = {
                 try {
-                    val shareIntent = if (youTubeVideoId != null) {
+                    val shareIntent = if (isStreamedSong) {
                         Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=$youTubeVideoId")
+                            // JioSaavn links need a page token the library does not keep, so its songs share their name.
+                            val text = youTubeVideoId?.let { "https://music.youtube.com/watch?v=$it" }
+                                ?: "${song.title} · ${song.displayArtist} (JioSaavn)"
+                            putExtra(Intent.EXTRA_TEXT, text)
                         }
                     } else Intent(Intent.ACTION_SEND).apply {
                         type = "audio/*"
@@ -435,8 +441,9 @@ fun SongInfoBottomSheet(
                     icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.QueueMusic),
                     onClick = { com.twilighty.lmusic.presentation.haptics.LMusicHaptics.get().successLight(); onAddToQueue() }
                 )
-                // YouTube songs: YouTube's mix of similar songs.
+                // YouTube and JioSaavn songs: the service's mix of similar songs.
                 com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicStartRadioAction(song = song, onDismiss = onDismiss)
+                com.twilighty.lmusic.presentation.jiosaavn.JioSaavnStartRadioAction(song = song, onDismiss = onDismiss)
                 if (youTubeVideoId != null) {
                     YuyuActionRow(
                         text = "Watch video",
@@ -460,7 +467,7 @@ fun SongInfoBottomSheet(
                     icon = rememberVectorPainter(Icons.AutoMirrored.Rounded.PlaylistAdd),
                     onClick = onAddToPlayList
                 )
-                if (youTubeVideoId == null) YuyuActionRow(
+                if (!isStreamedSong) YuyuActionRow(
                     text = "Edit tags",
                     icon = rememberVectorPainter(Icons.Rounded.Edit),
                     onClick = { showEditSheet = true },
@@ -493,7 +500,11 @@ fun SongInfoBottomSheet(
                     )
                 }
                 YuyuActionRow(
-                    text = if (youTubeVideoId != null) "Share link" else "Share file",
+                    text = when {
+                        youTubeVideoId != null -> "Share link"
+                        isStreamedSong -> "Share"
+                        else -> "Share file"
+                    },
                     icon = rememberVectorPainter(Icons.Rounded.Share),
                     onClick = shareSong
                 )
@@ -528,8 +539,8 @@ fun SongInfoBottomSheet(
                     )
                 }
 
-                if (youTubeVideoId == null) YuyuDivider(Modifier.padding(vertical = 4.dp))
-                if (youTubeVideoId == null) YuyuActionRow(
+                if (!isStreamedSong) YuyuDivider(Modifier.padding(vertical = 4.dp))
+                if (!isStreamedSong) YuyuActionRow(
                     text = "Delete from device…",
                     icon = rememberVectorPainter(Icons.Rounded.Delete),
                     danger = true,

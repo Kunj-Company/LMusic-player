@@ -1616,9 +1616,14 @@ private fun SongMetadataDisplaySection(
             }
         }
 
-        // YouTube songs only: save a tagged copy to Music/LMusic/YouTube Music.
+        // YouTube and JioSaavn songs only: save a tagged copy under Music/LMusic.
         song?.let { currentSong ->
             com.twilighty.lmusic.presentation.ytmusic.YouTubeMusicDownloadButton(
+                song = currentSong,
+                containerColor = chipColor,
+                contentColor = chipContentColor,
+            )
+            com.twilighty.lmusic.presentation.jiosaavn.JioSaavnDownloadButton(
                 song = currentSong,
                 containerColor = chipColor,
                 contentColor = chipContentColor,

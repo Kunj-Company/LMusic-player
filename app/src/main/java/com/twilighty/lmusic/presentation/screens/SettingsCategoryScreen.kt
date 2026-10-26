@@ -809,6 +809,7 @@ fun SettingsCategoryScreen(
                             }
 
                             YouTubeMusicQualitySettings()
+                            JioSaavnQualitySettings()
 
                             SettingsSubsection(title = stringResource(R.string.setcat_cast)) {
                                 ThemeSelectorItem(
@@ -2829,6 +2830,34 @@ private fun YouTubeMusicQualitySettings(
         ThemeSelectorItem(
             label = "Download quality",
             description = "Downloads are saved as tagged Opus files in Music/LMusic/YouTube Music.",
+            options = options,
+            selectedKey = downloadQuality.name,
+            onSelectionChanged = { viewModel.setDownloadQuality(quality(it)) },
+            leadingIcon = { Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.secondary) }
+        )
+    }
+}
+
+@Composable
+private fun JioSaavnQualitySettings(
+    viewModel: com.twilighty.lmusic.presentation.jiosaavn.JioSaavnSettingsViewModel = hiltViewModel(),
+) {
+    val streamQuality by viewModel.streamQuality.collectAsStateWithLifecycle()
+    val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val options = com.twilighty.lmusic.data.jiosaavn.JioSaavnAudioQuality.entries.associate { it.name to "${it.label} · ${it.kbps} kbps" }
+    fun quality(name: String) = com.twilighty.lmusic.data.jiosaavn.JioSaavnAudioQuality.valueOf(name)
+    SettingsSubsection(title = "JioSaavn") {
+        ThemeSelectorItem(
+            label = "Streaming quality",
+            description = "JioSaavn decides what each account gets: 320 kbps is a Pro feature. The player shows the bitrate you got.",
+            options = options,
+            selectedKey = streamQuality.name,
+            onSelectionChanged = { viewModel.setStreamQuality(quality(it)) },
+            leadingIcon = { Icon(Icons.Rounded.MusicNote, null, tint = MaterialTheme.colorScheme.secondary) }
+        )
+        ThemeSelectorItem(
+            label = "Download quality",
+            description = "Downloads are saved as tagged .m4a files in Music/LMusic/JioSaavn.",
             options = options,
             selectedKey = downloadQuality.name,
             onSelectionChanged = { viewModel.setDownloadQuality(quality(it)) },
