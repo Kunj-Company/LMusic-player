@@ -532,9 +532,10 @@ private fun ShelfList(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        shelves.forEach { shelf ->
+        // Keys include the shelf's index: untitled shelves (search, headerless sections) can share items.
+        shelves.forEachIndexed { index, shelf ->
             if (shelf.title.isNotBlank()) {
-                item(key = "title-${shelf.title}-${shelf.tracks.size}-${shelf.playlists.size}") {
+                item(key = "title-$index-${shelf.title}") {
                     Text(
                         shelf.title,
                         modifier = Modifier.padding(top = 8.dp, bottom = 4.dp, start = 8.dp),
@@ -544,7 +545,7 @@ private fun ShelfList(
                     )
                 }
             }
-            items(shelf.playlists, key = { "pl-${shelf.title}-${it.playlistId}" }) { playlist ->
+            items(shelf.playlists.distinctBy { it.playlistId }, key = { "pl-$index-${it.playlistId}" }) { playlist ->
                 MediaCard(
                     title = playlist.title,
                     subtitle = playlist.subtitle.ifBlank { "Playlist" },
@@ -553,7 +554,7 @@ private fun ShelfList(
                     onClick = { onOpenPlaylist(playlist) },
                 )
             }
-            items(shelf.tracks, key = { "tr-${shelf.title}-${it.videoId}" }) { track ->
+            items(shelf.tracks.distinctBy { it.videoId }, key = { "tr-$index-${it.videoId}" }) { track ->
                 MediaCard(
                     title = track.title,
                     subtitle = track.artist.ifBlank { "YouTube Music" },
@@ -618,7 +619,8 @@ private fun PlaylistTracks(
                 }
             }
         }
-        items(tracks, key = { it.videoId }) { track ->
+        // Tracks can be flattened from several shelves, so the same song may appear twice.
+        items(tracks.distinctBy { it.videoId }, key = { it.videoId }) { track ->
             MediaCard(
                 title = track.title,
                 subtitle = track.artist.ifBlank { "YouTube Music" },
