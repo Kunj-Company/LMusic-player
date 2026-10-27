@@ -9,7 +9,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.graphics.ColorUtils
 import androidx.wear.compose.material.MaterialTheme
@@ -37,6 +39,8 @@ data class WearPalette(
     val controlDisabledContent: Color,
     val transportContainer: Color,
     val transportContent: Color,
+    val playContainer: Color,
+    val playContent: Color,
     val chipContainer: Color,
     val chipContent: Color,
     val favoriteActive: Color,
@@ -44,7 +48,7 @@ data class WearPalette(
     val repeatActive: Color,
 )
 
-private val DefaultWearPalette = WearPalette(
+internal val DefaultWearPalette = WearPalette(
     gradientTop = Color(0xFF6C3AD8),
     gradientMiddle = Color(0xFF2C1858),
     gradientBottom = Color(0xFF130B23),
@@ -62,6 +66,8 @@ private val DefaultWearPalette = WearPalette(
     controlDisabledContent = bestContrastContent(Color(0xFF3D2E5B)),
     transportContainer = Color(0xFFE6DBFF).copy(alpha = 0.95f),
     transportContent = Color(0xFF2C0C62),
+    playContainer = Color(0xFFF0E7FF).copy(alpha = 0.96f),
+    playContent = Color(0xFF24114A),
     chipContainer = Color(0xFF2A2140),
     chipContent = Color(0xFFE8E0FF),
     favoriteActive = Color(0xFFF1608E),
@@ -154,6 +160,8 @@ private fun WearThemePalette.toWearPalette(): WearPalette {
             transportContentArgb,
             colorOrDefault(controlContentArgb, bestContrastContent(transportContainer)),
         ),
+        playContainer = Color(controlContainerArgb),
+        playContent = Color(controlContentArgb),
         chipContainer = colorOrDefault(chipContainerArgb, surface),
         chipContent = Color(chipContentArgb),
         favoriteActive = Color(favoriteActiveArgb),
@@ -210,6 +218,8 @@ private fun buildPaletteFromSeedColor(seed: Color): WearPalette {
         controlDisabledContent = controlDisabledContent,
         transportContainer = transportContainer,
         transportContent = transportContent,
+        playContainer = controlContainer.copy(alpha = 0.96f),
+        playContent = controlContent,
         chipContainer = chipContainer,
         chipContent = Color(0xFFF2EBFF),
         favoriteActive = buildAccentFromSeed(seedArgb, hueShift = 34f),
@@ -234,17 +244,14 @@ private fun buildAccentFromSeed(seedColor: Int, hueShift: Float): Color {
 private fun bestContrastContent(background: Color): Color {
     val light = Color(0xFFF6F2FF)
     val dark = Color(0xFF17141E)
-    // ColorUtils.calculateContrast requires an opaque background.
-    val opaqueBackgroundArgb = if (background.alpha >= 0.999f) {
-        background.toArgb()
-    } else {
-        ColorUtils.compositeColors(
-            background.toArgb(),
-            Color.Black.toArgb(),
-        )
+    val backgroundLuminance = background.compositeOver(Color.Black).luminance()
+    fun contrast(content: Color): Float {
+        val contentLuminance = content.luminance()
+        return (max(contentLuminance, backgroundLuminance) + 0.05f) /
+            (min(contentLuminance, backgroundLuminance) + 0.05f)
     }
-    val lightContrast = ColorUtils.calculateContrast(light.toArgb(), opaqueBackgroundArgb)
-    val darkContrast = ColorUtils.calculateContrast(dark.toArgb(), opaqueBackgroundArgb)
+    val lightContrast = contrast(light)
+    val darkContrast = contrast(dark)
     return if (lightContrast >= darkContrast) light else dark
 }
 

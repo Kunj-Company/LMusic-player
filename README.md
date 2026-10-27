@@ -47,6 +47,14 @@ from **Artifacts**.
   artists** discovered in the period.
 - History is kept for life (PixelPlayer trimmed it to two years).
 
+**Watch app** (Wear OS 2 and newer, round and square screens)
+- Works without the phone: search finds songs on the watch first, then on the phone;
+  playlists can be saved to the watch and play offline.
+- YouTube Music and JioSaavn search and streaming right on the watch (tap their chip in
+  search). Streams switch Wi-Fi on, buffer ahead and drop quality on the phone's Bluetooth.
+- Hand playback between watch and phone at the same spot, streams included.
+- Bezel and crown scroll one item per click.
+
 ### New in 1.4
 
 - Noise generator in Focus, Sleep space, charging screensaver (OLED-safe, Open-Meteo weather), Quick

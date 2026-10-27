@@ -36,7 +36,7 @@ import androidx.wear.compose.material.Text
 import com.twilighty.lmusic.data.WearAudioOutputRoute
 import com.twilighty.lmusic.data.WearLifecycleState
 import com.twilighty.lmusic.R
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.twilighty.lmusic.presentation.components.WatchScalingColumn
 import com.google.android.horologist.compose.layout.rememberResponsiveColumnState
 import com.twilighty.lmusic.data.WearOutputTarget
 import com.twilighty.lmusic.presentation.components.AlwaysOnScalingPositionIndicator
@@ -95,7 +95,7 @@ fun OutputScreen(
             .fillMaxSize()
             .background(background),
     ) {
-        ScalingLazyColumn(
+        WatchScalingColumn(
             modifier = Modifier.fillMaxSize(),
             columnState = columnState,
         ) {

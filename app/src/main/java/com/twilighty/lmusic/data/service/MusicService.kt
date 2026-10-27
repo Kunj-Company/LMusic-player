@@ -49,6 +49,7 @@ import com.google.common.util.concurrent.SettableFuture
 import com.twilighty.lmusic.LMusicApplication
 import com.twilighty.lmusic.MainActivity
 import com.twilighty.lmusic.R
+import com.twilighty.lmusic.data.jiosaavn.JioSaavnUris
 import com.twilighty.lmusic.data.model.PlayerInfo
 import com.twilighty.lmusic.data.model.PlaybackQueueItemSnapshot
 import com.twilighty.lmusic.data.model.PlaybackQueueSnapshot
@@ -90,6 +91,8 @@ import com.twilighty.lmusic.data.service.auto.AutoMediaBrowseTree
 import com.twilighty.lmusic.data.service.wear.buildWearThemePalette
 import com.twilighty.lmusic.data.service.wear.WearStatePublisher
 import com.twilighty.lmusic.presentation.viewmodel.ColorSchemePair
+import com.twilighty.lmusic.data.ytmusic.YouTubeMusicUris
+import com.twilighty.lmusic.shared.WearHandoffSong
 import com.twilighty.lmusic.shared.WearIntents
 import com.twilighty.lmusic.utils.ArtworkTransportSanitizer
 import com.twilighty.lmusic.utils.MediaItemBuilder
@@ -2358,6 +2361,16 @@ class MusicService : MediaLibraryService() {
 
     private var lastWidgetPlayerInfo: PlayerInfo? = null
 
+    /** The current song's stream id when it is a YouTube Music or JioSaavn stream, so the watch can stream it too. */
+    private suspend fun currentStreamIdForWear(): String? {
+        if (resolveCastRemoteSnapshot() != null) return null
+        val player = engine.masterPlayer
+        val uri = withContext(Dispatchers.Main) { player.currentMediaItem?.localConfiguration?.uri?.toString() }
+            ?: return null
+        YouTubeMusicUris.videoIdFromPlaybackUri(uri)?.let { return WearHandoffSong.YOUTUBE_PREFIX + it }
+        return JioSaavnUris.songIdFromPlaybackUri(uri)?.let { WearHandoffSong.JIOSAAVN_PREFIX + it }
+    }
+
     private fun shouldUpdateWidget(old: PlayerInfo, new: PlayerInfo): Boolean {
         if (old.songTitle != new.songTitle) return true
         if (old.artistName != new.artistName) return true
@@ -2399,7 +2412,7 @@ class MusicService : MediaLibraryService() {
         if (shouldPublishWear) {
             val currentMediaId = resolveCurrentMediaIdForWear()
             // Publish state to Wear OS watch
-            wearStatePublisher.publishState(currentMediaId, playerInfo)
+            wearStatePublisher.publishState(currentMediaId, playerInfo, currentStreamIdForWear())
         }
     }
 

@@ -115,6 +115,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -322,14 +323,13 @@ fun SettingsCategoryScreen(
     val titleMaxLines = if (isLongTitle) 2 else 1
 
     val topBarHeight = remember(maxTopBarHeightPx) { Animatable(maxTopBarHeightPx) }
-    var collapseFraction by remember { mutableStateOf(0f) }
 
-    LaunchedEffect(topBarHeight.value, maxTopBarHeightPx) {
-        collapseFraction =
-                1f -
-                        ((topBarHeight.value - minTopBarHeightPx) /
-                                        (maxTopBarHeightPx - minTopBarHeightPx))
-                                .coerceIn(0f, 1f)
+    // Derived, not a LaunchedEffect keyed on the height: reading the height here recomposed the
+    // whole screen on every frame of the top bar collapsing.
+    val collapseFraction by remember(minTopBarHeightPx, maxTopBarHeightPx) {
+        derivedStateOf {
+            1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(0f, 1f)
+        }
     }
 
     val nestedScrollConnection = remember {
@@ -2816,6 +2816,7 @@ private fun YouTubeMusicQualitySettings(
 ) {
     val streamQuality by viewModel.streamQuality.collectAsStateWithLifecycle()
     val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
+    val searchSuggestions by viewModel.searchSuggestionsEnabled.collectAsStateWithLifecycle()
     val options = com.twilighty.lmusic.data.ytmusic.YouTubeMusicAudioQuality.entries.associate { it.name to it.label }
     fun quality(name: String) = com.twilighty.lmusic.data.ytmusic.YouTubeMusicAudioQuality.valueOf(name)
     SettingsSubsection(title = "YouTube Music") {
@@ -2834,6 +2835,13 @@ private fun YouTubeMusicQualitySettings(
             selectedKey = downloadQuality.name,
             onSelectionChanged = { viewModel.setDownloadQuality(quality(it)) },
             leadingIcon = { Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.secondary) }
+        )
+        SwitchSettingItem(
+            title = "Search suggestions",
+            subtitle = "Suggest searches from YouTube as you type. Each keystroke is sent to YouTube.",
+            checked = searchSuggestions,
+            onCheckedChange = viewModel::setSearchSuggestionsEnabled,
+            leadingIcon = { Icon(Icons.Rounded.Search, null, tint = MaterialTheme.colorScheme.secondary) }
         )
     }
 }
