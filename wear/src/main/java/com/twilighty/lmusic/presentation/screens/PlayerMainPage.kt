@@ -1,6 +1,5 @@
 package com.twilighty.lmusic.presentation.screens
 
-import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
@@ -42,11 +41,12 @@ import com.twilighty.lmusic.presentation.components.CurvedVolumeIndicator
 import com.twilighty.lmusic.presentation.theme.LocalWearPalette
 import com.twilighty.lmusic.presentation.theme.rememberWearScreen
 import com.twilighty.lmusic.presentation.theme.surfaceContainerColor
+import com.twilighty.lmusic.data.WearLifecycleState
 import com.twilighty.lmusic.shared.WearPlayerState
 import com.twilighty.lmusic.shared.WearVolumeState
 import kotlinx.coroutines.delay
-import kotlin.math.max
-import kotlin.math.min
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 
 @Composable
 @OptIn(ExperimentalWearFoundationApi::class)
@@ -55,11 +55,13 @@ internal fun MainPlayerPage(
     isPhoneConnected: Boolean,
     isWatchOutputSelected: Boolean = false,
     activeVolumeState: WearVolumeState,
+    positionProvider: () -> Long,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSetActiveVolume: (Int) -> Unit,
     rotaryEnabled: Boolean,
+    progressUpdatesEnabled: Boolean,
     activeOutputRouteType: String,
     onVolumeClick: () -> Unit,
     onOutputClick: () -> Unit,
@@ -81,17 +83,7 @@ internal fun MainPlayerPage(
         },
     )
 
-    val livePositionMs by rememberLivePositionMs(state)
-    val trackProgressTarget = if (state.totalDurationMs > 0L) {
-        (livePositionMs.toFloat() / state.totalDurationMs.toFloat()).coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-    val trackProgress by animateFloatAsState(
-        targetValue = trackProgressTarget,
-        animationSpec = tween(durationMillis = 280),
-        label = "trackProgress",
-    )
+    val trackProgress = rememberTrackProgress(state, progressUpdatesEnabled, positionProvider)
     val queueShortcutRevealTarget by remember(columnState.state) {
         derivedStateOf {
             val layoutInfo = columnState.state.layoutInfo
@@ -194,7 +186,7 @@ internal fun MainPlayerPage(
                     isPlaying = state.isPlaying,
                     isEmpty = state.isEmpty,
                     enabled = if (isWatchOutputSelected) !state.isEmpty else isPhoneConnected,
-                    trackProgress = trackProgress,
+                    trackProgress = { trackProgress.value },
                     onTogglePlayPause = onTogglePlayPause,
                     onNext = onNext,
                     onPrevious = onPrevious,
@@ -246,33 +238,37 @@ internal fun MainPlayerPage(
 }
 
 @Composable
-private fun rememberLivePositionMs(state: WearPlayerState): androidx.compose.runtime.State<Long> {
-    val safeDuration = state.totalDurationMs.coerceAtLeast(0L)
-    val safeAnchorPosition = state.currentPositionMs.coerceIn(0L, safeDuration)
-    val positionKey = remember(
-        state.songId,
-        safeAnchorPosition,
-        safeDuration,
-        state.isPlaying,
-    ) {
-        "${state.songId}|$safeAnchorPosition|$safeDuration|${state.isPlaying}"
+private fun rememberTrackProgress(
+    state: WearPlayerState,
+    updatesEnabled: Boolean,
+    positionProvider: () -> Long,
+): androidx.compose.runtime.State<Float> {
+    fun progress(): Float {
+        val duration = state.totalDurationMs
+        return if (duration > 0L) {
+            (positionProvider().coerceIn(0L, duration).toFloat() / duration.toFloat())
+        } else {
+            0f
+        }
     }
     return produceState(
-        initialValue = safeAnchorPosition,
-        key1 = positionKey,
+        initialValue = progress(),
+        key1 = state,
+        key2 = updatesEnabled,
+        key3 = positionProvider,
     ) {
-        value = safeAnchorPosition
-        if (!state.isPlaying || safeDuration <= 0L) {
-            return@produceState
-        }
-
-        val startElapsedRealtime = SystemClock.elapsedRealtime()
-        while (true) {
-            val elapsed = SystemClock.elapsedRealtime() - startElapsedRealtime
-            val next = (safeAnchorPosition + elapsed).coerceIn(0L, safeDuration)
-            value = next
-            if (next >= safeDuration) break
-            delay(250L)
+        if (!updatesEnabled) return@produceState
+        WearLifecycleState.isInteractive.collectLatest { interactive ->
+            if (!interactive) return@collectLatest
+            // Read the source clock, including after seeks, navigation or waking.
+            // No frame-by-frame smoothing or whole-screen position subscription.
+            do {
+                value = progress()
+                // Paused seeks still need to update the ring. An unchanged value
+                // does not invalidate drawing, so this is a cheap source read.
+                if (state.totalDurationMs <= 0L) break
+                delay(1_000L)
+            } while (isActive)
         }
     }
 }
