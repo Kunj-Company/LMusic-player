@@ -33,5 +33,6 @@ dependencyResolutionManagement {
 rootProject.name = "LMusic"
 include(":app")
 include(":shared")
+include(":streaming")
 include(":wear")
 include(":baselineprofile")

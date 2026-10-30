@@ -3,8 +3,10 @@ package com.twilighty.lmusic.presentation.screens
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -33,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -47,8 +50,6 @@ import com.twilighty.lmusic.presentation.navigation.Screen
 import com.twilighty.lmusic.presentation.navigation.navigateSafely
 import com.twilighty.lmusic.presentation.viewmodel.PlayerViewModel
 import com.twilighty.lmusic.presentation.yuyu.Yuyu
-import com.twilighty.lmusic.presentation.yuyu.YuyuButton
-import com.twilighty.lmusic.presentation.yuyu.YuyuButtonStyle
 import com.twilighty.lmusic.presentation.yuyu.YuyuCard
 import com.twilighty.lmusic.presentation.yuyu.YuyuDivider
 import com.twilighty.lmusic.presentation.yuyu.YuyuIconButton
@@ -62,17 +63,9 @@ import com.twilighty.lmusic.presentation.yuyu.YuyuTopBar
 import com.twilighty.lmusic.presentation.yuyu.YuyuType
 
 private const val DeveloperName = "Abhiram NJ"
-private const val DeveloperHandle = "Twilight Abhi"
-private const val DeveloperGitHub = "https://github.com/twilighty-abhi"
 private const val RepoUrl = "https://github.com/twilighty-abhi/lmusic-player"
 private const val ReleasesUrl = "$RepoUrl/releases"
 private const val IssuesUrl = "$RepoUrl/issues"
-
-private data class Contributor(val name: String, val login: String, val contribution: String)
-
-private val Contributors = listOf(
-    Contributor(name = "Shaan Shoukath", login = "Shaan-Shoukath", contribution = "YouTube Music"),
-)
 
 @OptIn(UnstableApi::class)
 @Suppress("UNUSED_PARAMETER")
@@ -121,37 +114,20 @@ fun AboutScreen(
             )
 
             YuyuCard {
-                YuyuOverline("Developer")
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Box(
-                        Modifier.size(52.dp).clip(YuyuShapes.pill).background(Yuyu.ink),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("AN", style = YuyuType.h3, color = Yuyu.onInk)
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(DeveloperName, style = YuyuType.h3, color = Yuyu.text)
-                        Text("$DeveloperHandle · @twilighty-abhi", style = YuyuType.meta, color = Yuyu.textMuted)
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                YuyuButton(
-                    text = "GitHub profile",
-                    onClick = { openUrl(context, DeveloperGitHub) },
-                    style = YuyuButtonStyle.Secondary,
-                    icon = painterResource(R.drawable.github),
-                    modifier = Modifier.fillMaxWidth()
+                YuyuOverline("Developers")
+                Spacer(Modifier.height(6.dp))
+                DeveloperRow(
+                    name = DeveloperName,
+                    handle = "Twilight Abhi · @twilighty-abhi",
+                    avatar = R.drawable.avatar_abhiram_nj,
+                    onClick = { openUrl(context, "https://github.com/twilighty-abhi") }
                 )
-            }
-
-            YuyuCard {
-                YuyuOverline("Contributors")
-                Spacer(Modifier.height(10.dp))
-                Contributors.forEachIndexed { index, contributor ->
-                    if (index > 0) YuyuDivider(Modifier.padding(vertical = 12.dp))
-                    ContributorRow(contributor) { openUrl(context, "https://github.com/${contributor.login}") }
-                }
+                DeveloperRow(
+                    name = "Shaan Shoukath",
+                    handle = "@Shaan-Shoukath",
+                    avatar = R.drawable.avatar_shaan_shoukath,
+                    onClick = { openUrl(context, "https://github.com/Shaan-Shoukath") }
+                )
             }
 
             YuyuCard(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 4.dp)) {
@@ -220,26 +196,29 @@ private fun AboutHero(versionName: String, onVersionLongPress: () -> Unit) {
 }
 
 @Composable
-private fun ContributorRow(contributor: Contributor, onClick: () -> Unit) {
-    val initials = contributor.name.split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }
+private fun DeveloperRow(name: String, handle: String, @DrawableRes avatar: Int, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clip(YuyuShapes.md).clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(YuyuShapes.md)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Box(
-            Modifier.size(44.dp).clip(YuyuShapes.pill).background(Yuyu.subtle),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(initials, style = YuyuType.title, color = Yuyu.text)
-        }
+        Image(
+            painter = painterResource(avatar),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(52.dp).clip(YuyuShapes.pill)
+        )
         Column(Modifier.weight(1f)) {
-            Text(contributor.name, style = YuyuType.title, color = Yuyu.text)
-            Text("@${contributor.login} · ${contributor.contribution}", style = YuyuType.meta, color = Yuyu.textMuted)
+            Text(name, style = YuyuType.h3, color = Yuyu.text)
+            Text(handle, style = YuyuType.meta, color = Yuyu.textMuted)
         }
         Icon(
             painter = painterResource(R.drawable.github),
-            contentDescription = "${contributor.name} on GitHub",
+            contentDescription = "GitHub profile",
             tint = Yuyu.textMuted,
             modifier = Modifier.size(20.dp)
         )

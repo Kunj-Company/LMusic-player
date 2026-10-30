@@ -34,7 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,8 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
-import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
-import androidx.wear.compose.foundation.rotary.rotaryScrollable
+import com.twilighty.lmusic.presentation.components.rotaryInput
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
@@ -59,6 +57,7 @@ import com.twilighty.lmusic.presentation.theme.surfaceContainerColor
 import com.twilighty.lmusic.presentation.theme.surfaceContainerHighColor
 import com.twilighty.lmusic.presentation.viewmodel.WearPlayerViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun VolumeScreen(
@@ -80,8 +79,8 @@ fun VolumeScreen(
     // (e.g. system-wide hard-key presses on some Wear builds). 1.5s is plenty
     // for a UI knob; it pauses immediately when the screen turns off.
     LaunchedEffect(viewModel) {
-        WearLifecycleState.isInteractive.collect { interactive ->
-            if (!interactive) return@collect
+        WearLifecycleState.isInteractive.collectLatest { interactive ->
+            if (!interactive) return@collectLatest
             while (WearLifecycleState.isInteractiveNow) {
                 viewModel.refreshActiveVolumeState()
                 delay(1_500L)
@@ -99,7 +98,6 @@ fun VolumeScreen(
         label = "volumeProgress",
     )
     val background = palette.screenBackgroundColor()
-    val rotaryFocusRequester = remember { FocusRequester() }
     val rotaryVolumeUiState = remember(volumeState.level, volumeState.max) {
         VolumeUiState(
             current = volumeState.level.coerceAtLeast(0),
@@ -111,13 +109,12 @@ fun VolumeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .requestFocusOnHierarchyActive()
-            .rotaryScrollable(
+            .rotaryInput(
                 behavior = volumeRotaryBehavior(
                     volumeUiStateProvider = { rotaryVolumeUiState },
                     onRotaryVolumeInput = viewModel::setActiveVolume,
                 ),
-                focusRequester = rotaryFocusRequester,
+                active = true,
             )
             .background(background),
     ) {

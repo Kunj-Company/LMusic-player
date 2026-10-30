@@ -1,5 +1,9 @@
 package com.twilighty.lmusic.data.ytmusic
 
+import com.twilighty.lmusic.data.stream.StreamingCollection
+import com.twilighty.lmusic.data.stream.StreamingShelf
+import com.twilighty.lmusic.data.stream.StreamingTrack
+
 /** Bitrate caps: YouTube serves Opus at about 150, 70 and 50 kbps, and AAC at 128 kbps. */
 enum class YouTubeMusicAudioQuality(val maxBitrate: Int, val label: String) {
     HIGH(YouTubeMusicFormats.HIGHEST_TARGET_BITRATE, "High"),
@@ -37,25 +41,30 @@ data class YouTubeMusicSession(
 
 data class YouTubeMusicTrack(
     val videoId: String,
-    val title: String,
-    val artist: String = "",
+    override val title: String,
+    override val artist: String = "",
     val album: String = "",
-    val thumbnailUrl: String? = null,
+    override val thumbnailUrl: String? = null,
     val durationMs: Long = 0L,
     /** Browse ids for the artist (UC…) and album (MPREb_…) pages, when YouTube links them. */
     val artistId: String? = null,
     val albumId: String? = null,
-)
+) : StreamingTrack {
+    override val key: String get() = videoId
+}
 
 enum class YouTubeMusicItemKind { PLAYLIST, ALBUM, ARTIST }
 
 data class YouTubeMusicPlaylist(
     val playlistId: String,
-    val title: String,
-    val subtitle: String = "",
-    val thumbnailUrl: String? = null,
+    override val title: String,
+    override val subtitle: String = "",
+    override val thumbnailUrl: String? = null,
     val kind: YouTubeMusicItemKind = YouTubeMusicItemKind.PLAYLIST,
-)
+) : StreamingCollection {
+    override val key: String get() = playlistId
+    override val importable: Boolean get() = kind != YouTubeMusicItemKind.ARTIST
+}
 
 /** Songs YouTube picks after a seed song, the token for the next batch, and its lyrics page. */
 data class YouTubeMusicRadioPage(
@@ -68,10 +77,10 @@ data class YouTubeMusicRadioPage(
 data class YouTubeMusicLyrics(val text: String, val source: String? = null)
 
 data class YouTubeMusicShelf(
-    val title: String,
-    val tracks: List<YouTubeMusicTrack> = emptyList(),
-    val playlists: List<YouTubeMusicPlaylist> = emptyList(),
-)
+    override val title: String,
+    override val tracks: List<YouTubeMusicTrack> = emptyList(),
+    override val playlists: List<YouTubeMusicPlaylist> = emptyList(),
+) : StreamingShelf<YouTubeMusicTrack, YouTubeMusicPlaylist>
 
 data class YouTubeMusicBrowsePage(
     val shelves: List<YouTubeMusicShelf>,
@@ -112,6 +121,8 @@ data class YouTubeMusicStream(
     val origin: String = YouTubeMusicClients.ORIGIN,
     /** Song length from the player response; search rows often come without one. */
     val durationMs: Long = 0L,
+    /** The innertube client that returned the URL, so it can be rested if YouTube refuses it. */
+    val clientName: String = "",
 )
 
 data class YouTubeMusicVideo(

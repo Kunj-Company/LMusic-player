@@ -499,7 +499,9 @@ fun LibraryScreen(
     }
     val isSortSheetVisible by playerViewModel.isSortingSheetVisible.collectAsStateWithLifecycle()
     val isSendingToWatch by songInfoBottomSheetViewModel.isSendingToWatch.collectAsStateWithLifecycle()
-    val activeWatchTransfer by songInfoBottomSheetViewModel.activeWatchTransfer.collectAsStateWithLifecycle()
+    // Keep progress reads in the header and dialog so ticks do not recompose this screen.
+    val activeWatchTransfer = songInfoBottomSheetViewModel.activeWatchTransfer.collectAsStateWithLifecycle()
+    val activeWatchRequestId by remember { derivedStateOf { activeWatchTransfer.value?.requestId } }
     var showWatchTransferDialog by remember { mutableStateOf(false) }
     val canNavigateBackInFolders by remember(playerViewModel) {
         playerViewModel.playerUiState
@@ -523,8 +525,8 @@ fun LibraryScreen(
     var showReorderTabsSheet by remember { mutableStateOf(false) }
     var showTabSwitcherSheet by remember { mutableStateOf(false) }
 
-    LaunchedEffect(activeWatchTransfer?.requestId) {
-        if (activeWatchTransfer == null) {
+    LaunchedEffect(activeWatchRequestId) {
+        if (activeWatchRequestId == null) {
             showWatchTransferDialog = false
         }
     }
@@ -818,7 +820,7 @@ fun LibraryScreen(
 
     val dm = LocalLMusicDarkTheme.current
 
-    val iconRotation by transition.animateFloat(
+    val iconRotation = transition.animateFloat(
         label = "Action Button Icon Rotation",
         transitionSpec = {
             tween(durationMillis = 300, easing = FastOutSlowInEasing)
@@ -900,14 +902,14 @@ fun LibraryScreen(
                         }
                     }
                     if (isSendingToWatch) {
-                        val watchTransferProgress = activeWatchTransfer?.progress ?: 0f
+                        val watchTransferProgress = activeWatchTransfer.value?.progress ?: 0f
                         val watchTransferPercent = (watchTransferProgress * 100f).toInt().coerceIn(0, 100)
                         Row(
                             modifier = Modifier
                                 .height(36.dp)
                                 .clip(CircleShape)
                                 .background(Yuyu.muted)
-                                .clickable(enabled = activeWatchTransfer != null) {
+                                .clickable(enabled = activeWatchTransfer.value != null) {
                                     showWatchTransferDialog = true
                                 }
                                 .padding(horizontal = 10.dp),
@@ -1257,7 +1259,7 @@ fun LibraryScreen(
                                             else -> playerViewModel.shuffleAllSongs()
                                         }
                                     },
-                                    iconRotation = iconRotation,
+                                    iconRotation = iconRotation.value,
                                     showSortButton = sanitizedSortOptions.isNotEmpty(),
                                     showLocateButton = showLocateButton,
                                     onSortClick = { playerViewModel.showSortingSheet() },
@@ -1819,17 +1821,20 @@ fun LibraryScreen(
         }
     )
 
-    if (showWatchTransferDialog && activeWatchTransfer != null) {
-        val currentWatchTransfer = activeWatchTransfer!!
-        WatchTransferProgressDialog(
-            transfer = currentWatchTransfer,
-            onDismiss = { showWatchTransferDialog = false },
-            onCancelTransfer = {
-                songInfoBottomSheetViewModel.cancelWatchTransfer(currentWatchTransfer.requestId)
-                showWatchTransferDialog = false
-            }
-        )
+    val watchTransferDialogContent: @Composable () -> Unit = {
+        val currentWatchTransfer = if (showWatchTransferDialog) activeWatchTransfer.value else null
+        if (currentWatchTransfer != null) {
+            WatchTransferProgressDialog(
+                transfer = currentWatchTransfer,
+                onDismiss = { showWatchTransferDialog = false },
+                onCancelTransfer = {
+                    songInfoBottomSheetViewModel.cancelWatchTransfer(currentWatchTransfer.requestId)
+                    showWatchTransferDialog = false
+                }
+            )
+        }
     }
+    watchTransferDialogContent()
 
     if (showSongInfoBottomSheet && selectedSongForInfo != null) {
         val currentSong = selectedSongForInfo

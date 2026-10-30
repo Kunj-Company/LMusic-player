@@ -45,7 +45,7 @@ import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.twilighty.lmusic.presentation.components.WatchScalingColumn
 import com.google.android.horologist.compose.layout.rememberResponsiveColumnState
 import com.twilighty.lmusic.presentation.components.AlwaysOnScalingPositionIndicator
 import com.twilighty.lmusic.presentation.components.WearTopTimeText
@@ -77,6 +77,7 @@ fun MoreScreen(
     val isWatchOutputSelected by playerViewModel.isWatchOutputSelected.collectAsState()
     val canCurrentSongBeFavorited by playerViewModel.canCurrentSongBeFavorited.collectAsState()
     val queueState by browseViewModel.uiState.collectAsState()
+    val localQueue by playerViewModel.localQueueState.collectAsState()
     val downloadedSongIds by downloadsViewModel.downloadedSongIds.collectAsState()
     val activeTransfers by downloadsViewModel.activeTransfers.collectAsState()
 
@@ -101,8 +102,19 @@ fun MoreScreen(
         }
     }
 
-    val queueItems = (queueState as? BrowseUiState.Success)?.items.orEmpty()
-    val upNextTitle = queueItems.drop(1).firstOrNull()?.title ?: "Nothing queued"
+    // Playing on the watch: its own queue, so this works with no phone.
+    val queueItems = if (isWatchOutputSelected) {
+        localQueue.items
+    } else {
+        (queueState as? BrowseUiState.Success)?.items.orEmpty()
+    }
+    val upNext = if (isWatchOutputSelected) {
+        localQueue.items.getOrNull(localQueue.currentIndex + 1)
+    } else {
+        queueItems.drop(1).firstOrNull()
+    }
+    val upNextTitle = upNext?.title ?: "Nothing queued"
+    val queueActionsEnabled = isWatchOutputSelected || isPhoneConnected
     val currentSongId = playerState.songId
     val favoriteActionEnabled = !playerState.isEmpty && when {
         isWatchOutputSelected -> canCurrentSongBeFavorited
@@ -125,7 +137,7 @@ fun MoreScreen(
             .fillMaxSize()
             .background(palette.screenBackgroundColor()),
     ) {
-        ScalingLazyColumn(
+        WatchScalingColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 8.dp),
@@ -181,7 +193,7 @@ fun MoreScreen(
                     subtitle = if (queueItems.isNotEmpty()) "Current queue" else "Queue unavailable",
                     icon = Icons.AutoMirrored.Rounded.QueueMusic,
                     onClick = onQueueClick,
-                    enabled = isPhoneConnected && !isWatchOutputSelected,
+                    enabled = queueActionsEnabled,
                 )
             }
 
@@ -191,7 +203,7 @@ fun MoreScreen(
                     subtitle = upNextTitle,
                     icon = Icons.Rounded.SkipNext,
                     onClick = onQueueClick,
-                    enabled = isPhoneConnected && !isWatchOutputSelected,
+                    enabled = queueActionsEnabled,
                 )
             }
 

@@ -7,7 +7,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,15 +14,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.PhoneAndroid
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.runtime.Composable
@@ -35,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.ExperimentalTextApi
@@ -55,15 +47,15 @@ import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.twilighty.lmusic.presentation.components.WatchScalingColumn
 import com.google.android.horologist.compose.layout.rememberResponsiveColumnState
 import com.twilighty.lmusic.R
 import com.twilighty.lmusic.data.TransferState
 import com.twilighty.lmusic.presentation.components.AlwaysOnScalingPositionIndicator
 import com.twilighty.lmusic.presentation.components.PlayingEqIcon
 import com.twilighty.lmusic.presentation.components.WearTopTimeText
-import com.twilighty.lmusic.presentation.theme.surfaceContainerHighestColor
 import com.twilighty.lmusic.presentation.theme.LocalWearPalette
+import com.twilighty.lmusic.presentation.theme.WearWatchLibraryTitleFont
 import com.twilighty.lmusic.presentation.theme.screenBackgroundColor
 import com.twilighty.lmusic.presentation.theme.surfaceContainerColor
 import com.twilighty.lmusic.presentation.theme.surfaceContainerHighColor
@@ -93,7 +85,6 @@ fun DownloadsScreen(
     val playerState by playerViewModel.playerState.collectAsState()
     val isPhoneConnected by playerViewModel.isPhoneConnected.collectAsState()
     val palette = LocalWearPalette.current
-    val watchLibraryTitleFont = rememberWatchLibraryTitleFont()
     val columnState = rememberResponsiveColumnState()
     val context = LocalContext.current
     val audioPermission = remember {
@@ -163,9 +154,13 @@ fun DownloadsScreen(
             .fillMaxSize()
             .background(background),
     ) {
-        ScalingLazyColumn(
+        WatchScalingColumn(
             modifier = Modifier.fillMaxSize(),
             columnState = columnState,
+            // An open menu or confirmation takes the bezel.
+            rotaryActive = selectedLocalSongForMenu == null &&
+                selectedLocalSongForDeleteConfirmation == null &&
+                selectedTransferForCancelConfirmation == null,
         ) {
             item { Spacer(modifier = Modifier.height(18.dp)) }
 
@@ -173,7 +168,7 @@ fun DownloadsScreen(
                 Text(
                     text = stringResource(R.string.wear_watch_library_title),
                     style = MaterialTheme.typography.title2,
-                    fontFamily = watchLibraryTitleFont,
+                    fontFamily = WearWatchLibraryTitleFont,
                     fontWeight = FontWeight(780),
                     color = palette.textPrimary,
                     textAlign = TextAlign.Center,
@@ -593,512 +588,6 @@ fun DownloadsScreen(
     }
 }
 
-@Composable
-private fun DownloadsSectionHeader(
-    title: String,
-    color: Color,
-    topPadding: androidx.compose.ui.unit.Dp = 6.dp,
-) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.caption2,
-        color = color,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = topPadding, bottom = 2.dp),
-    )
-}
-
-@Composable
-private fun DownloadedSongChip(
-    title: String,
-    secondaryText: String,
-    isCurrentSong: Boolean,
-    isPlayingSong: Boolean,
-    onClick: () -> Unit,
-    onMenuClick: () -> Unit,
-) {
-    val palette = LocalWearPalette.current
-    val containerColor = if (isCurrentSong) {
-        palette.surfaceContainerHighColor()
-    } else {
-        palette.surfaceContainerColor()
-    }
-
-    Box(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Chip(
-            label = {
-                Text(
-                    text = title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = palette.textPrimary,
-                )
-            },
-            secondaryLabel = if (secondaryText.isNotEmpty() || isCurrentSong) {
-                {
-                    val statusWord = stringResource(
-                        if (isPlayingSong) R.string.wear_status_playing else R.string.wear_status_current
-                    )
-                    Text(
-                        text = if (isCurrentSong) {
-                            if (secondaryText.isNotEmpty()) {
-                                "$statusWord · $secondaryText"
-                            } else {
-                                statusWord
-                            }
-                        } else {
-                            secondaryText
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (isCurrentSong && isPlayingSong) {
-                            palette.shuffleActive.copy(alpha = 0.90f)
-                        } else {
-                            palette.textSecondary.copy(alpha = 0.78f)
-                        },
-                    )
-                }
-            } else {
-                null
-            },
-            icon = {
-                if (isCurrentSong) {
-                    PlayingEqIcon(
-                        color = if (isPlayingSong) palette.shuffleActive else palette.textSecondary,
-                        isPlaying = isPlayingSong,
-                        modifier = Modifier.size(18.dp),
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Rounded.MusicNote,
-                        contentDescription = null,
-                        tint = palette.textSecondary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            },
-            onClick = onClick,
-            colors = ChipDefaults.chipColors(
-                backgroundColor = containerColor,
-                contentColor = palette.chipContent,
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(end = 40.dp),
-        )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .size(34.dp)
-                .background(
-                    color = palette.surfaceContainerHighColor().copy(alpha = 0.74f),
-                    shape = CircleShape,
-                )
-                .clickable(onClick = onMenuClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.MoreVert,
-                contentDescription = stringResource(R.string.wear_cd_more_options),
-                tint = palette.textPrimary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun DownloadedSongActionScreen(
-    song: LocalSongEntity,
-    canPlayOnPhone: Boolean,
-    isPhonePlaybackPending: Boolean,
-    isCurrentWatchSong: Boolean,
-    isPlayingWatchSong: Boolean,
-    onDismiss: () -> Unit,
-    onPlayOnWatch: () -> Unit,
-    onPlayOnPhone: () -> Unit,
-    onDeleteFromWatch: () -> Unit,
-) {
-    val palette = LocalWearPalette.current
-    val columnState = rememberResponsiveColumnState()
-    val subtitle = buildSongSubtitle(song.artist, song.album, song.duration)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(palette.screenBackgroundColor())
-            .zIndex(12f),
-    ) {
-        ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            columnState = columnState,
-        ) {
-            item { Spacer(modifier = Modifier.height(18.dp)) }
-
-            item {
-                Text(
-                    text = song.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.title3,
-                    color = palette.textPrimary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp),
-                )
-            }
-
-            if (subtitle.isNotEmpty()) {
-                item {
-                    Text(
-                        text = subtitle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.caption2,
-                        color = palette.textSecondary.copy(alpha = 0.82f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 2.dp),
-                    )
-                }
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.PlayArrow,
-                    label = when {
-                        isCurrentWatchSong && isPlayingWatchSong -> stringResource(R.string.wear_playing_on_watch)
-                        isCurrentWatchSong -> stringResource(R.string.wear_current_on_watch)
-                        else -> stringResource(R.string.wear_play_on_watch)
-                    },
-                    backgroundColor = palette.shuffleActive.copy(alpha = 0.38f),
-                    onClick = onPlayOnWatch,
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.PhoneAndroid,
-                    label = when {
-                        isPhonePlaybackPending -> stringResource(R.string.wear_starting_on_phone)
-                        !canPlayOnPhone -> stringResource(R.string.wear_phone_disconnected)
-                        else -> stringResource(R.string.wear_play_on_phone)
-                    },
-                    backgroundColor = if (canPlayOnPhone && !isPhonePlaybackPending) {
-                        palette.repeatActive.copy(alpha = 0.38f)
-                    } else {
-                        palette.surfaceContainerHighestColor()
-                    },
-                    enabled = canPlayOnPhone && !isPhonePlaybackPending,
-                    onClick = onPlayOnPhone,
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.Delete,
-                    label = stringResource(R.string.wear_delete_from_watch),
-                    backgroundColor = palette.favoriteActive.copy(alpha = 0.38f),
-                    onClick = onDeleteFromWatch,
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.Close,
-                    label = stringResource(R.string.wear_back),
-                    backgroundColor = palette.surfaceContainerColor(),
-                    onClick = onDismiss,
-                )
-            }
-        }
-
-        AlwaysOnScalingPositionIndicator(
-            listState = columnState.state,
-            modifier = Modifier.align(Alignment.CenterEnd),
-            color = palette.textPrimary,
-        )
-
-        WearTopTimeText(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(5f),
-            color = palette.textPrimary,
-        )
-    }
-}
-
-@Composable
-private fun ConfirmDeleteDownloadedSongScreen(
-    song: LocalSongEntity,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    val palette = LocalWearPalette.current
-    val columnState = rememberResponsiveColumnState()
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(palette.screenBackgroundColor())
-            .zIndex(12f),
-    ) {
-        ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            columnState = columnState,
-        ) {
-            item { Spacer(modifier = Modifier.height(18.dp)) }
-
-            item {
-                Text(
-                    text = stringResource(R.string.wear_delete_from_watch_confirm_title),
-                    style = MaterialTheme.typography.title3,
-                    color = palette.textPrimary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp),
-                )
-            }
-
-            item {
-                Text(
-                    text = song.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.body2,
-                    color = palette.textSecondary.copy(alpha = 0.86f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp),
-                )
-            }
-
-            item {
-                Text(
-                    text = stringResource(R.string.wear_delete_watch_copy_message),
-                    style = MaterialTheme.typography.caption2,
-                    color = palette.textSecondary.copy(alpha = 0.78f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 4.dp),
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.Delete,
-                    label = stringResource(R.string.wear_delete),
-                    backgroundColor = palette.favoriteActive.copy(alpha = 0.38f),
-                    onClick = onConfirm,
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.Close,
-                    label = stringResource(R.string.wear_cancel),
-                    backgroundColor = palette.surfaceContainerColor(),
-                    onClick = onDismiss,
-                )
-            }
-        }
-
-        AlwaysOnScalingPositionIndicator(
-            listState = columnState.state,
-            modifier = Modifier.align(Alignment.CenterEnd),
-            color = palette.textPrimary,
-        )
-
-        WearTopTimeText(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(5f),
-            color = palette.textPrimary,
-        )
-    }
-}
-
-@Composable
-private fun ConfirmCancelTransferScreen(
-    transfer: TransferState,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    val context = LocalContext.current
-    val palette = LocalWearPalette.current
-    val columnState = rememberResponsiveColumnState()
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(palette.screenBackgroundColor())
-            .zIndex(12f),
-    ) {
-        ScalingLazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            columnState = columnState,
-        ) {
-            item { Spacer(modifier = Modifier.height(18.dp)) }
-
-            item {
-                Text(
-                    text = stringResource(R.string.wear_cancel_transfer_title),
-                    style = MaterialTheme.typography.title3,
-                    color = palette.textPrimary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp),
-                )
-            }
-
-            item {
-                Text(
-                    text = transfer.songTitle.ifBlank { context.getString(R.string.wear_current_transfer_fallback) },
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.body2,
-                    color = palette.textSecondary.copy(alpha = 0.86f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 2.dp),
-                )
-            }
-
-            item {
-                Text(
-                    text = stringResource(R.string.wear_cancel_transfer_body),
-                    style = MaterialTheme.typography.caption2,
-                    color = palette.textSecondary.copy(alpha = 0.78f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 4.dp),
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.Close,
-                    label = stringResource(R.string.wear_yes_cancel_transfer),
-                    backgroundColor = MaterialTheme.colors.error,
-                    contentColor = MaterialTheme.colors.onError,
-                    onClick = onConfirm,
-                )
-            }
-
-            item {
-                DownloadsActionChip(
-                    icon = Icons.Rounded.PlayArrow,
-                    label = stringResource(R.string.wear_keep_sending),
-                    backgroundColor = palette.surfaceContainerColor(),
-                    onClick = onDismiss,
-                )
-            }
-        }
-
-        AlwaysOnScalingPositionIndicator(
-            listState = columnState.state,
-            modifier = Modifier.align(Alignment.CenterEnd),
-            color = palette.textPrimary,
-        )
-
-        WearTopTimeText(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(5f),
-            color = palette.textPrimary,
-        )
-    }
-}
-
-@Composable
-private fun DownloadsActionChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    backgroundColor: androidx.compose.ui.graphics.Color,
-    contentColor: Color = LocalWearPalette.current.textPrimary,
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-) {
-    val palette = LocalWearPalette.current
-    val disabledContentColor = palette.textSecondary.copy(alpha = 0.72f)
-    Chip(
-        label = {
-            Text(
-                text = label,
-                color = if (enabled) contentColor else disabledContentColor,
-            )
-        },
-        icon = {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (enabled) contentColor else disabledContentColor,
-                modifier = Modifier.size(18.dp),
-            )
-        },
-        onClick = { if (enabled) onClick() },
-        colors = ChipDefaults.chipColors(
-            backgroundColor = backgroundColor,
-            contentColor = palette.chipContent,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
 private fun hasAudioLibraryPermission(context: Context, permission: String): Boolean {
     return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-}
-
-private fun buildSongSubtitle(artist: String, album: String, durationMs: Long): String {
-    val parts = buildList {
-        if (artist.isNotBlank()) add(artist)
-        if (album.isNotBlank()) add(album)
-        if (durationMs > 0L) add(formatDuration(durationMs))
-    }
-    return parts.joinToString(" · ")
-}
-
-private fun formatDuration(durationMs: Long): String {
-    val totalSeconds = (durationMs / 1000L).coerceAtLeast(0L)
-    val hours = totalSeconds / 3600L
-    val minutes = (totalSeconds % 3600L) / 60L
-    val seconds = totalSeconds % 60L
-    return if (hours > 0L) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%d:%02d".format(minutes, seconds)
-    }
-}
-
-@OptIn(ExperimentalTextApi::class)
-@Composable
-private fun rememberWatchLibraryTitleFont(): FontFamily {
-    return remember {
-        FontFamily(
-            Font(
-                resId = R.font.gflex_variable,
-                variationSettings = FontVariation.Settings(
-                    FontVariation.weight(710),
-                    FontVariation.width(132f),
-                    FontVariation.Setting("ROND", 82f),
-                    FontVariation.Setting("XTRA", 540f),
-                    FontVariation.Setting("YOPQ", 92f),
-                    FontVariation.Setting("YTLC", 512f),
-                ),
-            ),
-        )
-    }
 }

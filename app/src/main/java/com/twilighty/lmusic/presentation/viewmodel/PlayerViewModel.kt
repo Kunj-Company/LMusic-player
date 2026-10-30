@@ -225,6 +225,7 @@ class PlayerViewModel @Inject constructor(
 
     private val dualPlayerEngine: DualPlayerEngine,
     private val youTubeMusicRadio: com.twilighty.lmusic.data.ytmusic.YouTubeMusicRadio,
+    private val jioSaavnRadio: com.twilighty.lmusic.data.jiosaavn.JioSaavnRadio,
     private val appShortcutManager: AppShortcutManager,
     private val telegramCacheManagerProvider: Lazy<com.twilighty.lmusic.data.telegram.TelegramCacheManager>,
     private val listeningStatsTracker: ListeningStatsTracker,
@@ -2834,12 +2835,19 @@ class PlayerViewModel @Inject constructor(
                     mediaItem?.let { transitionedItem ->
                         val song = resolveSongFromMediaItem(transitionedItem)
 
-                        // YouTube radio: top the queue up before it runs out. Other queues are untouched.
+                        // YouTube and JioSaavn radio: top the queue up before it runs out. Other queues are untouched.
                         val songsLeft = playerCtrl.mediaItemCount - playerCtrl.currentMediaItemIndex - 1
-                        if (youTubeMusicRadio.isRadioSong(song?.id) && songsLeft <= RADIO_REFILL_WHEN_LEFT) {
-                            viewModelScope.launch {
-                                youTubeMusicRadio.more().forEach { next ->
-                                    mediaController?.addMediaItem(buildPlaybackMediaItem(next))
+                        if (songsLeft <= RADIO_REFILL_WHEN_LEFT) {
+                            val refill: (suspend () -> List<Song>)? = when {
+                                youTubeMusicRadio.isRadioSong(song?.id) -> youTubeMusicRadio::more
+                                jioSaavnRadio.isRadioSong(song?.id) -> jioSaavnRadio::more
+                                else -> null
+                            }
+                            if (refill != null) {
+                                viewModelScope.launch {
+                                    refill().forEach { next ->
+                                        mediaController?.addMediaItem(buildPlaybackMediaItem(next))
+                                    }
                                 }
                             }
                         }
@@ -3292,7 +3300,8 @@ class PlayerViewModel @Inject constructor(
                 startingUri.scheme == "qqmusic" ||
                 startingUri.scheme == "navidrome" ||
                 startingUri.scheme == "jellyfin" ||
-                startingUri.scheme == "ytmusic"
+                startingUri.scheme == "ytmusic" ||
+                startingUri.scheme == "jiosaavn"
             ) {
                 if (startingUri.scheme == "telegram") {
                     ensureTelegramPlaybackObserversStarted()

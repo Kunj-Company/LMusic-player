@@ -85,6 +85,7 @@ class DualPlayerEngine @Inject constructor(
     private val youTubeMusicStreamProxy: YouTubeMusicStreamProxy,
     private val youTubeMusicCache: com.twilighty.lmusic.data.ytmusic.YouTubeMusicCache,
     private val youTubeMusicLibrary: com.twilighty.lmusic.data.ytmusic.YouTubeMusicLibrary,
+    private val jioSaavnStreamProxy: com.twilighty.lmusic.data.jiosaavn.JioSaavnStreamProxy,
     private val gdriveStreamProxy: com.twilighty.lmusic.data.gdrive.GDriveStreamProxy,
     private val telegramCacheManager: com.twilighty.lmusic.data.telegram.TelegramCacheManager,
     private val connectivityStateHolder: com.twilighty.lmusic.presentation.viewmodel.ConnectivityStateHolder
@@ -93,7 +94,7 @@ class DualPlayerEngine @Inject constructor(
         private const val AUDIO_OFFLOAD_BUFFERING_FALLBACK_MS = 4_000L
         private const val MAX_AUXILIARY_TIMELINE_ITEMS = 200
         private val LOCAL_MEDIA_SCHEMES = setOf("content", "file", "android.resource")
-        private val REMOTE_MEDIA_SCHEMES = setOf("http", "https", "telegram", "netease", "qqmusic", "navidrome", "jellyfin", "gdrive", "ytmusic")
+        private val REMOTE_MEDIA_SCHEMES = setOf("http", "https", "telegram", "netease", "qqmusic", "navidrome", "jellyfin", "gdrive", "ytmusic", "jiosaavn")
     }
 
     data class TransitionTarget(
@@ -254,7 +255,7 @@ class DualPlayerEngine @Inject constructor(
 
                         for (uriToResolve in itemsToPreResolve) {
                             val scheme = uriToResolve.scheme
-                            if (scheme == "telegram" || scheme == "netease" || scheme == "qqmusic" || scheme == "navidrome" || scheme == "jellyfin" || scheme == "gdrive" || scheme == "ytmusic") {
+                            if (scheme == "telegram" || scheme == "netease" || scheme == "qqmusic" || scheme == "navidrome" || scheme == "jellyfin" || scheme == "gdrive" || scheme == "ytmusic" || scheme == "jiosaavn") {
                                 resolveCloudUri(uriToResolve)
                             }
                         }
@@ -581,7 +582,7 @@ class DualPlayerEngine @Inject constructor(
         val resolver = object : ResolvingDataSource.Resolver {
             override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
                 val uri = dataSpec.uri
-                youTubeMusicStreamProxy.rebindStaleProxyUri(uri)?.let { current ->
+                (youTubeMusicStreamProxy.rebindStaleProxyUri(uri) ?: jioSaavnStreamProxy.rebindStaleProxyUri(uri))?.let { current ->
                     return dataSpec.buildUpon().setUri(current).build()
                 }
                 val scheme = uri.scheme
@@ -598,7 +599,7 @@ class DualPlayerEngine @Inject constructor(
             }
         }
         
-        // YouTube streams go through a 7-day, 1 GB audio cache; everything else is read directly.
+        // YouTube and JioSaavn streams go through a 7-day, 1 GB audio cache; everything else is read directly.
         val dataSourceFactory = youTubeMusicCache.dataSourceFactory(DefaultDataSource.Factory(context))
         val resolvingFactory = ResolvingDataSource.Factory(dataSourceFactory, resolver)
         val extractorsFactory = DefaultExtractorsFactory()
@@ -676,6 +677,7 @@ class DualPlayerEngine @Inject constructor(
             "navidrome" -> resolveNavidromeUriAsync(uriString)
             "jellyfin" -> resolveJellyfinUriAsync(uriString)
             "ytmusic" -> resolveYouTubeMusicUriAsync(uriString)
+            "jiosaavn" -> resolveJioSaavnUriAsync(uriString)
             "gdrive" -> resolveGDriveUriAsync(uriString)
             else -> null
         }
@@ -739,6 +741,12 @@ class DualPlayerEngine @Inject constructor(
         youTubeMusicStreamProxy.resolveYouTubeMusicUri(uriString)?.let { Uri.parse(it) }
     }
 
+    private suspend fun resolveJioSaavnUriAsync(uriString: String): Uri? = withContext(Dispatchers.IO) {
+        if (!jioSaavnStreamProxy.ensureReady(5_000L)) return@withContext null
+        jioSaavnStreamProxy.warmUpStreamUrl(uriString)
+        jioSaavnStreamProxy.resolveJioSaavnUri(uriString)?.let { Uri.parse(it) }
+    }
+
     private suspend fun resolveGDriveUriAsync(uriString: String): Uri? = withContext(Dispatchers.IO) {
         if (!connectivityStateHolder.isOnline.value) {
             connectivityStateHolder.triggerOfflineBlockedEvent()
@@ -752,7 +760,8 @@ class DualPlayerEngine @Inject constructor(
     val streamedArtworkUpdates get() = youTubeMusicLibrary.artworkUpdates
 
     /** Bitrate a streaming source already knows for [uri], when the decoder cannot report one. */
-    fun knownStreamBitrate(uri: Uri): Int? = youTubeMusicStreamProxy.knownBitrate(uri)
+    fun knownStreamBitrate(uri: Uri): Int? =
+        youTubeMusicStreamProxy.knownBitrate(uri) ?: jioSaavnStreamProxy.knownBitrate(uri)
 
     suspend fun resolveMediaItem(mediaItem: MediaItem): MediaItem {
         val uri = mediaItem.localConfiguration?.uri ?: return mediaItem

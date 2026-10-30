@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +83,7 @@ import com.twilighty.lmusic.presentation.jellyfin.auth.JellyfinLoginActivity
 import com.twilighty.lmusic.presentation.navidrome.auth.NavidromeLoginActivity
 import com.twilighty.lmusic.presentation.qqmusic.auth.QqMusicLoginActivity
 import com.twilighty.lmusic.presentation.ytmusic.auth.YouTubeMusicLoginActivity
+import com.twilighty.lmusic.presentation.jiosaavn.auth.JioSaavnLoginActivity
 import com.twilighty.lmusic.presentation.telegram.auth.TelegramLoginActivity
 import com.twilighty.lmusic.presentation.viewmodel.AccountsViewModel
 import com.twilighty.lmusic.presentation.viewmodel.ExternalAccountUiModel
@@ -98,6 +100,7 @@ fun AccountsScreen(
     onOpenNavidromeDashboard: () -> Unit = {},
     onOpenJellyfinDashboard: () -> Unit = {},
     onOpenYouTubeMusicDashboard: () -> Unit = {},
+    onOpenJioSaavnDashboard: () -> Unit = {},
     viewModel: AccountsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -113,14 +116,13 @@ fun AccountsScreen(
     val minTopBarHeightPx = with(density) { minTopBarHeight.toPx() }
     val maxTopBarHeightPx = with(density) { maxTopBarHeight.toPx() }
     val topBarHeight = remember { Animatable(maxTopBarHeightPx) }
-    var collapseFraction by remember { mutableStateOf(0f) }
 
-    LaunchedEffect(topBarHeight.value) {
-        collapseFraction =
-            1f - (
-                (topBarHeight.value - minTopBarHeightPx) /
-                    (maxTopBarHeightPx - minTopBarHeightPx)
-                ).coerceIn(0f, 1f)
+    // Derived, not a LaunchedEffect keyed on the height: reading the height here recomposed the
+    // whole screen on every frame of the top bar collapsing.
+    val collapseFraction by remember(minTopBarHeightPx, maxTopBarHeightPx) {
+        derivedStateOf {
+            1f - ((topBarHeight.value - minTopBarHeightPx) / (maxTopBarHeightPx - minTopBarHeightPx)).coerceIn(0f, 1f)
+        }
     }
 
     val nestedScrollConnection = remember {
@@ -214,6 +216,7 @@ fun AccountsScreen(
                                 onOpenNavidromeDashboard = onOpenNavidromeDashboard,
                                 onOpenJellyfinDashboard = onOpenJellyfinDashboard,
                                 onOpenYouTubeMusicDashboard = onOpenYouTubeMusicDashboard,
+                                onOpenJioSaavnDashboard = onOpenJioSaavnDashboard,
                                 preferNeteaseDashboard = true
                             )
                         },
@@ -240,6 +243,7 @@ fun AccountsScreen(
                                 onOpenNavidromeDashboard = onOpenNavidromeDashboard,
                                 onOpenJellyfinDashboard = onOpenJellyfinDashboard,
                                 onOpenYouTubeMusicDashboard = onOpenYouTubeMusicDashboard,
+                                onOpenJioSaavnDashboard = onOpenJioSaavnDashboard,
                                 preferNeteaseDashboard = false
                             )
                         }
@@ -664,6 +668,14 @@ private fun servicePalette(service: ExternalServiceAccount): ServicePalette {
             primaryActionContainer = Color(0xFFFFD6DE),
             primaryActionTint = Color(0xFF8C001A)
         )
+        ExternalServiceAccount.JIOSAAVN -> ServicePalette(
+            iconContainer = Color(0xFF2BC5B4),
+            iconTint = Color.White,
+            statusContainer = Color(0xFFDDF7F4),
+            statusTint = Color(0xFF00695C),
+            primaryActionContainer = Color(0xFFCDF2EE),
+            primaryActionTint = Color(0xFF00695C)
+        )
     }
 }
 
@@ -676,6 +688,7 @@ private fun accountIcon(service: ExternalServiceAccount): ImageVector {
         ExternalServiceAccount.NAVIDROME -> Icons.Rounded.CloudQueue
         ExternalServiceAccount.JELLYFIN -> Icons.Rounded.CloudQueue
         ExternalServiceAccount.YOUTUBE_MUSIC -> Icons.Rounded.MusicNote
+        ExternalServiceAccount.JIOSAAVN -> Icons.Rounded.MusicNote
     }
 }
 
@@ -732,6 +745,7 @@ private fun serviceDisplayName(service: ExternalServiceAccount): String {
         ExternalServiceAccount.NAVIDROME -> stringResource(R.string.cd_subsonic_logo)
         ExternalServiceAccount.JELLYFIN -> stringResource(R.string.auth_jellyfin_title)
         ExternalServiceAccount.YOUTUBE_MUSIC -> "YouTube Music"
+        ExternalServiceAccount.JIOSAAVN -> "JioSaavn"
     }
 }
 
@@ -743,6 +757,7 @@ private fun openService(
     onOpenNavidromeDashboard: () -> Unit,
     onOpenJellyfinDashboard: () -> Unit,
     onOpenYouTubeMusicDashboard: () -> Unit,
+    onOpenJioSaavnDashboard: () -> Unit,
     preferNeteaseDashboard: Boolean
 ) {
     when (service) {
@@ -802,6 +817,16 @@ private fun openService(
                 safeStartActivity(
                     context = context,
                     intent = Intent(context, YouTubeMusicLoginActivity::class.java)
+                )
+            }
+        }
+        ExternalServiceAccount.JIOSAAVN -> {
+            if (preferNeteaseDashboard) {
+                onOpenJioSaavnDashboard()
+            } else {
+                safeStartActivity(
+                    context = context,
+                    intent = Intent(context, JioSaavnLoginActivity::class.java)
                 )
             }
         }

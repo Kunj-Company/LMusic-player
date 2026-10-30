@@ -88,7 +88,7 @@ object YouTubeMusicParsers {
             val title = row["title"]?.let(::firstRun) ?: return@mapNotNull null
             val byline = row["longBylineText"]?.let { joinRuns(it) }.orEmpty()
             // "Artist • Album • 2022"
-            val names = byline.split("•").map { it.trim() }.filter { it.isNotBlank() && !isMetaText(it) }
+            val names = namesOnly(byline.split("•").map { it.trim() })
             val ids = browseIds(row["longBylineText"])
             YouTubeMusicTrack(
                 videoId = videoId,
@@ -216,6 +216,10 @@ object YouTubeMusicParsers {
                     collectShelf(renderer, shelves, looseTracks, loosePlaylists)
                     return
                 }
+                element["musicCardShelfRenderer"]?.let { renderer ->
+                    collectTopResultCard(renderer.jsonObject, shelf, shelves, looseTracks, loosePlaylists)
+                    return
+                }
                 element["musicResponsiveListItemRenderer"]?.let { renderer ->
                     val item = renderer.jsonObject
                     parseTrack(item)?.let { track ->
@@ -256,12 +260,12 @@ object YouTubeMusicParsers {
             ?: return null
         // "Song • Arijit Singh • Album", "Sony Music • 88M views • 3:18": keep only names.
         val detailParts = columns.drop(1).flatMap { it.split("•") }.map { it.trim() }
-        val rest = detailParts.filter { it.isNotBlank() && !isMetaText(it) }
+        val rest = namesOnly(detailParts)
         val rawSubtitleParts = item["subtitle"]?.let { joinRuns(it) }.orEmpty()
             .split("•")
             .map { it.trim() }
             .filter { it.isNotBlank() }
-        val subtitleParts = rawSubtitleParts.filterNot(::isMetaText)
+        val subtitleParts = namesOnly(rawSubtitleParts)
         val durationMs = detailParts.firstNotNullOfOrNull { parseDuration(it) }
             ?: rawSubtitleParts.firstNotNullOfOrNull { parseDuration(it) }
             ?: 0L
@@ -275,6 +279,24 @@ object YouTubeMusicParsers {
             artistId = browseIds(item["flexColumns"]).firstOrNull { it.startsWith("UC") },
             albumId = browseIds(item["flexColumns"]).firstOrNull { it.startsWith("MPRE") },
         )
+    }
+
+    /** Search's top-result card. Its song rows leave out the artist when the card is that artist's. */
+    private fun collectTopResultCard(
+        card: JsonObject,
+        shelf: ShelfBuilder?,
+        shelves: MutableList<YouTubeMusicShelf>,
+        looseTracks: MutableList<YouTubeMusicTrack>,
+        loosePlaylists: MutableList<YouTubeMusicPlaylist>,
+    ) {
+        val tracks = shelf?.tracks ?: looseTracks
+        val start = tracks.size
+        card.values.forEach { child -> walk(child, shelf, shelves, looseTracks, loosePlaylists) }
+        val isArtistCard = card["subtitle"]?.let { joinRuns(it) }.orEmpty().startsWith("Artist")
+        val artist = card["title"]?.let(::firstRun)?.takeIf { isArtistCard } ?: return
+        for (i in start until tracks.size) {
+            if (tracks[i].artist.isBlank()) tracks[i] = tracks[i].copy(artist = artist)
+        }
     }
 
     private fun collectShelf(
@@ -432,12 +454,32 @@ object YouTubeMusicParsers {
 
     private val DURATION_TEXT = Regex("""\d{1,2}:\d{2}(?::\d{2})?""")
     // "88M views", "24 crore views", "1.2 lakh plays": a number, an optional scale word, a unit.
-    private val COUNT_TEXT = Regex("""[\d.,]+\s*(?:[^\s\d]+\s+)?(views|plays|songs|subscribers|monthly audience|watching)""", RegexOption.IGNORE_CASE)
+    // "88M views", "6.7K plays", "24 crore views", "1.2 lakh plays": a number, an optional scale, a unit.
+    // Only known scale words, so names like "69 Love Songs" stay.
+    private val COUNT_TEXT = Regex(
+        """[\d.,]+\s*[KMB]?\s*(?:(?:lakh|crore|thousand|million|billion)\s+)?""" +
+            """(views?|plays?|likes?|songs?|subscribers?|monthly audience|watching)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    // Indian locales write counts as "14 crore plays"; the JVM's \s doesn't match those spaces.
+    private val NO_BREAK_SPACES = Regex("""[  ]""")
     private val TYPE_LABELS = setOf("Song", "Video", "Episode", "Single", "Album", "EP", "Podcast")
 
     // Upload dates on video and episode rows: "Aug 20, 2021", "2021".
     private val DATE_TEXT = Regex("""(?:[A-Z][a-z]{2} \d{1,2}, )?\d{4}""")
 
+    private val YEAR_TEXT = Regex("""\d{4}""")
+
+    /**
+     * The name parts of a byline. A bare year only counts as a date in the last slot
+     * ("Artist • Album • 2014"), so an album called "1989" is kept.
+     */
+    private fun namesOnly(parts: List<String>): List<String> = parts.filterIndexed { index, part ->
+        part.isNotBlank() && (!isMetaText(part) || (part.matches(YEAR_TEXT) && index < parts.lastIndex))
+    }
+
     private fun isMetaText(text: String): Boolean =
-        text in TYPE_LABELS || text.matches(DURATION_TEXT) || text.matches(COUNT_TEXT) || text.matches(DATE_TEXT)
+        text in TYPE_LABELS || text.matches(DURATION_TEXT) ||
+            text.replace(NO_BREAK_SPACES, " ").matches(COUNT_TEXT) || text.matches(DATE_TEXT)
 }

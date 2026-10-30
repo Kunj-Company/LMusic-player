@@ -12,6 +12,7 @@ import com.twilighty.lmusic.data.WearLocalPlayerRepository
 import com.twilighty.lmusic.data.WearOutputTarget
 import com.twilighty.lmusic.data.WearPlaybackController
 import com.twilighty.lmusic.data.WearStateRepository
+import com.twilighty.lmusic.data.WearStreamingCatalog
 import com.twilighty.lmusic.data.WearTransferRepository
 import com.twilighty.lmusic.data.WearVolumeRepository
 import com.twilighty.lmusic.shared.WearPlayerState
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.math.roundToInt
@@ -49,6 +51,7 @@ class WearPlayerViewModel @Inject constructor(
     private val transferRepository: WearTransferRepository,
     private val volumeRepository: WearVolumeRepository,
     private val favoriteSyncRepository: WearFavoriteSyncRepository,
+    private val streamingCatalog: WearStreamingCatalog,
 ) : ViewModel() {
     companion object {
         private const val PHONE_SYNC_BOOTSTRAP_ATTEMPTS = 3
@@ -104,6 +107,13 @@ class WearPlayerViewModel @Inject constructor(
             WearOutputTarget.PHONE -> remoteState
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WearPlayerState())
+
+    // The player layout needs metadata and transport state, not position ticks.
+    // Progress reads livePositionMs separately, so every second does not rebuild
+    // the pager, scaling list, text, shapes, and control layout.
+    val playerDisplayState: StateFlow<WearPlayerState> = playerState
+        .map { it.copy(currentPositionMs = 0L) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WearPlayerState())
 
     val albumArt: StateFlow<Bitmap?> = combine(
         stateRepository.outputTarget,
@@ -206,8 +216,8 @@ class WearPlayerViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            WearLifecycleState.isInteractive.collect { interactive ->
-                if (!interactive) return@collect
+            WearLifecycleState.isInteractive.collectLatest { interactive ->
+                if (!interactive) return@collectLatest
                 while (WearLifecycleState.isInteractiveNow) {
                     if (isWatchOutputSelected.value) {
                         volumeRepository.refreshWatchVolumeState()
@@ -266,11 +276,18 @@ class WearPlayerViewModel @Inject constructor(
             state.isPlaying
     }
 
+    /** Start a new UI clock from the source, including after the player page was unloaded. */
+    fun livePositionMs(): Long = when (outputTarget.value) {
+        WearOutputTarget.WATCH -> localPlayerRepository.livePositionMs()
+        WearOutputTarget.PHONE -> stateRepository.livePhonePositionMs()
+    }
+
     fun selectOutput(target: WearOutputTarget) {
         when (target) {
             WearOutputTarget.WATCH -> {
                 val remoteState = stateRepository.playerState.value
                 val remoteSongId = remoteState.songId
+                val phonePositionMs = stateRepository.livePhonePositionMs()
                 val localState = localPlayerRepository.localPlayerState.value
 
                 if (
@@ -278,7 +295,7 @@ class WearPlayerViewModel @Inject constructor(
                     (remoteSongId.isBlank() || localState.songId == remoteSongId)
                 ) {
                     if (remoteSongId.isNotBlank() && localState.songId == remoteSongId) {
-                        localPlayerRepository.seekTo(remoteState.currentPositionMs)
+                        localPlayerRepository.seekTo(phonePositionMs)
                         if (remoteState.isPlaying) {
                             localPlayerRepository.play()
                             playbackController.pause()
@@ -297,7 +314,7 @@ class WearPlayerViewModel @Inject constructor(
                     localPlayerRepository.playLocalSongs(
                         songs = songs,
                         startIndex = startIndex,
-                        startPositionMs = remoteState.currentPositionMs,
+                        startPositionMs = phonePositionMs,
                         autoPlay = remoteState.isPlaying,
                     )
                     stateRepository.setOutputTarget(WearOutputTarget.WATCH)
@@ -307,10 +324,22 @@ class WearPlayerViewModel @Inject constructor(
                     return
                 }
 
+                // A YouTube Music or JioSaavn song: the watch streams it itself rather than waiting for a file.
+                streamingCatalog.queueSongForPhoneStream(remoteState)?.let { stream ->
+                    localPlayerRepository.playUriSongs(
+                        songs = listOf(stream),
+                        startPositionMs = phonePositionMs,
+                        autoPlay = remoteState.isPlaying,
+                    )
+                    stateRepository.setOutputTarget(WearOutputTarget.WATCH)
+                    if (remoteState.isPlaying) playbackController.pause()
+                    return
+                }
+
                 if (!isPhoneConnected.value) return
                 transferRepository.requestTemporaryPlayback(
                     songId = remoteSongId,
-                    startPositionMs = remoteState.currentPositionMs,
+                    startPositionMs = phonePositionMs,
                     autoPlay = remoteState.isPlaying,
                     pausePhoneAfterStart = remoteState.isPlaying,
                 )
@@ -318,6 +347,7 @@ class WearPlayerViewModel @Inject constructor(
 
             WearOutputTarget.PHONE -> {
                 stateRepository.setOutputTarget(WearOutputTarget.PHONE)
+                localPlayerRepository.continueOnPhoneCommand()?.let(playbackController::sendCommand)
                 if (localPlayerRepository.localPlayerState.value.isPlaying) {
                     localPlayerRepository.pause()
                 }

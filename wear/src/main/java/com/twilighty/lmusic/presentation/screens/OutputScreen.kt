@@ -36,7 +36,7 @@ import androidx.wear.compose.material.Text
 import com.twilighty.lmusic.data.WearAudioOutputRoute
 import com.twilighty.lmusic.data.WearLifecycleState
 import com.twilighty.lmusic.R
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.twilighty.lmusic.presentation.components.WatchScalingColumn
 import com.google.android.horologist.compose.layout.rememberResponsiveColumnState
 import com.twilighty.lmusic.data.WearOutputTarget
 import com.twilighty.lmusic.presentation.components.AlwaysOnScalingPositionIndicator
@@ -50,6 +50,7 @@ import com.twilighty.lmusic.presentation.viewmodel.WearPlayerViewModel
 import com.twilighty.lmusic.shared.WearPlayerState
 import com.twilighty.lmusic.shared.WearVolumeState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 @Composable
 fun OutputScreen(
@@ -79,8 +80,8 @@ fun OutputScreen(
     // reactively while discovery is on (DisposableEffect above). This loop is just a
     // slow safety net and pauses whenever the screen turns off.
     LaunchedEffect(viewModel) {
-        WearLifecycleState.isInteractive.collect { interactive ->
-            if (!interactive) return@collect
+        WearLifecycleState.isInteractive.collectLatest { interactive ->
+            if (!interactive) return@collectLatest
             while (WearLifecycleState.isInteractiveNow) {
                 viewModel.refreshWatchAudioState()
                 delay(2_500L)
@@ -95,7 +96,7 @@ fun OutputScreen(
             .fillMaxSize()
             .background(background),
     ) {
-        ScalingLazyColumn(
+        WatchScalingColumn(
             modifier = Modifier.fillMaxSize(),
             columnState = columnState,
         ) {

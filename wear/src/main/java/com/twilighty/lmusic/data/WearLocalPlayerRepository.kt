@@ -2,20 +2,19 @@ package com.twilighty.lmusic.data
 
 import android.app.Application
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Color
-import android.media.MediaMetadataRetriever
 import android.net.Uri
-import androidx.media3.common.C
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import com.twilighty.lmusic.data.local.LocalSongDao
 import com.twilighty.lmusic.data.local.LocalSongEntity
-import com.twilighty.lmusic.shared.WearLibraryItem
+import com.twilighty.lmusic.shared.WearHandoffSong
+import com.twilighty.lmusic.shared.WearPlaybackCommand
 import com.twilighty.lmusic.shared.WearThemePalette
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -34,33 +34,6 @@ import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/**
- * Local player state mirroring WearPlayerState structure for unified UI.
- */
-data class WearLocalPlayerState(
-    val songId: String = "",
-    val songTitle: String = "",
-    val artistName: String = "",
-    val albumName: String = "",
-    val isPlaying: Boolean = false,
-    val currentPositionMs: Long = 0L,
-    val totalDurationMs: Long = 0L,
-    val isFavorite: Boolean = false,
-    val canToggleFavorite: Boolean = false,
-    val isShuffleEnabled: Boolean = false,
-    val repeatMode: Int = Player.REPEAT_MODE_OFF,
-) {
-    val isEmpty: Boolean get() = songId.isEmpty()
-}
-
-data class WearQueueSong(
-    val songId: String,
-    val title: String,
-    val artist: String,
-    val album: String,
-    val uri: Uri,
-)
 
 /**
  * Repository managing ExoPlayer for standalone local playback on the watch.
@@ -73,9 +46,14 @@ data class WearQueueSong(
 class WearLocalPlayerRepository @Inject constructor(
     private val application: Application,
     private val localSongDao: LocalSongDao,
+    private val youTube: WearYouTubeRepository,
+    private val jioSaavn: WearJioSaavnRepository,
+    private val streamingNetwork: WearStreamingNetwork,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val json = Json { ignoreUnknownKeys = true }
+    private val artworkLoader = WearLocalPlayerArtworkLoader(application)
+    private val streaming = WearStreamingPlayback(streamingNetwork, youTube, jioSaavn)
     private var exoPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
 
@@ -132,7 +110,10 @@ class WearLocalPlayerRepository @Inject constructor(
     }
 
     private fun getOrCreatePlayer(): ExoPlayer {
-        return exoPlayer ?: ExoPlayer.Builder(application).build().also { player ->
+        return exoPlayer ?: ExoPlayer.Builder(application)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(wearPlayerDataSourceFactory(application, youTube, jioSaavn)))
+            .setLoadControl(wearStreamingLoadControl())
+            .build().also { player ->
             exoPlayer = player
             player.setAudioAttributes(
                 AudioAttributes.Builder()
@@ -148,6 +129,7 @@ class WearLocalPlayerRepository @Inject constructor(
                     updateState()
                     if (playbackState == Player.STATE_ENDED) {
                         stopPositionUpdates()
+                        streaming.updateNetwork(player)
                     }
                 }
 
@@ -156,8 +138,18 @@ class WearLocalPlayerRepository @Inject constructor(
                     if (isPlaying) startPositionUpdates() else stopPositionUpdates()
                 }
 
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    streaming.updateNetwork(player)
+                }
+
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     updateState()
+                    streaming.onItemChanged()
+                    streaming.updateNetwork(player)
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    if (!streaming.recover(player, error)) streaming.updateNetwork(player)
                 }
             })
             Timber.tag(TAG).d("ExoPlayer created")
@@ -278,6 +270,7 @@ class WearLocalPlayerRepository @Inject constructor(
         transientSongIds: Set<String> = emptySet(),
         transientCleanupPaths: Set<String> = emptySet(),
     ) {
+        if (autoPlay && streaming.isStream(queueSongs.getOrNull(startIndex)?.uri)) streamingNetwork.acquireAndWait()
         withContext(Dispatchers.Main) {
             val player = getOrCreatePlayer()
             if (this@WearLocalPlayerRepository.transientCleanupPaths.isNotEmpty()) {
@@ -350,6 +343,38 @@ class WearLocalPlayerRepository @Inject constructor(
         exoPlayer?.pause()
     }
 
+    /**
+     * What the phone needs to carry on from here: the queue and where the current song is. Null when nothing
+     * is playing, or the current song exists only on the watch (`device:` songs from its own storage).
+     */
+    fun continueOnPhoneCommand(): WearPlaybackCommand? {
+        val player = exoPlayer?.takeIf { it.isPlaying } ?: return null
+        val queue = (0 until player.mediaItemCount).mapNotNull { index ->
+            handoffSong(player.getMediaItemAt(index).mediaId)?.let { index to it }
+        }
+        val start = queue.indexOfFirst { it.first == player.currentMediaItemIndex }
+        if (start == -1) return null
+        return WearPlaybackCommand(
+            action = WearPlaybackCommand.CONTINUE_ON_PHONE,
+            queueIndex = start,
+            positionMs = player.currentPosition,
+            handoffQueue = queue.map { it.second },
+        )
+    }
+
+    private fun handoffSong(songId: String): WearHandoffSong? {
+        if (songId.startsWith(WearDeviceMusicRepository.DEVICE_SONG_PREFIX)) return null
+        val item = currentQueueItemsById[songId]
+        val local = currentQueueSongsById[songId]
+        return WearHandoffSong(
+            songId = songId,
+            title = item?.title ?: local?.title.orEmpty(),
+            artist = item?.artist ?: local?.artist.orEmpty(),
+            album = item?.album ?: local?.album.orEmpty(),
+            artworkUrl = item?.artworkUrl,
+        )
+    }
+
     fun next() {
         val player = exoPlayer ?: return
         if (player.hasNextMediaItem()) {
@@ -366,7 +391,11 @@ class WearLocalPlayerRepository @Inject constructor(
 
     fun seekTo(positionMs: Long) {
         exoPlayer?.seekTo(positionMs)
+        updateState()
     }
+
+    /** Read on the main thread when recreating the lazily composed player UI. */
+    fun livePositionMs(): Long = exoPlayer?.currentPosition ?: _localPlayerState.value.currentPositionMs
 
     fun toggleShuffle() {
         scope.launch {
@@ -496,16 +525,18 @@ class WearLocalPlayerRepository @Inject constructor(
     private fun startPositionUpdates() {
         positionUpdateJob?.cancel()
         positionUpdateJob = scope.launch {
-            while (isActive) {
-                // Skip the StateFlow churn when the user can't see the UI: the
-                // ExoPlayer keeps tracking position internally, we just don't
-                // need to repaint composables. We still wake every second to
-                // notice the screen turning back on quickly, but we don't run
-                // the (allocating) updateState() pipeline.
-                if (WearLifecycleState.isInteractiveNow) {
-                    updateState()
+            WearLifecycleState.isInteractive.collectLatest { interactive ->
+                if (!interactive) return@collectLatest
+                while (isActive) {
+                    val player = exoPlayer ?: return@collectLatest
+                    // Position changes must not rebuild every item in the queue
+                    // or recheck artwork/palettes. Player events handle metadata.
+                    _localPlayerState.value = _localPlayerState.value.copy(
+                        currentPositionMs = player.currentPosition,
+                        totalDurationMs = player.duration.coerceAtLeast(0L),
+                    )
+                    delay(POSITION_UPDATE_INTERVAL_MS)
                 }
-                delay(POSITION_UPDATE_INTERVAL_MS)
             }
         }
     }
@@ -518,89 +549,12 @@ class WearLocalPlayerRepository @Inject constructor(
     private fun updateQueueState(currentIndex: Int? = null) {
         val player = exoPlayer
         val rawCurrentIndex = currentIndex ?: exoPlayer?.currentMediaItemIndex ?: -1
-        val visibleQueueIndices = when {
-            player == null -> {
-                if (rawCurrentIndex in currentQueueSongIds.indices) {
-                    (rawCurrentIndex until currentQueueSongIds.size).toList()
-                } else {
-                    currentQueueSongIds.indices.toList()
-                }
-            }
-
-            rawCurrentIndex !in 0 until player.mediaItemCount -> {
-                (0 until player.mediaItemCount).toList()
-            }
-
-            else -> buildVisibleQueueIndices(player, rawCurrentIndex)
-        }
-
-        val queueItems = visibleQueueIndices.mapNotNull { index ->
-            val mediaItem = player?.getMediaItemAt(index)
-            val songId = mediaItem?.mediaId ?: currentQueueSongIds.getOrNull(index) ?: return@mapNotNull null
-            val queueItem = currentQueueItemsById[songId]
-            val title = queueItem?.title
-                ?: mediaItem?.mediaMetadata?.title?.toString()
-                ?: return@mapNotNull null
-            val artist = queueItem?.artist ?: mediaItem?.mediaMetadata?.artist?.toString().orEmpty()
-            val album = queueItem?.album ?: mediaItem?.mediaMetadata?.albumTitle?.toString().orEmpty()
-            val subtitle = when {
-                index == rawCurrentIndex -> {
-                    val supportingText = artist.ifBlank { album }
-                    if (supportingText.isBlank()) {
-                        "Playing on watch"
-                    } else {
-                        "Playing · $supportingText"
-                    }
-                }
-
-                artist.isNotBlank() -> artist
-                else -> album
-            }
-
-            WearLibraryItem(
-                id = index.toString(),
-                title = title,
-                subtitle = subtitle,
-                type = WearLibraryItem.TYPE_SONG,
-            )
-        }
-
-        val resolvedCurrentIndex = if (rawCurrentIndex in currentQueueSongIds.indices && queueItems.isNotEmpty()) {
-            0
-        } else {
-            -1
-        }
-
-        _localQueueState.value = WearLocalQueueState(
-            items = queueItems,
-            currentIndex = resolvedCurrentIndex,
+        _localQueueState.value = buildWearLocalQueueState(
+            player = player,
+            rawCurrentIndex = rawCurrentIndex,
+            currentQueueSongIds = currentQueueSongIds,
+            currentQueueItemsById = currentQueueItemsById,
         )
-    }
-
-    private fun buildVisibleQueueIndices(player: ExoPlayer, currentIndex: Int): List<Int> {
-        if (currentIndex !in 0 until player.mediaItemCount) {
-            return (0 until player.mediaItemCount).toList()
-        }
-
-        val visibleIndices = mutableListOf(currentIndex)
-        val visited = hashSetOf(currentIndex)
-        val timeline = player.currentTimeline
-        var nextIndex = timeline.getNextWindowIndex(
-            currentIndex,
-            Player.REPEAT_MODE_OFF,
-            player.shuffleModeEnabled,
-        )
-
-        while (nextIndex != C.INDEX_UNSET && visited.add(nextIndex)) {
-            visibleIndices += nextIndex
-            nextIndex = timeline.getNextWindowIndex(
-                nextIndex,
-                Player.REPEAT_MODE_OFF,
-                player.shuffleModeEnabled,
-            )
-        }
-
-        return visibleIndices
     }
 
     private fun updatePaletteForSong(songId: String) {
@@ -634,7 +588,7 @@ class WearLocalPlayerRepository @Inject constructor(
         _localPaletteSeedArgb.value = null
         if (queueSong != null) {
             scope.launch(Dispatchers.IO) {
-                val extractedSeed = extractSeedFromLocalSong(queueSong)
+                val extractedSeed = artworkLoader.extractSeedFromLocalSong(queueSong)
                 if (extractedSeed != null) {
                     runCatching { localSongDao.updatePaletteSeed(queueSong.songId, extractedSeed) }
                         .onFailure { error ->
@@ -657,7 +611,9 @@ class WearLocalPlayerRepository @Inject constructor(
 
         val queueItem = currentQueueItemsById[songId] ?: return
         scope.launch(Dispatchers.IO) {
-            val extractedSeed = extractSeedFromUri(queueItem.uri, queueItem.songId)
+            val extractedSeed = queueItem.artworkUrl
+                ?.let { url -> artworkLoader.loadRemoteArtwork(url)?.let(artworkLoader::extractSeed) }
+                ?: artworkLoader.extractSeedFromUri(queueItem.uri, queueItem.songId)
             withContext(Dispatchers.Main) {
                 if (lastPaletteSongId != queueItem.songId) return@withContext
                 _localThemePalette.value = null
@@ -678,7 +634,7 @@ class WearLocalPlayerRepository @Inject constructor(
         val queueSong = currentQueueSongsById[songId]
         if (queueSong != null) {
             scope.launch(Dispatchers.IO) {
-                val bitmap = loadLocalAlbumArtBitmap(queueSong)
+                val bitmap = artworkLoader.loadLocalAlbumArtBitmap(queueSong)
                 withContext(Dispatchers.Main) {
                     if (lastArtworkSongId != queueSong.songId) return@withContext
                     _localAlbumArt.value = bitmap
@@ -693,196 +649,12 @@ class WearLocalPlayerRepository @Inject constructor(
             return
         }
         scope.launch(Dispatchers.IO) {
-            val bitmap = loadArtworkBitmapFromUri(queueItem.uri, queueItem.songId)
+            val bitmap = queueItem.artworkUrl?.let(artworkLoader::loadRemoteArtwork)
+                ?: artworkLoader.loadArtworkBitmapFromUri(queueItem.uri, queueItem.songId)
             withContext(Dispatchers.Main) {
                 if (lastArtworkSongId != queueItem.songId) return@withContext
                 _localAlbumArt.value = bitmap
             }
         }
-    }
-
-    private fun loadLocalAlbumArtBitmap(song: LocalSongEntity): Bitmap? {
-        val fromStoredArtwork = song.artworkPath
-            ?.takeIf { it.isNotBlank() }
-            ?.let { artworkPath ->
-                decodeBoundedBitmapFromFile(artworkPath, maxDimension = 1024)
-            }
-        if (fromStoredArtwork != null) return fromStoredArtwork
-
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(song.localPath)
-            val embedded = retriever.embeddedPicture ?: return null
-            decodeBoundedBitmapFromBytes(embedded, maxDimension = 1024)
-        } catch (e: Exception) {
-            Timber.tag(TAG).w(e, "Failed to load local artwork for songId=${song.songId}")
-            null
-        } finally {
-            runCatching { retriever.release() }
-        }
-    }
-
-    private fun decodeBoundedBitmapFromFile(path: String, maxDimension: Int): Bitmap? {
-        val file = File(path)
-        if (!file.exists() || file.length() <= 0L) return null
-
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, bounds)
-        val srcWidth = bounds.outWidth
-        val srcHeight = bounds.outHeight
-        if (srcWidth <= 0 || srcHeight <= 0) return null
-
-        var sampleSize = 1
-        while (
-            (srcWidth / sampleSize) > maxDimension * 2 ||
-            (srcHeight / sampleSize) > maxDimension * 2
-        ) {
-            sampleSize *= 2
-        }
-
-        return BitmapFactory.decodeFile(
-            path,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-                inMutable = false
-            },
-        )
-    }
-
-    private fun decodeBoundedBitmapFromBytes(data: ByteArray, maxDimension: Int): Bitmap? {
-        if (data.isEmpty()) return null
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-        val srcWidth = bounds.outWidth
-        val srcHeight = bounds.outHeight
-        if (srcWidth <= 0 || srcHeight <= 0) return null
-
-        var sampleSize = 1
-        while (
-            (srcWidth / sampleSize) > maxDimension * 2 ||
-            (srcHeight / sampleSize) > maxDimension * 2
-        ) {
-            sampleSize *= 2
-        }
-
-        return BitmapFactory.decodeByteArray(
-            data,
-            0,
-            data.size,
-            BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-                inMutable = false
-            },
-        )
-    }
-
-    private fun extractSeedFromLocalSong(song: LocalSongEntity): Int? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(song.localPath)
-            val embedded = retriever.embeddedPicture ?: return null
-            val bitmap = BitmapFactory.decodeByteArray(
-                embedded,
-                0,
-                embedded.size,
-                BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                    inSampleSize = 2
-                },
-            ) ?: return null
-
-            try {
-                extractSeedColorArgb(bitmap)
-            } finally {
-                bitmap.recycle()
-            }
-        } catch (e: Exception) {
-            Timber.tag(TAG).w(e, "Failed to extract local artwork seed for songId=${song.songId}")
-            null
-        } finally {
-            runCatching { retriever.release() }
-        }
-    }
-
-    private fun extractSeedFromUri(uri: Uri, songId: String): Int? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(application, uri)
-            val embedded = retriever.embeddedPicture ?: return null
-            val bitmap = BitmapFactory.decodeByteArray(
-                embedded,
-                0,
-                embedded.size,
-                BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                    inSampleSize = 2
-                },
-            ) ?: return null
-
-            try {
-                extractSeedColorArgb(bitmap)
-            } finally {
-                bitmap.recycle()
-            }
-        } catch (e: Exception) {
-            Timber.tag(TAG).w(e, "Failed to extract artwork seed from URI for songId=$songId")
-            null
-        } finally {
-            runCatching { retriever.release() }
-        }
-    }
-
-    private fun loadArtworkBitmapFromUri(uri: Uri, songId: String): Bitmap? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(application, uri)
-            val embedded = retriever.embeddedPicture ?: return null
-            decodeBoundedBitmapFromBytes(embedded, maxDimension = 1024)
-        } catch (e: Exception) {
-            Timber.tag(TAG).w(e, "Failed to load artwork from URI for songId=$songId")
-            null
-        } finally {
-            runCatching { retriever.release() }
-        }
-    }
-
-    private fun extractSeedColorArgb(bitmap: Bitmap): Int? {
-        if (bitmap.width <= 0 || bitmap.height <= 0) return null
-
-        val step = (minOf(bitmap.width, bitmap.height) / 24).coerceAtLeast(1)
-        var redSum = 0L
-        var greenSum = 0L
-        var blueSum = 0L
-        var count = 0L
-
-        var y = 0
-        while (y < bitmap.height) {
-            var x = 0
-            while (x < bitmap.width) {
-                val pixel = bitmap.getPixel(x, y)
-                if (Color.alpha(pixel) >= 28) {
-                    val red = Color.red(pixel)
-                    val green = Color.green(pixel)
-                    val blue = Color.blue(pixel)
-                    if (red + green + blue > 36) {
-                        redSum += red
-                        greenSum += green
-                        blueSum += blue
-                        count++
-                    }
-                }
-                x += step
-            }
-            y += step
-        }
-
-        if (count == 0L) return null
-        return Color.rgb(
-            (redSum / count).toInt(),
-            (greenSum / count).toInt(),
-            (blueSum / count).toInt(),
-        )
     }
 }

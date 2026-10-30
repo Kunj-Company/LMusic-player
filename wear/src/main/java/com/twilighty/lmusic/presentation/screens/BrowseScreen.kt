@@ -27,7 +27,7 @@ import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.twilighty.lmusic.presentation.components.WatchScalingColumn
 import com.google.android.horologist.compose.layout.rememberResponsiveColumnState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
@@ -35,12 +35,14 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.twilighty.lmusic.R
 import com.twilighty.lmusic.presentation.components.AlwaysOnScalingPositionIndicator
 import com.twilighty.lmusic.presentation.components.WearTopTimeText
 import com.twilighty.lmusic.presentation.theme.LocalWearPalette
+import com.twilighty.lmusic.presentation.theme.WearLibraryTitleFont
 import com.twilighty.lmusic.presentation.theme.screenBackgroundColor
 import com.twilighty.lmusic.presentation.theme.surfaceContainerColor
 
@@ -53,34 +55,22 @@ import com.twilighty.lmusic.presentation.theme.surfaceContainerColor
 @Composable
 fun BrowseScreen(
     onCategoryClick: (browseType: String, title: String) -> Unit,
+    /** False while this is the off-screen page of the player's pager, so the bezel stays with the player. */
+    rotaryActive: Boolean = true,
 ) {
     val columnState = rememberResponsiveColumnState()
     val palette = LocalWearPalette.current
     val background = palette.screenBackgroundColor()
-    val libraryTitleFont = remember {
-        FontFamily(
-            Font(
-                resId = R.font.gflex_variable,
-                variationSettings = FontVariation.Settings(
-                    FontVariation.weight(650),
-                    FontVariation.width(146f),
-                    FontVariation.Setting("ROND", 56f),
-                    FontVariation.Setting("XTRA", 520f),
-                    FontVariation.Setting("YOPQ", 90f),
-                    FontVariation.Setting("YTLC", 505f),
-                ),
-            ),
-        )
-    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(background),
     ) {
-        ScalingLazyColumn(
+        WatchScalingColumn(
             modifier = Modifier.fillMaxSize(),
             columnState = columnState,
+            rotaryActive = rotaryActive,
         ) {
             item { Spacer(modifier = Modifier.height(2.dp)) }
 
@@ -88,13 +78,22 @@ fun BrowseScreen(
                 Text(
                     text = stringResource(R.string.wear_library_screen_title),
                     style = MaterialTheme.typography.title2,
-                    fontFamily = libraryTitleFont,
+                    fontFamily = WearLibraryTitleFont,
                     fontWeight = FontWeight(760),
                     color = palette.textPrimary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 4.dp),
+                )
+            }
+
+            item {
+                BrowseCategoryChip(
+                    label = stringResource(R.string.wear_search),
+                    icon = Icons.Rounded.Search,
+                    iconTint = palette.textPrimary,
+                    onClick = { onCategoryClick("search", "Search") },
                 )
             }
 
@@ -149,6 +148,15 @@ fun BrowseScreen(
                     icon = Icons.Rounded.Watch,
                     iconTint = palette.textSecondary,
                     onClick = { onCategoryClick("downloads", "On Watch") },
+                )
+            }
+
+            item {
+                BrowseCategoryChip(
+                    label = stringResource(R.string.wear_watch_playlists),
+                    icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                    iconTint = palette.shuffleActive,
+                    onClick = { onCategoryClick("watch_playlists", "Watch playlists") },
                 )
             }
         }

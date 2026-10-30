@@ -29,7 +29,7 @@ import androidx.wear.compose.material.ChipDefaults
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
-import com.google.android.horologist.compose.layout.ScalingLazyColumn
+import com.twilighty.lmusic.presentation.components.WatchScalingColumn
 import com.google.android.horologist.compose.layout.rememberResponsiveColumnState
 import com.twilighty.lmusic.presentation.components.AlwaysOnScalingPositionIndicator
 import com.twilighty.lmusic.presentation.components.WearTopTimeText
@@ -63,7 +63,7 @@ fun TimerScreen(
             .fillMaxSize()
             .background(palette.screenBackgroundColor()),
     ) {
-        ScalingLazyColumn(
+        WatchScalingColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 8.dp),

@@ -241,6 +241,9 @@ fun AppNavigation(
                         },
                         onOpenYouTubeMusicDashboard = {
                             navController.navigateSafely(Screen.YouTubeMusicDashboard.route)
+                        },
+                        onOpenJioSaavnDashboard = {
+                            navController.navigateSafely(Screen.JioSaavnDashboard.route)
                         }
                     )
                 }
@@ -618,6 +621,20 @@ fun AppNavigation(
             ) {
                 ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
                     com.twilighty.lmusic.presentation.ytmusic.dashboard.YouTubeMusicDashboardScreen(
+                        onBack = { navController.popBackStack() },
+                        playerViewModel = playerViewModel,
+                    )
+                }
+            }
+            composable(
+                Screen.JioSaavnDashboard.route,
+                enterTransition = { enterTransition() },
+                exitTransition = { exitTransition() },
+                popEnterTransition = { popEnterTransition() },
+                popExitTransition = { popExitTransition() },
+            ) {
+                ScreenWrapper(navController = navController, playerViewModel = playerViewModel) {
+                    com.twilighty.lmusic.presentation.jiosaavn.dashboard.JioSaavnDashboardScreen(
                         onBack = { navController.popBackStack() },
                         playerViewModel = playerViewModel,
                     )

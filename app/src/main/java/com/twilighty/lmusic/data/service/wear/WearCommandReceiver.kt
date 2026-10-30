@@ -20,7 +20,6 @@ import com.twilighty.lmusic.data.preferences.PlaylistPreferencesRepository
 import com.twilighty.lmusic.data.repository.MusicRepository
 import com.twilighty.lmusic.data.service.MusicService
 import com.twilighty.lmusic.data.service.MusicNotificationProvider
-import com.twilighty.lmusic.data.service.player.DualPlayerEngine
 import com.twilighty.lmusic.shared.WearBrowseRequest
 import com.twilighty.lmusic.shared.WearBrowseResponse
 import com.twilighty.lmusic.shared.WearDataPaths
@@ -30,7 +29,6 @@ import com.twilighty.lmusic.shared.WearTransferMetadata
 import com.twilighty.lmusic.shared.WearTransferProgress
 import com.twilighty.lmusic.shared.WearTransferRequest
 import com.twilighty.lmusic.shared.WearVolumeCommand
-import com.twilighty.lmusic.utils.MediaItemBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -64,10 +62,11 @@ class WearCommandReceiver : WearableListenerService() {
 
     @Inject lateinit var musicRepository: MusicRepository
     @Inject lateinit var playlistPreferencesRepository: PlaylistPreferencesRepository
-    @Inject lateinit var dualPlayerEngine: DualPlayerEngine
     @Inject lateinit var directTransferCoordinator: PhoneDirectWatchTransferCoordinator
     @Inject lateinit var transferCancellationStore: PhoneWatchTransferCancellationStore
     @Inject lateinit var transferStateStore: PhoneWatchTransferStateStore
+    @Inject lateinit var watchHandoffQueue: WatchHandoffQueue
+    @Inject lateinit var watchStartedPlayback: WatchStartedPlayback
 
     private val json = Json { ignoreUnknownKeys = true }
     private var mediaController: MediaController? = null
@@ -83,6 +82,7 @@ class WearCommandReceiver : WearableListenerService() {
         private const val MAX_SONGS = 500
         private const val MAX_ALBUMS = 200
         private const val MAX_ARTISTS = 200
+        private const val MAX_SEARCH_RESULTS = 50
         private const val MAX_QUEUE_ITEMS = 20
         private const val TRANSFER_CHUNK_SIZE = 8192
         private const val PROGRESS_UPDATE_INTERVAL_BYTES = 65536L
@@ -115,6 +115,9 @@ class WearCommandReceiver : WearableListenerService() {
         when (command.action) {
             WearPlaybackCommand.PLAY_FROM_CONTEXT -> {
                 handlePlayFromContext(command)
+            }
+            WearPlaybackCommand.CONTINUE_ON_PHONE -> {
+                handleContinueOnPhone(command)
             }
             else -> {
                 getOrBuildMediaController { controller ->
@@ -185,10 +188,7 @@ class WearCommandReceiver : WearableListenerService() {
         }
     }
 
-    /**
-     * Handle PLAY_FROM_CONTEXT: load songs for the given context, build a queue,
-     * find the start index, and start playback.
-     */
+    /** Play a song within its album, artist, playlist or library queue. */
     private fun handlePlayFromContext(command: WearPlaybackCommand) {
         val songId = command.songId
         val contextType = command.contextType
@@ -197,30 +197,16 @@ class WearCommandReceiver : WearableListenerService() {
             return
         }
 
-        scope.launch {
-            try {
-                val songs = getSongsForContext(contextType, command.contextId)
-                if (songs.isEmpty()) {
-                    Timber.tag(TAG).w("No songs found for context: $contextType / ${command.contextId}")
-                    return@launch
-                }
+        watchStartedPlayback.play("PLAY_FROM_CONTEXT") {
+            val songs = getSongsForContext(contextType, command.contextId)
+            songs.takeIf { it.isNotEmpty() }?.let { it to it.indexOfFirst { song -> song.id == songId }.coerceAtLeast(0) }
+        }
+    }
 
-                val mediaItems = songs.map { MediaItemBuilder.build(it) }.toMutableList()
-                val startIndex = songs.indexOfFirst { it.id == songId }.coerceAtLeast(0)
-                mediaItems[startIndex] = dualPlayerEngine.resolveMediaItem(mediaItems[startIndex])
-
-                getOrBuildMediaController { controller ->
-                    controller.setMediaItems(mediaItems, startIndex, 0L)
-                    controller.prepare()
-                    controller.play()
-                    Timber.tag(TAG).d(
-                        "Playing from context: $contextType, song=${songs[startIndex].title}, " +
-                            "queue size=${songs.size}"
-                    )
-                }
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Failed to handle PLAY_FROM_CONTEXT")
-            }
+    /** The watch switched its output to the phone: play its queue here from where it was. */
+    private fun handleContinueOnPhone(command: WearPlaybackCommand) {
+        watchStartedPlayback.play("CONTINUE_ON_PHONE", positionMs = command.positionMs ?: 0L) {
+            watchHandoffQueue.resolve(command.handoffQueue.orEmpty(), command.queueIndex ?: 0)
         }
     }
 
@@ -252,6 +238,7 @@ class WearCommandReceiver : WearableListenerService() {
             "all_songs" -> {
                 musicRepository.getSongsPage(limit = MAX_SONGS, offset = 0)
             }
+            WearBrowseRequest.SEARCH -> searchSongs(contextId)
             else -> {
                 Timber.tag(TAG).w("Unknown context type: $contextType")
                 emptyList()
@@ -394,11 +381,18 @@ class WearCommandReceiver : WearableListenerService() {
                 getCurrentQueueItems()
             }
 
+            WearBrowseRequest.SEARCH -> searchSongs(contextId).map { song -> song.toWearLibraryItem() }
+
             else -> {
                 Timber.tag(TAG).w("Unknown browse type: $browseType")
                 emptyList()
             }
         }
+    }
+
+    private suspend fun searchSongs(query: String?): List<Song> {
+        if (query.isNullOrBlank()) return emptyList()
+        return musicRepository.searchSongs(query.trim()).first().take(MAX_SEARCH_RESULTS)
     }
 
     private fun Song.toWearLibraryItem(): WearLibraryItem {
@@ -407,6 +401,8 @@ class WearCommandReceiver : WearableListenerService() {
             title = title,
             subtitle = displayArtist,
             type = WearLibraryItem.TYPE_SONG,
+            // Only songs with a file on this phone (Jellyfin/Navidrome paths are server paths).
+            canSaveToWatch = (path.isNotBlank() && File(path).isFile) || contentUriString.startsWith("content://"),
         )
     }
 
@@ -742,11 +738,13 @@ class WearCommandReceiver : WearableListenerService() {
                 return@runOnMainThread
             }
 
+            // The application context, not this service's: the service is often destroyed before the
+            // connection is up, and releasing a connection bound to it then crashes the app.
             val sessionToken = SessionToken(
-                this,
-                ComponentName(this, MusicService::class.java)
+                applicationContext,
+                ComponentName(applicationContext, MusicService::class.java)
             )
-            val future = MediaController.Builder(this, sessionToken)
+            val future = MediaController.Builder(applicationContext, sessionToken)
                 .setApplicationLooper(Looper.getMainLooper())
                 .buildAsync()
             mediaControllerFuture = future
@@ -788,7 +786,13 @@ class WearCommandReceiver : WearableListenerService() {
 
     override fun onDestroy() {
         scope.cancel()
-        runOnMainThread { releaseController() }
+        runOnMainThread {
+            // Commands still waiting for the connection run first; then it is let go.
+            mediaControllerFuture?.takeIf { !it.isDone }?.let { pending ->
+                pending.addListener({ MediaController.releaseFuture(pending) }, ContextCompat.getMainExecutor(applicationContext))
+            }
+            releaseController()
+        }
         super.onDestroy()
     }
 }
