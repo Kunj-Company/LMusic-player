@@ -127,8 +127,10 @@ the tag). Pushing a `v*` tag yourself works too. Other pushes just build an APK 
 - [PixelPlayer](https://github.com/theovilardo/PixelPlayer) by theovilardo and
   contributors — this project is based on upstream commit `3903015` (12 May 2026),
   the last version released under the MIT License. See [LICENSE](LICENSE).
-- Fonts: [Figtree](https://github.com/erikdkennedy/figtree) and
-  [Bricolage Grotesque](https://github.com/ateliertriay/bricolage), SIL Open Font
+- Fonts: [Figtree](https://github.com/erikdkennedy/figtree),
+  [Bricolage Grotesque](https://github.com/ateliertriay/bricolage),
+  [Google Sans Flex](https://github.com/googlefonts/googlesans-flex) and
+  [Roboto Flex](https://github.com/TypeNetwork/Roboto-Flex), SIL Open Font
   License — see [licenses/](licenses/).
 - On-device audio model: [YAMNet](https://github.com/tensorflow/models/tree/master/research/audioset/yamnet) (Apache-2.0), run with TensorFlow Lite.
 - Metadata: [MusicBrainz](https://musicbrainz.org) (CC0) and
