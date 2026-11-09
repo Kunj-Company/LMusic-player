@@ -1,0 +1,65 @@
+name: Bug
+description: Something in LMusic doesn't work as it should
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      placeholder: "The song stops after about 1 minute when streaming from YouTube Music."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Search a song in YouTube Music
+        2. Play it
+        3. Lock the phone
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen
+  - type: dropdown
+    id: source
+    attributes:
+      label: Song source
+      options:
+        - Local file
+        - YouTube Music
+        - JioSaavn
+        - Not related to playback
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where
+      options:
+        - Phone
+        - Watch
+        - Handoff between phone and watch
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: LMusic version
+      placeholder: "1.4"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and Android / Wear OS version
+      placeholder: "Samsung S23, Android 16 / Galaxy Watch5 Pro, Wear OS 6"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Logcat output is formatted as code automatically.
+      render: shell

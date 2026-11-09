@@ -1,0 +1,17 @@
+name: Task
+description: A small piece of work, chore or refactor (or a sub-issue of a feature)
+title: "[Task] "
+labels: ["task"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What to do
+    validations:
+      required: true
+  - type: input
+    id: parent
+    attributes:
+      label: Part of
+      description: The feature issue this belongs to, if any. You can also add it as a sub-issue from the feature.
+      placeholder: "#12"
