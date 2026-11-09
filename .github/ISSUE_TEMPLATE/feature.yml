@@ -1,0 +1,54 @@
+name: Feature
+description: Plan a new feature or a bigger improvement for LMusic
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What and why
+      description: What should LMusic do, and what problem does it solve?
+      placeholder: "Gapless playback between album tracks, so live albums don't click between songs."
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Playback
+        - Library & tag editor
+        - Streaming (YouTube Music / JioSaavn)
+        - Downloads
+        - Lyrics
+        - Analytics
+        - UI / Yuyu theming
+        - Widgets & notifications
+        - Watch app
+        - Performance & battery
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where
+      options:
+        - Phone
+        - Watch
+        - Phone and watch
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done when
+      description: A short checklist that tells you the feature is finished.
+      placeholder: |
+        - [ ] No gap between tracks of the same album
+        - [ ] Works with crossfade off and on
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes, references, mockups
+      description: Links to other apps, screenshots, implementation ideas. Break big features into sub-issues.
